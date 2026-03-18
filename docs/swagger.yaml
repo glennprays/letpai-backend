@@ -1,0 +1,79 @@
+openapi: 3.1.0
+info:
+  title: Example Golang Clean Architecture API
+  version: 1.0.0
+  description: API for a Golang Clean Architecture example
+servers:
+  - url: /api/v1
+    description: API v1
+
+paths:
+  /health:
+    get:
+      summary: Health check endpoint
+      description: Returns the health status of the API server
+      operationId: healthCheck
+      tags:
+        - Health
+      parameters:
+        - $ref: '#/components/parameters/RequestID'
+      responses:
+        '200':
+          description: Server is healthy
+          headers:
+            X-Request-ID:
+              schema:
+                type: string
+                format: uuid
+              description: Unique request identifier
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  timestamp:
+                    type: string
+                    format: date-time
+                    example: "2026-01-14T10:30:00Z"
+        '500':
+          description: Internal server error
+          headers:
+            X-Request-ID:
+              schema:
+                type: string
+                format: uuid
+              description: Unique request identifier
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "Internal Server Error"
+        request_id:
+          type: string
+          format: uuid
+          example: "123e4567-e89b-12d3-a456-426614174000"
+
+  parameters:
+    RequestID:
+      name: X-Request-ID
+      in: header
+      description: Optional request ID for tracing
+      required: false
+      schema:
+        type: string
+        format: uuid
+
+tags:
+  - name: Health
+    description: Health check operations
