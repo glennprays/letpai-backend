@@ -23,6 +23,13 @@ type Config struct {
 	DBUser     string `mapstructure:"DB_USER" default:"postgres"`
 	DBPassword string `mapstructure:"DB_PASSWORD"`
 	DBName     string `mapstructure:"DB_NAME"`
+
+	JWTSecret           string `mapstructure:"JWT_SECRET" default:"your-secret-key-change-in-production"`
+	JWTExpiryHours      int    `mapstructure:"JWT_EXPIRY_HOURS" default:"168"` // 7 days
+	OTPExpiryMinutes    int    `mapstructure:"OTP_EXPIRY_MINUTES" default:"5"`
+
+	WhatsAppGatewayURL string `mapstructure:"WHATSAPP_GATEWAY_URL" default:"http://localhost:8080"`
+	WhatsAppAPIKey     string `mapstructure:"WHATSAPP_API_KEY" default:""`
 }
 
 type Environment string
