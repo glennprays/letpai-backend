@@ -1,8 +1,11 @@
 openapi: 3.1.0
 info:
-  title: Example Golang Clean Architecture API
+  title: Letpai API
   version: 1.0.0
-  description: API for a Golang Clean Architecture example
+  description: API for Letpai - Bill splitting application with WhatsApp integration
+  contact:
+    name: Letpai Team
+    email: support@letpai.com
 servers:
   - url: /api/v1
     description: API v1
@@ -11,21 +14,13 @@ paths:
   /health:
     get:
       summary: Health check endpoint
-      description: Returns the health status of the API server
+      description: Returns health status of API server
       operationId: healthCheck
       tags:
         - Health
-      parameters:
-        - $ref: '#/components/parameters/RequestID'
       responses:
         '200':
           description: Server is healthy
-          headers:
-            X-Request-ID:
-              schema:
-                type: string
-                format: uuid
-              description: Unique request identifier
           content:
             application/json:
               schema:
@@ -37,43 +32,1765 @@ paths:
                   timestamp:
                     type: string
                     format: date-time
-                    example: "2026-01-14T10:30:00Z"
-        '500':
-          description: Internal server error
-          headers:
-            X-Request-ID:
+                    example: "2026-03-18T10:30:00Z"
+
+  /auth/register:
+    post:
+      summary: Register new user
+      description: Register new user with OTP verification
+      operationId: register
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: User registered successfully, OTP sent
+          content:
+            application/json:
               schema:
-                type: string
-                format: uuid
-              description: Unique request identifier
+                $ref: '#/components/schemas/RegisterResponse'
+        '400':
+          description: Bad request
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
 
+  /auth/verify-otp:
+    post:
+      summary: Verify OTP
+      description: Verify OTP and complete registration
+      operationId: verifyOtp
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyOTPRequest'
+      responses:
+        '200':
+          description: OTP verified successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          description: Invalid or expired OTP
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/login:
+    post:
+      summary: Login
+      description: Login with WhatsApp number and password
+      operationId: login
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/logout:
+    post:
+      summary: Logout
+      description: Logout and invalidate token
+      operationId: logout
+      tags:
+        - Authentication
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Logout successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /contacts:
+    get:
+      summary: Get all contacts
+      description: Get all contacts for current user
+      operationId: getContacts
+      tags:
+        - Contacts
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: group_id
+          in: query
+          description: Filter by group ID
+          schema:
+            type: string
+            format: uuid
+        - name: search
+          in: query
+          description: Search by name
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Contacts retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContactsResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    post:
+      summary: Create contact
+      description: Create new contact
+      operationId: createContact
+      tags:
+        - Contacts
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateContactRequest'
+      responses:
+        '201':
+          description: Contact created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContactResponse'
+
+  /contacts/bulk:
+    post:
+      summary: Bulk operations on contacts
+      description: Perform bulk operations on contacts
+      operationId: bulkContactOperations
+      tags:
+        - Contacts
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkContactRequest'
+      responses:
+        '200':
+          description: Bulk operation completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkContactResponse'
+
+  /contacts/{id}:
+    get:
+      summary: Get contact by ID
+      description: Get single contact details
+      operationId: getContact
+      tags:
+        - Contacts
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ContactID'
+      responses:
+        '200':
+          description: Contact retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContactResponse'
+        '404':
+          description: Contact not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    put:
+      summary: Update contact
+      description: Update contact details
+      operationId: updateContact
+      tags:
+        - Contacts
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ContactID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateContactRequest'
+      responses:
+        '200':
+          description: Contact updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContactResponse'
+
+    delete:
+      summary: Delete contact
+      description: Delete contact (soft delete)
+      operationId: deleteContact
+      tags:
+        - Contacts
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ContactID'
+      responses:
+        '200':
+          description: Contact deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /contact-groups:
+    get:
+      summary: Get all contact groups
+      description: Get all contact groups for current user
+      operationId: getContactGroups
+      tags:
+        - Contact Groups
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Contact groups retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContactGroupsResponse'
+
+    post:
+      summary: Create contact group
+      description: Create new contact group
+      operationId: createContactGroup
+      tags:
+        - Contact Groups
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateContactGroupRequest'
+      responses:
+        '201':
+          description: Contact group created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContactGroupResponse'
+
+  /contact-groups/{id}:
+    put:
+      summary: Update contact group
+      description: Update contact group details
+      operationId: updateContactGroup
+      tags:
+        - Contact Groups
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GroupID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateContactGroupRequest'
+      responses:
+        '200':
+          description: Contact group updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContactGroupResponse'
+
+    delete:
+      summary: Delete contact group
+      description: Delete contact group
+      operationId: deleteContactGroup
+      tags:
+        - Contact Groups
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GroupID'
+      responses:
+        '200':
+          description: Contact group deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /sessions:
+    get:
+      summary: Get all sessions
+      description: Get all sessions for current user
+      operationId: getSessions
+      tags:
+        - Sessions
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          description: Filter by status (active, completed, cancelled)
+          schema:
+            type: string
+            enum: [active, completed, cancelled]
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Sessions retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionsResponse'
+
+    post:
+      summary: Create session
+      description: Create new session
+      operationId: createSession
+      tags:
+        - Sessions
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSessionRequest'
+      responses:
+        '201':
+          description: Session created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionResponse'
+
+  /sessions/{id}:
+    get:
+      summary: Get session details
+      description: Get session details with participants and bills
+      operationId: getSession
+      tags:
+        - Sessions
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SessionID'
+      responses:
+        '200':
+          description: Session retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionDetailResponse'
+
+    put:
+      summary: Update session
+      description: Update session details
+      operationId: updateSession
+      tags:
+        - Sessions
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SessionID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateSessionRequest'
+      responses:
+        '200':
+          description: Session updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionResponse'
+
+    delete:
+      summary: Cancel session
+      description: Cancel/delete session
+      operationId: cancelSession
+      tags:
+        - Sessions
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SessionID'
+      responses:
+        '200':
+          description: Session cancelled successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /sessions/{id}/participants:
+    post:
+      summary: Add participants to session
+      description: Add participants to session
+      operationId: addParticipants
+      tags:
+        - Sessions
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SessionID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddParticipantsRequest'
+      responses:
+        '201':
+          description: Participants added successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ParticipantsResponse'
+
+  /sessions/{id}/participants/{participant_id}:
+    put:
+      summary: Update participant
+      description: Update or remove participant from session
+      operationId: updateParticipant
+      tags:
+        - Sessions
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SessionID'
+        - $ref: '#/components/parameters/ParticipantID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action:
+                  type: string
+                  enum: [remove]
+      responses:
+        '200':
+          description: Participant updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /sessions/{id}/bills:
+    post:
+      summary: Add bill item
+      description: Add bill item to session
+      operationId: addBillItem
+      tags:
+        - Sessions
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SessionID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateBillItemRequest'
+      responses:
+        '201':
+          description: Bill item created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillItemResponse'
+
+  /sessions/{id}/calculate-splits:
+    put:
+      summary: Calculate equal splits
+      description: Calculate equal split for all participants
+      operationId: calculateSplits
+      tags:
+        - Sessions
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SessionID'
+      responses:
+        '200':
+          description: Splits calculated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CalculateSplitsResponse'
+
+  /sessions/{id}/send-notifications:
+    post:
+      summary: Send notifications
+      description: Send WhatsApp notifications to all participants
+      operationId: sendNotifications
+      tags:
+        - Notifications
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SessionID'
+      responses:
+        '200':
+          description: Notifications sent successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SendNotificationsResponse'
+
+  /sessions/{id}/bulk-reminder:
+    post:
+      summary: Send bulk reminders
+      description: Send reminder to all unpaid participants
+      operationId: bulkReminder
+      tags:
+        - Notifications
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SessionID'
+      responses:
+        '200':
+          description: Reminders sent successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkReminderResponse'
+
+  /participants/{participant_id}/reminder:
+    post:
+      summary: Send reminder
+      description: Send reminder to specific participant
+      operationId: sendReminder
+      tags:
+        - Notifications
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ParticipantID'
+      responses:
+        '200':
+          description: Reminder sent successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SendReminderResponse'
+        '429':
+          description: Rate limit exceeded
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                description: Seconds to wait before next reminder
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RateLimitError'
+
+  /payments/{participant_id}/submit:
+    post:
+      summary: Submit payment proof
+      description: Submit payment proof (public link, no auth required)
+      operationId: submitPayment
+      tags:
+        - Payments
+      parameters:
+        - $ref: '#/components/parameters/ParticipantID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubmitPaymentRequest'
+      responses:
+        '201':
+          description: Payment proof submitted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentSubmitResponse'
+
+  /payments/{proof_id}/approve:
+    post:
+      summary: Approve payment
+      description: Approve payment (host only)
+      operationId: approvePayment
+      tags:
+        - Payments
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ProofID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApprovePaymentRequest'
+      responses:
+        '200':
+          description: Payment approved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentApproveResponse'
+
+  /payments/{proof_id}/reject:
+    post:
+      summary: Reject payment
+      description: Reject payment (host only)
+      operationId: rejectPayment
+      tags:
+        - Payments
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ProofID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RejectPaymentRequest'
+      responses:
+        '200':
+          description: Payment rejected successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentRejectResponse'
+
+  /payments/bulk-approve:
+    post:
+      summary: Bulk approve payments
+      description: Bulk approve payments
+      operationId: bulkApprovePayments
+      tags:
+        - Payments
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkApproveRequest'
+      responses:
+        '200':
+          description: Payments approved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkApproveResponse'
+
+  /payments/bulk-reject:
+    post:
+      summary: Bulk reject payments
+      description: Bulk reject payments
+      operationId: bulkRejectPayments
+      tags:
+        - Payments
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkRejectRequest'
+      responses:
+        '200':
+          description: Payments rejected successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkRejectResponse'
+
+  /payments/{participant_id}/public:
+    get:
+      summary: Get payment page
+      description: Get payment page data (public, no auth required)
+      operationId: getPaymentPage
+      tags:
+        - Payments
+      parameters:
+        - $ref: '#/components/parameters/ParticipantID'
+      responses:
+        '200':
+          description: Payment page data retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentPageResponse'
+
+  /webhooks/whatsapp-status:
+    post:
+      summary: WhatsApp status webhook
+      description: Receive status updates from WhatsApp Gateway
+      operationId: whatsappStatusWebhook
+      tags:
+        - Webhooks
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WhatsAppStatusWebhook'
+      responses:
+        '200':
+          description: Webhook received successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
 components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token for authentication
+
   schemas:
+    RegisterRequest:
+      type: object
+      required:
+        - whatsapp_number
+        - password
+      properties:
+        whatsapp_number:
+          type: string
+          example: "+6281234567890"
+        password:
+          type: string
+          format: password
+          example: "SecurePass123!"
+
+    RegisterResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "OTP sent to your WhatsApp"
+        user_id:
+          type: string
+          format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        expires_at:
+          type: string
+          format: date-time
+          example: "2026-03-18T18:00:00Z"
+
+    VerifyOTPRequest:
+      type: object
+      required:
+        - whatsapp_number
+        - otp_code
+      properties:
+        whatsapp_number:
+          type: string
+          example: "+6281234567890"
+        otp_code:
+          type: string
+          pattern: '^\d{6}$'
+          example: "123456"
+
+    LoginRequest:
+      type: object
+      required:
+        - whatsapp_number
+        - password
+      properties:
+        whatsapp_number:
+          type: string
+          example: "+6281234567890"
+        password:
+          type: string
+          format: password
+          example: "SecurePass123!"
+
+    LoginResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        token:
+          type: string
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        user:
+          $ref: '#/components/schemas/User'
+
+    User:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        whatsapp_number:
+          type: string
+          example: "+6281234567890"
+        full_name:
+          type: string
+          example: "John Doe"
+
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+
     Error:
       type: object
       properties:
+        success:
+          type: boolean
+          example: false
         error:
-          type: string
-          example: "Internal Server Error"
-        request_id:
+          type: object
+          properties:
+            code:
+              type: string
+              example: "AUTH_001"
+            message:
+              type: string
+              example: "Invalid credentials"
+            details:
+              type: object
+              additionalProperties: true
+
+    Contact:
+      type: object
+      properties:
+        contact_id:
           type: string
           format: uuid
-          example: "123e4567-e89b-12d3-a456-426614174000"
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        name:
+          type: string
+          example: "John Doe"
+        whatsapp_number:
+          type: string
+          example: "+6281234567890"
+        group_id:
+          type: string
+          format: uuid
+          nullable: true
+        group_name:
+          type: string
+          nullable: true
+        is_favorite:
+          type: boolean
+          example: true
+        avatar_url:
+          type: string
+          format: uri
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          example: "2026-03-18T10:00:00Z"
+
+    CreateContactRequest:
+      type: object
+      required:
+        - name
+        - whatsapp_number
+      properties:
+        name:
+          type: string
+          example: "Jane Doe"
+        whatsapp_number:
+          type: string
+          example: "+6289876543210"
+        group_id:
+          type: string
+          format: uuid
+          nullable: true
+        avatar_url:
+          type: string
+          format: uri
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+
+    UpdateContactRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        whatsapp_number:
+          type: string
+        group_id:
+          type: string
+          format: uuid
+          nullable: true
+        is_favorite:
+          type: boolean
+
+    ContactResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          $ref: '#/components/schemas/Contact'
+
+    ContactsResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Contact'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+          example: 1
+        limit:
+          type: integer
+          example: 20
+        total:
+          type: integer
+          example: 50
+
+    BulkContactRequest:
+      type: object
+      required:
+        - action
+      properties:
+        action:
+          type: string
+          enum: [add_to_group, delete, export]
+        contact_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        group_id:
+          type: string
+          format: uuid
+          description: Required for add_to_group action
+
+    BulkContactResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+
+    ContactGroup:
+      type: object
+      properties:
+        group_id:
+          type: string
+          format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        group_name:
+          type: string
+          example: "Family"
+        color:
+          type: string
+          pattern: '^#[0-9A-Fa-f]{6}$'
+          example: "#10B981"
+        description:
+          type: string
+          nullable: true
+        sort_order:
+          type: integer
+          example: 1
+        contact_count:
+          type: integer
+          example: 5
+        created_at:
+          type: string
+          format: date-time
+          example: "2026-03-18T09:00:00Z"
+
+    CreateContactGroupRequest:
+      type: object
+      required:
+        - group_name
+      properties:
+        group_name:
+          type: string
+          example: "Work"
+        color:
+          type: string
+          pattern: '^#[0-9A-Fa-f]{6}$'
+          default: "#10B981"
+        description:
+          type: string
+          nullable: true
+
+    UpdateContactGroupRequest:
+      type: object
+      properties:
+        group_name:
+          type: string
+        color:
+          type: string
+          pattern: '^#[0-9A-Fa-f]{6}$'
+        sort_order:
+          type: integer
+
+    ContactGroupResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          $ref: '#/components/schemas/ContactGroup'
+
+    ContactGroupsResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ContactGroup'
+
+    Session:
+      type: object
+      properties:
+        session_id:
+          type: string
+          format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        session_name:
+          type: string
+          example: "Makan Siang"
+        session_description:
+          type: string
+          nullable: true
+          example: "Makan bareng temen kantor"
+        total_amount:
+          type: integer
+          example: 500000
+        currency:
+          type: string
+          default: "IDR"
+          example: "IDR"
+        status:
+          type: string
+          enum: [active, completed, cancelled]
+          example: "active"
+        participant_count:
+          type: integer
+          example: 4
+        paid_count:
+          type: integer
+          example: 2
+        created_at:
+          type: string
+          format: date-time
+          example: "2026-03-18T10:00:00Z"
+
+    CreateSessionRequest:
+      type: object
+      required:
+        - session_name
+      properties:
+        session_name:
+          type: string
+          example: "Liburan Bali"
+        session_description:
+          type: string
+          nullable: true
+        currency:
+          type: string
+          default: "IDR"
+          example: "IDR"
+
+    UpdateSessionRequest:
+      type: object
+      properties:
+        session_name:
+          type: string
+        session_description:
+          type: string
+          nullable: true
+
+    SessionResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          $ref: '#/components/schemas/Session'
+
+    SessionsResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Session'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    SessionParticipant:
+      type: object
+      properties:
+        participant_id:
+          type: string
+          format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        name:
+          type: string
+          example: "John Doe"
+        whatsapp_number:
+          type: string
+          example: "+6281234567890"
+        share_amount:
+          type: integer
+          example: 125000
+        payment_status:
+          type: string
+          enum: [pending, submitted, paid, rejected]
+          example: "paid"
+        contact_avatar_url:
+          type: string
+          format: uri
+          nullable: true
+        notification_count:
+          type: integer
+          example: 2
+        last_notification_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2026-03-18T14:00:00Z"
+
+    AddParticipantsRequest:
+      type: object
+      required:
+        - participants
+      properties:
+        participants:
+          type: array
+          items:
+            type: object
+            properties:
+              contact_id:
+                type: string
+                format: uuid
+                nullable: true
+              name:
+                type: string
+                example: "John Doe"
+              whatsapp_number:
+                type: string
+                example: "+6281234567890"
+
+    Participant:
+      type: object
+      properties:
+        participant_id:
+          type: string
+          format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        name:
+          type: string
+          example: "John Doe"
+        share_amount:
+          type: integer
+          default: 0
+          example: 0
+        payment_status:
+          type: string
+          enum: [pending, submitted, paid, rejected]
+          default: "pending"
+          example: "pending"
+
+    ParticipantsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "3 participants added"
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Participant'
+
+    BillItem:
+      type: object
+      properties:
+        bill_item_id:
+          type: string
+          format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        name:
+          type: string
+          example: "Makan Siang"
+        description:
+          type: string
+          nullable: true
+          example: "Nasi goreng + es teh"
+        amount:
+          type: integer
+          example: 500000
+        currency:
+          type: string
+          default: "IDR"
+          example: "IDR"
+        created_at:
+          type: string
+          format: date-time
+          example: "2026-03-18T12:00:00Z"
+
+    CreateBillItemRequest:
+      type: object
+      required:
+        - name
+        - amount
+      properties:
+        name:
+          type: string
+          example: "Makan Siang"
+        description:
+          type: string
+          nullable: true
+        amount:
+          type: integer
+          example: 500000
+        currency:
+          type: string
+          default: "IDR"
+          example: "IDR"
+
+    BillItemResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          $ref: '#/components/schemas/BillItem'
+
+    CalculateSplitsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Splits calculated"
+        data:
+          type: object
+          properties:
+            total_amount:
+              type: integer
+              example: 500000
+            participant_count:
+              type: integer
+              example: 4
+            share_per_person:
+              type: integer
+              example: 125000
+            participants:
+              type: array
+              items:
+                type: object
+                properties:
+                  participant_id:
+                    type: string
+                    format: uuid
+                  share_amount:
+                    type: integer
+                    example: 125000
+
+    SessionDetailResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            session_id:
+              type: string
+              format: uuid
+            session_name:
+              type: string
+            session_description:
+              type: string
+              nullable: true
+            total_amount:
+              type: integer
+            currency:
+              type: string
+            status:
+              type: string
+              enum: [active, completed, cancelled]
+            created_at:
+              type: string
+              format: date-time
+            participants:
+              type: array
+              items:
+                $ref: '#/components/schemas/SessionParticipant'
+            bill_items:
+              type: array
+              items:
+                $ref: '#/components/schemas/BillItem'
+
+    SendNotificationsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "3 notifications sent"
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              participant_id:
+                type: string
+                format: uuid
+              whatsapp_message_id:
+                type: string
+                example: "msg_123"
+              sent_at:
+                type: string
+                format: date-time
+                example: "2026-03-18T14:00:00Z"
+
+    SendReminderResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Reminder sent to John Doe"
+        data:
+          type: object
+          properties:
+            whatsapp_message_id:
+              type: string
+              example: "msg_456"
+            next_available_at:
+              type: string
+              format: date-time
+              example: "2026-03-19T14:00:00Z"
+
+    BulkReminderResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "2 reminders sent"
+        skipped:
+          type: array
+          items:
+            type: object
+            properties:
+              participant_id:
+                type: string
+                format: uuid
+              reason:
+                type: string
+                example: "Rate limit: wait 22h"
+
+    RateLimitError:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          example: "Rate limit exceeded. Wait 22h before next reminder."
+        retry_after:
+          type: integer
+          example: 79200
+          description: Seconds to wait
+
+    SubmitPaymentRequest:
+      type: object
+      required:
+        - proof_image
+        - file_name
+      properties:
+        proof_image:
+          type: string
+          description: Base64 encoded image
+          example: "data:image/jpeg;base64,/9j/4AAQSkZJRg..."
+        file_name:
+          type: string
+          example: "proof.jpg"
+        file_format:
+          type: string
+          example: "image/jpeg"
+
+    PaymentSubmitResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Payment proof submitted"
+        data:
+          type: object
+          properties:
+            proof_id:
+              type: string
+              format: uuid
+            status:
+              type: string
+              enum: [pending, submitted, paid, rejected]
+              example: "submitted"
+            uploaded_at:
+              type: string
+              format: date-time
+              example: "2026-03-18T15:00:00Z"
+
+    ApprovePaymentRequest:
+      type: object
+      properties:
+        rejection_reason:
+          type: string
+          nullable: true
+          default: null
+
+    PaymentApproveResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Payment approved"
+        data:
+          type: object
+          properties:
+            payment_status:
+              type: string
+              example: "paid"
+            approved_at:
+              type: string
+              format: date-time
+              example: "2026-03-18T15:30:00Z"
+
+    RejectPaymentRequest:
+      type: object
+      required:
+        - rejection_reason
+      properties:
+        rejection_reason:
+          type: string
+          example: "Photo is blurry, please upload clearer proof"
+
+    PaymentRejectResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Payment rejected"
+        data:
+          type: object
+          properties:
+            payment_status:
+              type: string
+              example: "rejected"
+            rejection_count:
+              type: integer
+              example: 1
+            rejected_at:
+              type: string
+              format: date-time
+              example: "2026-03-18T15:30:00Z"
+
+    BulkApproveRequest:
+      type: object
+      required:
+        - proof_ids
+      properties:
+        proof_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+
+    BulkApproveResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "3 payments approved"
+        data:
+          type: object
+          properties:
+            approved_count:
+              type: integer
+              example: 3
+            session_completed:
+              type: boolean
+              example: false
+
+    BulkRejectRequest:
+      type: object
+      required:
+        - proof_ids
+        - rejection_reason
+      properties:
+        proof_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        rejection_reason:
+          type: string
+          example: "Please upload clearer proof"
+
+    BulkRejectResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+
+    PaymentPageResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            session_name:
+              type: string
+              example: "Makan Siang"
+            participant_name:
+              type: string
+              example: "John Doe"
+            share_amount:
+              type: integer
+              example: 125000
+            currency:
+              type: string
+              example: "IDR"
+            bill_items:
+              type: array
+              items:
+                $ref: '#/components/schemas/BillItem'
+            payment_status:
+              type: string
+              enum: [pending, submitted, paid, rejected]
+              example: "pending"
+            link_expires_at:
+              type: string
+              format: date-time
+              example: "2026-03-25T14:00:00Z"
+
+    WhatsAppStatusWebhook:
+      type: object
+      required:
+        - message_id
+        - status
+        - timestamp
+      properties:
+        message_id:
+          type: string
+          example: "msg_123"
+        status:
+          type: string
+          enum: [queued, sent, delivered, read, failed]
+          example: "delivered"
+        timestamp:
+          type: string
+          format: date-time
+          example: "2026-03-18T15:00:00Z"
+        error:
+          type: string
+          nullable: true
 
   parameters:
-    RequestID:
-      name: X-Request-ID
-      in: header
-      description: Optional request ID for tracing
-      required: false
+    ContactID:
+      name: id
+      in: path
+      required: true
+      description: Contact ID
       schema:
         type: string
         format: uuid
+      example: "550e8400-e29b-41d4-a716-446655440000"
+
+    GroupID:
+      name: id
+      in: path
+      required: true
+      description: Contact Group ID
+      schema:
+        type: string
+        format: uuid
+      example: "550e8400-e29b-41d4-a716-446655440000"
+
+    SessionID:
+      name: id
+      in: path
+      required: true
+      description: Session ID
+      schema:
+        type: string
+        format: uuid
+      example: "550e8400-e29b-41d4-a716-446655440000"
+
+    ParticipantID:
+      name: participant_id
+      in: path
+      required: true
+      description: Participant ID
+      schema:
+        type: string
+        format: uuid
+      example: "550e8400-e29b-41d4-a716-446655440000"
+
+    ProofID:
+      name: proof_id
+      in: path
+      required: true
+      description: Payment Proof ID
+      schema:
+        type: string
+        format: uuid
+      example: "550e8400-e29b-41d4-a716-446655440000"
 
 tags:
   - name: Health
     description: Health check operations
+  - name: Authentication
+    description: Authentication operations
+  - name: Contacts
+    description: Contact management operations
+  - name: Contact Groups
+    description: Contact group management operations
+  - name: Sessions
+    description: Session management operations
+  - name: Notifications
+    description: Notification operations
+  - name: Payments
+    description: Payment operations
+  - name: Webhooks
+    description: Webhook operations
