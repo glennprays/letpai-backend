@@ -3,11 +3,11 @@ package handler
 import (
 	"time"
 
-	"github.com/gofiber/fiber/v2"
 	"github.com/glennprays/letpai-backend/internal/httperror"
 	"github.com/glennprays/letpai-backend/internal/params/request"
 	"github.com/glennprays/letpai-backend/internal/params/response"
 	"github.com/glennprays/letpai-backend/internal/usecase/auth"
+	"github.com/gofiber/fiber/v2"
 )
 
 // AuthHandler handles authentication requests
@@ -67,9 +67,9 @@ func (h *AuthHandler) Register(c *fiber.Ctx) error {
 	expiresAt, _ := time.Parse(time.RFC3339, result.ExpiresAt)
 
 	return c.Status(fiber.StatusCreated).JSON(response.RegisterResponse{
-		Success:  true,
-		Message:  "OTP sent to your WhatsApp",
-		UserID:   result.UserID,
+		Success:   true,
+		Message:   "OTP sent to your WhatsApp",
+		UserID:    result.UserID,
 		ExpiresAt: expiresAt,
 	})
 }
