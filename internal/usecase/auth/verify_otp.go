@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/glennprays/letpai-backend/domain/errors"
+	"github.com/glennprays/letpai-backend/domain"
 	"github.com/glennprays/letpai-backend/domain/ports"
 	"github.com/glennprays/letpai-backend/internal/service"
 )
@@ -17,8 +17,8 @@ type VerifyOTPRequest struct {
 
 // VerifyOTPResponse represents the response after OTP verification
 type VerifyOTPResponse struct {
-	Token string          `json:"token"`
-	User  *UserResponse   `json:"user"`
+	Token string        `json:"token"`
+	User  *UserResponse `json:"user"`
 }
 
 // UserResponse represents user data in responses
@@ -30,10 +30,10 @@ type UserResponse struct {
 
 // VerifyOTPUseCase handles OTP verification
 type VerifyOTPUseCase struct {
-	userRepo    ports.UserRepository
-	otpRepo     ports.OTPRepository
-	jwtSvc      *service.JWTService
-	otpSvc      *service.OTPService
+	userRepo ports.UserRepository
+	otpRepo  ports.OTPRepository
+	jwtSvc   *service.JWTService
+	otpSvc   *service.OTPService
 }
 
 // NewVerifyOTPUseCase creates a new verify OTP use case
@@ -55,28 +55,28 @@ func NewVerifyOTPUseCase(
 func (uc *VerifyOTPUseCase) Execute(ctx context.Context, req *VerifyOTPRequest) (*VerifyOTPResponse, error) {
 	// Validate OTP code format
 	if !uc.otpSvc.ValidateCode(req.OTPCode) {
-		return nil, errors.NewError(errors.ErrBadRequest, errors.New("invalid OTP code format"))
+		return nil, domain.NewError(domain.ErrBadRequest, errors.New("invalid OTP code format"))
 	}
 
 	// Find valid OTP for this phone number
 	otp, err := uc.otpRepo.FindValidByPhone(ctx, req.WhatsAppNumber)
 	if err != nil {
-		return nil, errors.NewError(errors.ErrNotFound, errors.New("no valid OTP found"))
+		return nil, domain.NewError(domain.ErrNotFound, errors.New("no valid OTP found"))
 	}
 
 	// Check if OTP is expired
 	if otp.IsExpired() {
-		return nil, errors.NewError(errors.ErrBadRequest, errors.New("OTP has expired"))
+		return nil, domain.NewError(domain.ErrBadRequest, errors.New("OTP has expired"))
 	}
 
 	// Check if OTP is already used
 	if otp.IsUsed {
-		return nil, errors.NewError(errors.ErrBadRequest, errors.New("OTP has already been used"))
+		return nil, domain.NewError(domain.ErrBadRequest, errors.New("OTP has already been used"))
 	}
 
 	// Verify OTP code
 	if otp.OTPCode != req.OTPCode {
-		return nil, errors.NewError(errors.ErrBadRequest, errors.New("invalid OTP code"))
+		return nil, domain.NewError(domain.ErrBadRequest, errors.New("invalid OTP code"))
 	}
 
 	// Mark OTP as used
@@ -99,7 +99,7 @@ func (uc *VerifyOTPUseCase) Execute(ctx context.Context, req *VerifyOTPRequest) 
 	// Generate JWT token
 	token, err := uc.jwtSvc.GenerateToken(user.UserID.String(), user.WhatsAppNumber)
 	if err != nil {
-		return nil, errors.NewError(errors.ErrInternalFailure, err)
+		return nil, domain.NewError(domain.ErrInternalFailure, err)
 	}
 
 	return &VerifyOTPResponse{

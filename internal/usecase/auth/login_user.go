@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/glennprays/letpai-backend/domain/errors"
+	"github.com/glennprays/letpai-backend/domain"
 	"github.com/glennprays/letpai-backend/domain/ports"
 	"github.com/glennprays/letpai-backend/internal/service"
 )
@@ -46,23 +46,23 @@ func (uc *LoginUserUseCase) Execute(ctx context.Context, req *LoginRequest) (*Lo
 	// Find user by WhatsApp number
 	user, err := uc.userRepo.FindByWhatsApp(ctx, req.WhatsAppNumber)
 	if err != nil {
-		return nil, errors.NewError(errors.ErrUnauthorized, errors.New("invalid credentials"))
+		return nil, domain.NewError(domain.ErrUnauthorized, errors.New("invalid credentials"))
 	}
 
 	// Check if user is verified
 	if !user.IsVerified {
-		return nil, errors.NewError(errors.ErrUnauthorized, errors.New("please verify your account first"))
+		return nil, domain.NewError(domain.ErrUnauthorized, errors.New("please verify your account first"))
 	}
 
 	// Verify password
 	if !uc.passwordSvc.Verify(req.Password, user.PasswordHash) {
-		return nil, errors.NewError(errors.ErrUnauthorized, errors.New("invalid credentials"))
+		return nil, domain.NewError(domain.ErrUnauthorized, errors.New("invalid credentials"))
 	}
 
 	// Generate JWT token
 	token, err := uc.jwtSvc.GenerateToken(user.UserID.String(), user.WhatsAppNumber)
 	if err != nil {
-		return nil, errors.NewError(errors.ErrInternalFailure, err)
+		return nil, domain.NewError(domain.ErrInternalFailure, err)
 	}
 
 	return &LoginResponse{

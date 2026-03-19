@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 
+	"github.com/glennprays/letpai-backend/domain"
 	"github.com/glennprays/letpai-backend/domain/entity"
-	"github.com/glennprays/letpai-backend/domain/errors"
 	"github.com/glennprays/letpai-backend/domain/ports"
 	"github.com/glennprays/letpai-backend/internal/service"
 )
@@ -18,17 +18,17 @@ type RegisterUserRequest struct {
 
 // RegisterUserResponse represents the response after user registration
 type RegisterUserResponse struct {
-	UserID    string    `json:"user_id"`
-	ExpiresAt string    `json:"expires_at"`
+	UserID    string `json:"user_id"`
+	ExpiresAt string `json:"expires_at"`
 }
 
 // RegisterUserUseCase handles user registration with OTP verification
 type RegisterUserUseCase struct {
-	userRepo       ports.UserRepository
-	otpRepo        ports.OTPRepository
-	passwordSvc    *service.PasswordService
-	otpSvc         *service.OTPService
-	whatsappSvc    *service.WhatsAppService
+	userRepo    ports.UserRepository
+	otpRepo     ports.OTPRepository
+	passwordSvc *service.PasswordService
+	otpSvc      *service.OTPService
+	whatsappSvc *service.WhatsAppService
 }
 
 // NewRegisterUserUseCase creates a new register user use case
@@ -52,7 +52,7 @@ func NewRegisterUserUseCase(
 func (uc *RegisterUserUseCase) Execute(ctx context.Context, req *RegisterUserRequest) (*RegisterUserResponse, error) {
 	// Validate password
 	if err := uc.passwordSvc.ValidatePassword(req.Password); err != nil {
-		return nil, errors.NewError(errors.ErrBadRequest, err)
+		return nil, domain.NewError(domain.ErrBadRequest, err)
 	}
 
 	// Check if user already exists
@@ -61,13 +61,13 @@ func (uc *RegisterUserUseCase) Execute(ctx context.Context, req *RegisterUserReq
 		return nil, err
 	}
 	if exists {
-		return nil, errors.NewError(errors.ErrConflict, errors.New("user already exists"))
+		return nil, domain.NewError(domain.ErrConflict, errors.New("user already exists"))
 	}
 
 	// Hash password
 	hashedPassword, err := uc.passwordSvc.Hash(req.Password)
 	if err != nil {
-		return nil, errors.NewError(errors.ErrInternalFailure, err)
+		return nil, domain.NewError(domain.ErrInternalFailure, err)
 	}
 
 	// Create user
@@ -79,7 +79,7 @@ func (uc *RegisterUserUseCase) Execute(ctx context.Context, req *RegisterUserReq
 	// Generate OTP
 	otpCode, err := uc.otpSvc.Generate()
 	if err != nil {
-		return nil, errors.NewError(errors.ErrInternalFailure, err)
+		return nil, domain.NewError(domain.ErrInternalFailure, err)
 	}
 
 	// Create OTP verification

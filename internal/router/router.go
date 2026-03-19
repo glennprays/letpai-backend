@@ -3,26 +3,39 @@ package router
 import (
 	"github.com/glennprays/letpai-backend/internal/handler"
 	"github.com/glennprays/letpai-backend/internal/middleware"
+	"github.com/glennprays/letpai-backend/internal/service"
 	"github.com/glennprays/log"
 	"github.com/gofiber/fiber/v2"
 )
 
 type Router struct {
-	logger        *log.Logger
-	HealthHandler *handler.HealthHandler
-	AuthHandler   *handler.AuthHandler
+	logger              *log.Logger
+	HealthHandler       *handler.HealthHandler
+	AuthHandler         *handler.AuthHandler
+	ContactGroupHandler *handler.ContactGroupHandler
+	ContactHandler      *handler.ContactHandler
+	SessionHandler      *handler.SessionHandler
+	jwtService          *service.JWTService
 }
 
 func NewRouter(
 	logger *log.Logger,
 	healthHandler *handler.HealthHandler,
 	authHandler *handler.AuthHandler,
+	contactGroupHandler *handler.ContactGroupHandler,
+	contactHandler *handler.ContactHandler,
+	sessionHandler *handler.SessionHandler,
+	jwtService *service.JWTService,
 ) *Router {
 	routerLogger := logger.With(log.String("component", "router"))
 	return &Router{
-		logger:        routerLogger,
-		HealthHandler: healthHandler,
-		AuthHandler:   authHandler,
+		logger:              routerLogger,
+		HealthHandler:       healthHandler,
+		AuthHandler:         authHandler,
+		ContactGroupHandler: contactGroupHandler,
+		ContactHandler:      contactHandler,
+		SessionHandler:      sessionHandler,
+		jwtService:          jwtService,
 	}
 }
 
@@ -31,7 +44,6 @@ func (r *Router) Setup(app *fiber.App) {
 	// Global middleware
 	app.Use(middleware.TraceID())
 	app.Use(middleware.CORS())
-
 	app.Use(middleware.NewHTTPLogger(r.logger))
 
 	// API v1 group
@@ -42,9 +54,10 @@ func (r *Router) Setup(app *fiber.App) {
 	r.setupAuthRoutes(v1)
 
 	// Protected routes (require auth)
-	// protected := v1.Use(middleware.Authenticate(jwtSvc))
-	// r.setupContactRoutes(protected)
-	// etc.
+	protected := v1.Use(middleware.Authenticate(r.jwtService))
+	r.setupContactGroupRoutes(protected)
+	r.setupContactRoutes(protected)
+	r.setupSessionRoutes(protected)
 }
 
 func (r *Router) setupHealthRoutes(group fiber.Router) {
@@ -57,4 +70,36 @@ func (r *Router) setupAuthRoutes(group fiber.Router) {
 	auth.Post("/verify-otp", r.AuthHandler.VerifyOTP)
 	auth.Post("/login", r.AuthHandler.Login)
 	auth.Post("/logout", r.AuthHandler.Logout)
+}
+
+func (r *Router) setupContactGroupRoutes(group fiber.Router) {
+	contactGroups := group.Group("/contact-groups")
+	contactGroups.Post("/", r.ContactGroupHandler.Create)
+	contactGroups.Get("/", r.ContactGroupHandler.GetGroups)
+	contactGroups.Put("/:id", r.ContactGroupHandler.Update)
+	contactGroups.Delete("/:id", r.ContactGroupHandler.Delete)
+}
+
+func (r *Router) setupContactRoutes(group fiber.Router) {
+	contacts := group.Group("/contacts")
+	contacts.Post("/", r.ContactHandler.Create)
+	contacts.Get("/", r.ContactHandler.GetContacts)
+	contacts.Get("/:id", r.ContactHandler.GetByID)
+	contacts.Put("/:id", r.ContactHandler.Update)
+	contacts.Delete("/:id", r.ContactHandler.Delete)
+	contacts.Post("/bulk", r.ContactHandler.BulkOperations)
+}
+
+func (r *Router) setupSessionRoutes(group fiber.Router) {
+	sessions := group.Group("/sessions")
+	sessions.Post("/", r.SessionHandler.Create)
+	sessions.Get("/", r.SessionHandler.GetSessions)
+	sessions.Get("/:id", r.SessionHandler.GetByID)
+	sessions.Put("/:id", r.SessionHandler.Update)
+	sessions.Delete("/:id", r.SessionHandler.Delete)
+	sessions.Post("/:id/participants", r.SessionHandler.AddParticipants)
+	sessions.Delete("/:id/participants/:participant_id", r.SessionHandler.RemoveParticipant)
+	sessions.Put("/:id/participants/:participant_id", r.SessionHandler.UpdateParticipant)
+	sessions.Post("/:id/bills", r.SessionHandler.AddBillItem)
+	sessions.Put("/:id/calculate-splits", r.SessionHandler.CalculateSplits)
 }
