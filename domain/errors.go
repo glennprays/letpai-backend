@@ -4,12 +4,14 @@ import "errors"
 
 // Service error types
 var (
-	ErrBadRequest      = errors.New("bad request")
-	ErrNotFound        = errors.New("not found")
-	ErrInternalFailure = errors.New("internal failure")
-	ErrUnauthorized    = errors.New("unauthorized")
-	ErrForbidden       = errors.New("forbidden")
-	ErrConflict        = errors.New("conflict")
+	ErrBadRequest                  = errors.New("bad request")
+	ErrNotFound                    = errors.New("not found")
+	ErrInternalFailure             = errors.New("internal failure")
+	ErrUnauthorized                = errors.New("unauthorized")
+	ErrForbidden                   = errors.New("forbidden")
+	ErrConflict                    = errors.New("conflict")
+	ErrInvalidStatusTransition     = errors.New("invalid status transition")
+	ErrInvalidPaymentStatusTransition = errors.New("invalid payment status transition")
 )
 
 // Error wraps service and application errors
