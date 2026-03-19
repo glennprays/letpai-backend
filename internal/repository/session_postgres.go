@@ -61,14 +61,37 @@ func (r *PostgresSessionRepository) FindByID(ctx context.Context, sessionID stri
 		WHERE session_id = $1 AND user_id = $2 AND deleted_at IS NULL
 	`
 
+	row := r.db.QueryRowxContext(ctx, query, sessionID, userID)
+	if row.Err() != nil {
+		if errors.Is(row.Err(), sql.ErrNoRows) {
+			return nil, domain.NewError(domain.ErrNotFound, nil)
+		}
+		return nil, domain.NewError(domain.ErrInternalFailure, row.Err())
+	}
+
 	var session entity.Session
-	err := r.db.GetContext(ctx, &session, query, sessionID, userID)
+	var statusStr string
+	err := row.Scan(
+		&session.SessionID,
+		&session.UserID,
+		&session.Title,
+		&session.Description,
+		&statusStr,
+		&session.TotalAmount,
+		&session.Currency,
+		&session.SessionDate,
+		&session.CreatedAt,
+		&session.UpdatedAt,
+		&session.DeletedAt,
+	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, domain.NewError(domain.ErrNotFound, nil)
 		}
 		return nil, domain.NewError(domain.ErrInternalFailure, err)
 	}
+
+	session.Status = valueobject.SessionStatus(statusStr)
 
 	return &session, nil
 }
@@ -138,7 +161,7 @@ func (r *PostgresSessionRepository) FindAll(ctx context.Context, userID string, 
 		FROM sessions
 		WHERE ` + whereClause
 	var total int
-	if err := r.db.GetContext(ctx, &total, countQuery, args...); err != nil {
+	if err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
 		return nil, domain.NewError(domain.ErrInternalFailure, err)
 	}
 
@@ -151,8 +174,8 @@ func (r *PostgresSessionRepository) FindAll(ctx context.Context, userID string, 
 		LIMIT $` + string(rune('0'+argIndex)) + ` OFFSET $` + string(rune('0'+argIndex+1))
 	args = append(args, opts.Limit, offset)
 
-	var sessions []*entity.Session
-	if err := r.db.SelectContext(ctx, &sessions, dataQuery, args...); err != nil {
+	rows, err := r.db.QueryContext(ctx, dataQuery, args...)
+	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return &ports.SessionListResult{
 				Sessions: []*entity.Session{},
@@ -160,6 +183,42 @@ func (r *PostgresSessionRepository) FindAll(ctx context.Context, userID string, 
 			}, nil
 		}
 		return nil, domain.NewError(domain.ErrInternalFailure, err)
+	}
+	defer rows.Close()
+
+	var sessions []*entity.Session
+	for rows.Next() {
+		var session entity.Session
+		var statusStr string
+		err = rows.Scan(
+			&session.SessionID,
+			&session.UserID,
+			&session.Title,
+			&session.Description,
+			&statusStr,
+			&session.TotalAmount,
+			&session.Currency,
+			&session.SessionDate,
+			&session.CreatedAt,
+			&session.UpdatedAt,
+			&session.DeletedAt,
+		)
+		if err != nil {
+			return nil, domain.NewError(domain.ErrInternalFailure, err)
+		}
+		session.Status = valueobject.SessionStatus(statusStr)
+		sessions = append(sessions, &session)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, domain.NewError(domain.ErrInternalFailure, err)
+	}
+
+	if len(sessions) == 0 {
+		return &ports.SessionListResult{
+			Sessions: []*entity.Session{},
+			Total:    total,
+		}, nil
 	}
 
 	return &ports.SessionListResult{

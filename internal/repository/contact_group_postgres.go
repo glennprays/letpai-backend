@@ -56,8 +56,25 @@ func (r *PostgresContactGroupRepository) FindByID(ctx context.Context, groupID s
 		WHERE group_id = $1 AND user_id = $2 AND deleted_at IS NULL
 	`
 
+	row := r.db.QueryRowxContext(ctx, query, groupID, userID)
+	if row.Err() != nil {
+		if errors.Is(row.Err(), sql.ErrNoRows) {
+			return nil, domain.NewError(domain.ErrNotFound, nil)
+		}
+		return nil, domain.NewError(domain.ErrInternalFailure, row.Err())
+	}
+
 	var group entity.ContactGroup
-	err := r.db.GetContext(ctx, &group, query, groupID, userID)
+	err := row.Scan(
+		&group.GroupID,
+		&group.UserID,
+		&group.Name,
+		&group.Color,
+		&group.SortOrder,
+		&group.CreatedAt,
+		&group.UpdatedAt,
+		&group.DeletedAt,
+	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, domain.NewError(domain.ErrNotFound, nil)
@@ -77,13 +94,40 @@ func (r *PostgresContactGroupRepository) FindAll(ctx context.Context, userID str
 		ORDER BY sort_order ASC, created_at ASC
 	`
 
-	var groups []*entity.ContactGroup
-	err := r.db.SelectContext(ctx, &groups, query, userID)
+	rows, err := r.db.QueryContext(ctx, query, userID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return []*entity.ContactGroup{}, nil
 		}
 		return nil, domain.NewError(domain.ErrInternalFailure, err)
+	}
+	defer rows.Close()
+
+	var groups []*entity.ContactGroup
+	for rows.Next() {
+		var group entity.ContactGroup
+		err = rows.Scan(
+			&group.GroupID,
+			&group.UserID,
+			&group.Name,
+			&group.Color,
+			&group.SortOrder,
+			&group.CreatedAt,
+			&group.UpdatedAt,
+			&group.DeletedAt,
+		)
+		if err != nil {
+			return nil, domain.NewError(domain.ErrInternalFailure, err)
+		}
+		groups = append(groups, &group)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, domain.NewError(domain.ErrInternalFailure, err)
+	}
+
+	if len(groups) == 0 {
+		return []*entity.ContactGroup{}, nil
 	}
 
 	return groups, nil
@@ -164,7 +208,7 @@ func (r *PostgresContactGroupRepository) ExistsByName(ctx context.Context, userI
 	}
 
 	var count int
-	err := r.db.GetContext(ctx, &count, query, args...)
+	err := r.db.QueryRowContext(ctx, query, args...).Scan(&count)
 	if err != nil {
 		return false, domain.NewError(domain.ErrInternalFailure, err)
 	}

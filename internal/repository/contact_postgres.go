@@ -60,8 +60,28 @@ func (r *PostgresContactRepository) FindByID(ctx context.Context, contactID stri
 		WHERE c.contact_id = $1 AND c.user_id = $2 AND c.deleted_at IS NULL
 	`
 
+	row := r.db.QueryRowxContext(ctx, query, contactID, userID)
+	if row.Err() != nil {
+		if errors.Is(row.Err(), sql.ErrNoRows) {
+			return nil, domain.NewError(domain.ErrNotFound, nil)
+		}
+		return nil, domain.NewError(domain.ErrInternalFailure, row.Err())
+	}
+
 	var contact entity.Contact
-	err := r.db.GetContext(ctx, &contact, query, contactID, userID)
+	err := row.Scan(
+		&contact.ContactID,
+		&contact.UserID,
+		&contact.Name,
+		&contact.WhatsAppNumber,
+		&contact.GroupID,
+		&contact.IsFavorite,
+		&contact.CreatedAt,
+		&contact.UpdatedAt,
+		&contact.DeletedAt,
+		&contact.GroupName,
+		&contact.GroupColor,
+	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, domain.NewError(domain.ErrNotFound, nil)
@@ -143,7 +163,7 @@ func (r *PostgresContactRepository) FindAll(ctx context.Context, userID string, 
 		FROM contacts c
 		WHERE ` + whereClause
 	var total int
-	if err := r.db.GetContext(ctx, &total, countQuery, args...); err != nil {
+	if err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
 		return nil, domain.NewError(domain.ErrInternalFailure, err)
 	}
 
@@ -159,8 +179,8 @@ func (r *PostgresContactRepository) FindAll(ctx context.Context, userID string, 
 		LIMIT $` + string(rune('0'+argIndex)) + ` OFFSET $` + string(rune('0'+argIndex+1))
 	args = append(args, opts.Limit, offset)
 
-	var contacts []*entity.Contact
-	if err := r.db.SelectContext(ctx, &contacts, dataQuery, args...); err != nil {
+	rows, err := r.db.QueryContext(ctx, dataQuery, args...)
+	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return &ports.ContactListResult{
 				Contacts: []*entity.Contact{},
@@ -168,6 +188,40 @@ func (r *PostgresContactRepository) FindAll(ctx context.Context, userID string, 
 			}, nil
 		}
 		return nil, domain.NewError(domain.ErrInternalFailure, err)
+	}
+	defer rows.Close()
+
+	var contacts []*entity.Contact
+	for rows.Next() {
+		var contact entity.Contact
+		err = rows.Scan(
+			&contact.ContactID,
+			&contact.UserID,
+			&contact.Name,
+			&contact.WhatsAppNumber,
+			&contact.GroupID,
+			&contact.IsFavorite,
+			&contact.CreatedAt,
+			&contact.UpdatedAt,
+			&contact.DeletedAt,
+			&contact.GroupName,
+			&contact.GroupColor,
+		)
+		if err != nil {
+			return nil, domain.NewError(domain.ErrInternalFailure, err)
+		}
+		contacts = append(contacts, &contact)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, domain.NewError(domain.ErrInternalFailure, err)
+	}
+
+	if len(contacts) == 0 {
+		return &ports.ContactListResult{
+			Contacts: []*entity.Contact{},
+			Total:    total,
+		}, nil
 	}
 
 	return &ports.ContactListResult{
@@ -309,7 +363,7 @@ func (r *PostgresContactRepository) ExistsByWhatsApp(ctx context.Context, userID
 	}
 
 	var count int
-	err := r.db.GetContext(ctx, &count, query, args...)
+	err := r.db.QueryRowContext(ctx, query, args...).Scan(&count)
 	if err != nil {
 		return false, domain.NewError(domain.ErrInternalFailure, err)
 	}

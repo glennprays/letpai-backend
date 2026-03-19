@@ -8,6 +8,7 @@ import (
 	"github.com/glennprays/letpai-backend/domain/entity"
 	"github.com/glennprays/letpai-backend/domain"
 	"github.com/glennprays/letpai-backend/domain/ports"
+	"github.com/glennprays/letpai-backend/domain/valueobject"
 	"github.com/jmoiron/sqlx"
 )
 
@@ -58,14 +59,36 @@ func (r *PostgresParticipantRepository) FindByID(ctx context.Context, participan
 		WHERE participant_id = $1
 	`
 
+	row := r.db.QueryRowxContext(ctx, query, participantID)
+	if row.Err() != nil {
+		if errors.Is(row.Err(), sql.ErrNoRows) {
+			return nil, domain.NewError(domain.ErrNotFound, nil)
+		}
+		return nil, domain.NewError(domain.ErrInternalFailure, row.Err())
+	}
+
 	var participant entity.SessionParticipant
-	err := r.db.GetContext(ctx, &participant, query, participantID)
+	var paymentStatusStr string
+	err := row.Scan(
+		&participant.ParticipantID,
+		&participant.SessionID,
+		&participant.ContactID,
+		&participant.CustomName,
+		&participant.CustomWhatsApp,
+		&participant.ShareAmount,
+		&paymentStatusStr,
+		&participant.PaymentProofURL,
+		&participant.JoinedAt,
+		&participant.UpdatedAt,
+	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, domain.NewError(domain.ErrNotFound, nil)
 		}
 		return nil, domain.NewError(domain.ErrInternalFailure, err)
 	}
+
+	participant.PaymentStatus = valueobject.PaymentStatus(paymentStatusStr)
 
 	return &participant, nil
 }
@@ -79,13 +102,44 @@ func (r *PostgresParticipantRepository) FindBySessionID(ctx context.Context, ses
 		ORDER BY joined_at ASC
 	`
 
-	var participants []*entity.SessionParticipant
-	err := r.db.SelectContext(ctx, &participants, query, sessionID)
+	rows, err := r.db.QueryContext(ctx, query, sessionID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return []*entity.SessionParticipant{}, nil
 		}
 		return nil, domain.NewError(domain.ErrInternalFailure, err)
+	}
+	defer rows.Close()
+
+	var participants []*entity.SessionParticipant
+	for rows.Next() {
+		var participant entity.SessionParticipant
+		var paymentStatusStr string
+		err = rows.Scan(
+			&participant.ParticipantID,
+			&participant.SessionID,
+			&participant.ContactID,
+			&participant.CustomName,
+			&participant.CustomWhatsApp,
+			&participant.ShareAmount,
+			&paymentStatusStr,
+			&participant.PaymentProofURL,
+			&participant.JoinedAt,
+			&participant.UpdatedAt,
+		)
+		if err != nil {
+			return nil, domain.NewError(domain.ErrInternalFailure, err)
+		}
+		participant.PaymentStatus = valueobject.PaymentStatus(paymentStatusStr)
+		participants = append(participants, &participant)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, domain.NewError(domain.ErrInternalFailure, err)
+	}
+
+	if len(participants) == 0 {
+		return []*entity.SessionParticipant{}, nil
 	}
 
 	return participants, nil
@@ -103,13 +157,45 @@ func (r *PostgresParticipantRepository) FindBySessionIDWithContactInfo(ctx conte
 		ORDER BY sp.joined_at ASC
 	`
 
-	var participants []*entity.SessionParticipant
-	err := r.db.SelectContext(ctx, &participants, query, sessionID)
+	rows, err := r.db.QueryContext(ctx, query, sessionID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return []*entity.SessionParticipant{}, nil
 		}
 		return nil, domain.NewError(domain.ErrInternalFailure, err)
+	}
+	defer rows.Close()
+
+	var participants []*entity.SessionParticipant
+	for rows.Next() {
+		var participant entity.SessionParticipant
+		var paymentStatusStr string
+		err = rows.Scan(
+			&participant.ParticipantID,
+			&participant.SessionID,
+			&participant.ContactID,
+			&participant.CustomName,
+			&participant.CustomWhatsApp,
+			&participant.ShareAmount,
+			&paymentStatusStr,
+			&participant.PaymentProofURL,
+			&participant.JoinedAt,
+			&participant.UpdatedAt,
+			&participant.ContactAvatarURL,
+		)
+		if err != nil {
+			return nil, domain.NewError(domain.ErrInternalFailure, err)
+		}
+		participant.PaymentStatus = valueobject.PaymentStatus(paymentStatusStr)
+		participants = append(participants, &participant)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, domain.NewError(domain.ErrInternalFailure, err)
+	}
+
+	if len(participants) == 0 {
+		return []*entity.SessionParticipant{}, nil
 	}
 
 	return participants, nil
@@ -286,7 +372,7 @@ func (r *PostgresParticipantRepository) CountBySessionIDAndStatus(ctx context.Co
 	`
 
 	var count int
-	err := r.db.GetContext(ctx, &count, query, sessionID, status)
+	err := r.db.QueryRowContext(ctx, query, sessionID, status).Scan(&count)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return 0, nil

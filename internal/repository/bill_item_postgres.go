@@ -55,8 +55,24 @@ func (r *PostgresBillItemRepository) FindByID(ctx context.Context, billItemID st
 		WHERE bill_item_id = $1
 	`
 
+	row := r.db.QueryRowxContext(ctx, query, billItemID)
+	if row.Err() != nil {
+		if errors.Is(row.Err(), sql.ErrNoRows) {
+			return nil, domain.NewError(domain.ErrNotFound, nil)
+		}
+		return nil, domain.NewError(domain.ErrInternalFailure, row.Err())
+	}
+
 	var item entity.BillItem
-	err := r.db.GetContext(ctx, &item, query, billItemID)
+	err := row.Scan(
+		&item.BillItemID,
+		&item.SessionID,
+		&item.Description,
+		&item.Amount,
+		&item.Category,
+		&item.CreatedAt,
+		&item.UpdatedAt,
+	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, domain.NewError(domain.ErrNotFound, nil)
@@ -76,13 +92,39 @@ func (r *PostgresBillItemRepository) FindBySessionID(ctx context.Context, sessio
 		ORDER BY created_at ASC
 	`
 
-	var items []*entity.BillItem
-	err := r.db.SelectContext(ctx, &items, query, sessionID)
+	rows, err := r.db.QueryContext(ctx, query, sessionID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return []*entity.BillItem{}, nil
 		}
 		return nil, domain.NewError(domain.ErrInternalFailure, err)
+	}
+	defer rows.Close()
+
+	var items []*entity.BillItem
+	for rows.Next() {
+		var item entity.BillItem
+		err = rows.Scan(
+			&item.BillItemID,
+			&item.SessionID,
+			&item.Description,
+			&item.Amount,
+			&item.Category,
+			&item.CreatedAt,
+			&item.UpdatedAt,
+		)
+		if err != nil {
+			return nil, domain.NewError(domain.ErrInternalFailure, err)
+		}
+		items = append(items, &item)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, domain.NewError(domain.ErrInternalFailure, err)
+	}
+
+	if len(items) == 0 {
+		return []*entity.BillItem{}, nil
 	}
 
 	return items, nil
@@ -170,7 +212,7 @@ func (r *PostgresBillItemRepository) SumBySessionID(ctx context.Context, session
 	`
 
 	var total float64
-	err := r.db.GetContext(ctx, &total, query, sessionID)
+	err := r.db.QueryRowContext(ctx, query, sessionID).Scan(&total)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return 0, nil

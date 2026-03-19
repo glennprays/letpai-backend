@@ -58,8 +58,25 @@ func (r *PostgresOTPRepository) FindValidByPhone(ctx context.Context, whatsappNu
 		LIMIT 1
 	`
 
+	row := r.db.QueryRowxContext(ctx, query, whatsappNumber)
+	if row.Err() != nil {
+		if errors.Is(row.Err(), sql.ErrNoRows) {
+			return nil, domain.NewError(domain.ErrNotFound, nil)
+		}
+		return nil, domain.NewError(domain.ErrInternalFailure, row.Err())
+	}
+
 	var otp entity.OTPVerification
-	err := r.db.GetContext(ctx, &otp, query, whatsappNumber)
+	err := row.Scan(
+		&otp.OTPID,
+		&otp.UserID,
+		&otp.WhatsAppNumber,
+		&otp.OTPCode,
+		&otp.ExpiresAt,
+		&otp.IsUsed,
+		&otp.CreatedAt,
+		&otp.UsedAt,
+	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, domain.NewError(domain.ErrNotFound, nil)
@@ -78,8 +95,25 @@ func (r *PostgresOTPRepository) FindByID(ctx context.Context, otpID string) (*en
 		WHERE otp_id = $1
 	`
 
+	row := r.db.QueryRowxContext(ctx, query, otpID)
+	if row.Err() != nil {
+		if errors.Is(row.Err(), sql.ErrNoRows) {
+			return nil, domain.NewError(domain.ErrNotFound, nil)
+		}
+		return nil, domain.NewError(domain.ErrInternalFailure, row.Err())
+	}
+
 	var otp entity.OTPVerification
-	err := r.db.GetContext(ctx, &otp, query, otpID)
+	err := row.Scan(
+		&otp.OTPID,
+		&otp.UserID,
+		&otp.WhatsAppNumber,
+		&otp.OTPCode,
+		&otp.ExpiresAt,
+		&otp.IsUsed,
+		&otp.CreatedAt,
+		&otp.UsedAt,
+	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, domain.NewError(domain.ErrNotFound, nil)

@@ -57,8 +57,26 @@ func (r *PostgresUserRepository) FindByID(ctx context.Context, userID string) (*
 		WHERE user_id = $1 AND deleted_at IS NULL
 	`
 
+	row := r.db.QueryRowxContext(ctx, query, userID)
+	if row.Err() != nil {
+		if errors.Is(row.Err(), sql.ErrNoRows) {
+			return nil, domain.NewError(domain.ErrNotFound, nil)
+		}
+		return nil, domain.NewError(domain.ErrInternalFailure, row.Err())
+	}
+
 	var user entity.User
-	err := r.db.GetContext(ctx, &user, query, userID)
+	err := row.Scan(
+		&user.UserID,
+		&user.WhatsAppNumber,
+		&user.PasswordHash,
+		&user.FullName,
+		&user.AvatarURL,
+		&user.IsVerified,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+		&user.DeletedAt,
+	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, domain.NewError(domain.ErrNotFound, nil)
@@ -77,8 +95,26 @@ func (r *PostgresUserRepository) FindByWhatsApp(ctx context.Context, whatsappNum
 		WHERE whatsapp_number = $1 AND deleted_at IS NULL
 	`
 
+	row := r.db.QueryRowxContext(ctx, query, whatsappNumber)
+	if row.Err() != nil {
+		if errors.Is(row.Err(), sql.ErrNoRows) {
+			return nil, domain.NewError(domain.ErrNotFound, nil)
+		}
+		return nil, domain.NewError(domain.ErrInternalFailure, row.Err())
+	}
+
 	var user entity.User
-	err := r.db.GetContext(ctx, &user, query, whatsappNumber)
+	err := row.Scan(
+		&user.UserID,
+		&user.WhatsAppNumber,
+		&user.PasswordHash,
+		&user.FullName,
+		&user.AvatarURL,
+		&user.IsVerified,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+		&user.DeletedAt,
+	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, domain.NewError(domain.ErrNotFound, nil)
@@ -157,7 +193,7 @@ func (r *PostgresUserRepository) IsExists(ctx context.Context, whatsappNumber st
 	`
 
 	var count int
-	err := r.db.GetContext(ctx, &count, query, whatsappNumber)
+	err := r.db.QueryRowContext(ctx, query, whatsappNumber).Scan(&count)
 	if err != nil {
 		return false, domain.NewError(domain.ErrInternalFailure, err)
 	}
