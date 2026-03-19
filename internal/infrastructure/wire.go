@@ -5,15 +5,18 @@ package infrastructure
 
 import (
 	"github.com/google/wire"
-	"github.com/jmoiron/sqlx"
 
 	"github.com/glennprays/letpai-backend/config"
 	"github.com/glennprays/letpai-backend/internal/handler"
-	"github.com/glennprays/letpai-backend/internal/middleware"
 	"github.com/glennprays/letpai-backend/internal/repository"
 	"github.com/glennprays/letpai-backend/internal/router"
 	"github.com/glennprays/letpai-backend/internal/service"
 	"github.com/glennprays/letpai-backend/internal/usecase/auth"
+	"github.com/glennprays/letpai-backend/internal/usecase/billing"
+	"github.com/glennprays/letpai-backend/internal/usecase/contact"
+	"github.com/glennprays/letpai-backend/internal/usecase/contactgroup"
+	"github.com/glennprays/letpai-backend/internal/usecase/participant"
+	"github.com/glennprays/letpai-backend/internal/usecase/session"
 	"github.com/glennprays/letpai-backend/pkg/logger"
 )
 
@@ -26,6 +29,11 @@ var CoreSet = wire.NewSet(
 var RepositorySet = wire.NewSet(
 	repository.NewPostgresUserRepository,
 	repository.NewPostgresOTPRepository,
+	repository.NewPostgresContactGroupRepository,
+	repository.NewPostgresContactRepository,
+	repository.NewPostgresSessionRepository,
+	repository.NewPostgresParticipantRepository,
+	repository.NewPostgresBillItemRepository,
 )
 
 var ServiceSet = wire.NewSet(
@@ -36,15 +44,44 @@ var ServiceSet = wire.NewSet(
 )
 
 var UseCaseSet = wire.NewSet(
+	// Auth use cases
 	auth.NewRegisterUserUseCase,
 	auth.NewVerifyOTPUseCase,
 	auth.NewLoginUserUseCase,
 	auth.NewLogoutUserUseCase,
+	// Contact group use cases
+	contactgroup.NewCreateGroupUseCase,
+	contactgroup.NewGetGroupsUseCase,
+	contactgroup.NewUpdateGroupUseCase,
+	contactgroup.NewDeleteGroupUseCase,
+	// Contact use cases
+	contact.NewCreateContactUseCase,
+	contact.NewGetContactsUseCase,
+	contact.NewGetContactByIDUseCase,
+	contact.NewUpdateContactUseCase,
+	contact.NewDeleteContactUseCase,
+	contact.NewBulkOperationsUseCase,
+	// Session use cases
+	session.NewCreateSessionUseCase,
+	session.NewGetSessionsUseCase,
+	session.NewGetSessionDetailUseCase,
+	session.NewUpdateSessionUseCase,
+	session.NewCancelSessionUseCase,
+	// Participant use cases
+	participant.NewAddParticipantsUseCase,
+	participant.NewRemoveParticipantUseCase,
+	participant.NewUpdateParticipantUseCase,
+	// Billing use cases
+	billing.NewAddBillItemUseCase,
+	billing.NewCalculateSplitsUseCase,
 )
 
 var HandlerSet = wire.NewSet(
 	handler.NewHealthHandler,
 	handler.NewAuthHandler,
+	handler.NewContactGroupHandler,
+	handler.NewContactHandler,
+	handler.NewSessionHandler,
 )
 
 var ApiSet = wire.NewSet(
@@ -87,7 +124,6 @@ func InitializeApp() (*App, error) {
 		ServiceSet,
 		UseCaseSet,
 		ApiSet,
-		middleware.Authenticate,
 		wire.Struct(new(App), "*"),
 	)
 	return nil, nil
