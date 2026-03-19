@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/glennprays/letpai-backend/domain/entity"
-	"github.com/glennprays/letpai-backend/domain/errors"
+	"github.com/glennprays/letpai-backend/domain"
 	"github.com/glennprays/letpai-backend/domain/ports"
 	"github.com/jmoiron/sqlx"
 )
@@ -43,7 +43,7 @@ func (r *PostgresUserRepository) Create(ctx context.Context, user *entity.User) 
 	)
 
 	if err != nil {
-		return errors.NewError(errors.ErrInternalFailure, err)
+		return domain.NewError(domain.ErrInternalFailure, err)
 	}
 
 	return nil
@@ -61,9 +61,9 @@ func (r *PostgresUserRepository) FindByID(ctx context.Context, userID string) (*
 	err := r.db.GetContext(ctx, &user, query, userID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, errors.NewError(errors.ErrNotFound, nil)
+			return nil, domain.NewError(domain.ErrNotFound, nil)
 		}
-		return nil, errors.NewError(errors.ErrInternalFailure, err)
+		return nil, domain.NewError(domain.ErrInternalFailure, err)
 	}
 
 	return &user, nil
@@ -81,9 +81,9 @@ func (r *PostgresUserRepository) FindByWhatsApp(ctx context.Context, whatsappNum
 	err := r.db.GetContext(ctx, &user, query, whatsappNumber)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, errors.NewError(errors.ErrNotFound, nil)
+			return nil, domain.NewError(domain.ErrNotFound, nil)
 		}
-		return nil, errors.NewError(errors.ErrInternalFailure, err)
+		return nil, domain.NewError(domain.ErrInternalFailure, err)
 	}
 
 	return &user, nil
@@ -108,16 +108,16 @@ func (r *PostgresUserRepository) Update(ctx context.Context, user *entity.User) 
 	)
 
 	if err != nil {
-		return errors.NewError(errors.ErrInternalFailure, err)
+		return domain.NewError(domain.ErrInternalFailure, err)
 	}
 
 	rows, err := result.RowsAffected()
 	if err != nil {
-		return errors.NewError(errors.ErrInternalFailure, err)
+		return domain.NewError(domain.ErrInternalFailure, err)
 	}
 
 	if rows == 0 {
-		return errors.NewError(errors.ErrNotFound, nil)
+		return domain.NewError(domain.ErrNotFound, nil)
 	}
 
 	return nil
@@ -134,16 +134,16 @@ func (r *PostgresUserRepository) Delete(ctx context.Context, userID string) erro
 	now := time.Now()
 	result, err := r.db.ExecContext(ctx, query, userID, now)
 	if err != nil {
-		return errors.NewError(errors.ErrInternalFailure, err)
+		return domain.NewError(domain.ErrInternalFailure, err)
 	}
 
 	rows, err := result.RowsAffected()
 	if err != nil {
-		return errors.NewError(errors.ErrInternalFailure, err)
+		return domain.NewError(domain.ErrInternalFailure, err)
 	}
 
 	if rows == 0 {
-		return errors.NewError(errors.ErrNotFound, nil)
+		return domain.NewError(domain.ErrNotFound, nil)
 	}
 
 	return nil
@@ -159,7 +159,7 @@ func (r *PostgresUserRepository) IsExists(ctx context.Context, whatsappNumber st
 	var count int
 	err := r.db.GetContext(ctx, &count, query, whatsappNumber)
 	if err != nil {
-		return false, errors.NewError(errors.ErrInternalFailure, err)
+		return false, domain.NewError(domain.ErrInternalFailure, err)
 	}
 
 	return count > 0, nil

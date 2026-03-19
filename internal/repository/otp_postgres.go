@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/glennprays/letpai-backend/domain/entity"
-	"github.com/glennprays/letpai-backend/domain/errors"
+	"github.com/glennprays/letpai-backend/domain"
 	"github.com/glennprays/letpai-backend/domain/ports"
 	"github.com/jmoiron/sqlx"
 )
@@ -42,7 +42,7 @@ func (r *PostgresOTPRepository) Create(ctx context.Context, otp *entity.OTPVerif
 	)
 
 	if err != nil {
-		return errors.NewError(errors.ErrInternalFailure, err)
+		return domain.NewError(domain.ErrInternalFailure, err)
 	}
 
 	return nil
@@ -62,9 +62,9 @@ func (r *PostgresOTPRepository) FindValidByPhone(ctx context.Context, whatsappNu
 	err := r.db.GetContext(ctx, &otp, query, whatsappNumber)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, errors.NewError(errors.ErrNotFound, nil)
+			return nil, domain.NewError(domain.ErrNotFound, nil)
 		}
-		return nil, errors.NewError(errors.ErrInternalFailure, err)
+		return nil, domain.NewError(domain.ErrInternalFailure, err)
 	}
 
 	return &otp, nil
@@ -82,9 +82,9 @@ func (r *PostgresOTPRepository) FindByID(ctx context.Context, otpID string) (*en
 	err := r.db.GetContext(ctx, &otp, query, otpID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, errors.NewError(errors.ErrNotFound, nil)
+			return nil, domain.NewError(domain.ErrNotFound, nil)
 		}
-		return nil, errors.NewError(errors.ErrInternalFailure, err)
+		return nil, domain.NewError(domain.ErrInternalFailure, err)
 	}
 
 	return &otp, nil
@@ -100,16 +100,16 @@ func (r *PostgresOTPRepository) MarkAsUsed(ctx context.Context, otpID string) er
 
 	result, err := r.db.ExecContext(ctx, query, otpID, time.Now())
 	if err != nil {
-		return errors.NewError(errors.ErrInternalFailure, err)
+		return domain.NewError(domain.ErrInternalFailure, err)
 	}
 
 	rows, err := result.RowsAffected()
 	if err != nil {
-		return errors.NewError(errors.ErrInternalFailure, err)
+		return domain.NewError(domain.ErrInternalFailure, err)
 	}
 
 	if rows == 0 {
-		return errors.NewError(errors.ErrNotFound, nil)
+		return domain.NewError(domain.ErrNotFound, nil)
 	}
 
 	return nil
@@ -125,7 +125,7 @@ func (r *PostgresOTPRepository) InvalidatePreviousOTPs(ctx context.Context, what
 
 	_, err := r.db.ExecContext(ctx, query, whatsappNumber, time.Now())
 	if err != nil {
-		return errors.NewError(errors.ErrInternalFailure, err)
+		return domain.NewError(domain.ErrInternalFailure, err)
 	}
 
 	return nil
@@ -141,12 +141,12 @@ func (r *PostgresOTPRepository) CleanupExpired(ctx context.Context, olderThan ti
 	cutoff := time.Now().Add(-olderThan)
 	result, err := r.db.ExecContext(ctx, query, cutoff)
 	if err != nil {
-		return 0, errors.NewError(errors.ErrInternalFailure, err)
+		return 0, domain.NewError(domain.ErrInternalFailure, err)
 	}
 
 	rows, err := result.RowsAffected()
 	if err != nil {
-		return 0, errors.NewError(errors.ErrInternalFailure, err)
+		return 0, domain.NewError(domain.ErrInternalFailure, err)
 	}
 
 	return rows, nil
