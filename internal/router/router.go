@@ -15,6 +15,8 @@ type Router struct {
 	ContactGroupHandler *handler.ContactGroupHandler
 	ContactHandler      *handler.ContactHandler
 	SessionHandler      *handler.SessionHandler
+	PaymentHandler      *handler.PaymentHandler
+	NotificationHandler *handler.NotificationHandler
 	jwtService          *service.JWTService
 }
 
@@ -25,6 +27,8 @@ func NewRouter(
 	contactGroupHandler *handler.ContactGroupHandler,
 	contactHandler *handler.ContactHandler,
 	sessionHandler *handler.SessionHandler,
+	paymentHandler *handler.PaymentHandler,
+	notificationHandler *handler.NotificationHandler,
 	jwtService *service.JWTService,
 ) *Router {
 	routerLogger := logger.With(log.String("component", "router"))
@@ -35,6 +39,8 @@ func NewRouter(
 		ContactGroupHandler: contactGroupHandler,
 		ContactHandler:      contactHandler,
 		SessionHandler:      sessionHandler,
+		PaymentHandler:      paymentHandler,
+		NotificationHandler: notificationHandler,
 		jwtService:          jwtService,
 	}
 }
@@ -52,12 +58,15 @@ func (r *Router) Setup(app *fiber.App) {
 	// Public routes (no auth required)
 	r.setupHealthRoutes(v1)
 	r.setupAuthRoutes(v1)
+	r.setupPublicPaymentRoutes(v1)
 
 	// Protected routes (require auth)
 	protected := v1.Use(middleware.Authenticate(r.jwtService))
 	r.setupContactGroupRoutes(protected)
 	r.setupContactRoutes(protected)
 	r.setupSessionRoutes(protected)
+	r.setupProtectedPaymentRoutes(protected)
+	r.setupNotificationRoutes(protected)
 }
 
 func (r *Router) setupHealthRoutes(group fiber.Router) {
@@ -70,6 +79,13 @@ func (r *Router) setupAuthRoutes(group fiber.Router) {
 	auth.Post("/verify-otp", r.AuthHandler.VerifyOTP)
 	auth.Post("/login", r.AuthHandler.Login)
 	auth.Post("/logout", r.AuthHandler.Logout)
+}
+
+func (r *Router) setupPublicPaymentRoutes(group fiber.Router) {
+	// Public payment routes (no auth required)
+	payments := group.Group("/payments")
+	payments.Post("/:participant_id/submit", r.PaymentHandler.SubmitPayment)
+	payments.Get("/:participant_id/public", r.PaymentHandler.GetPaymentPage)
 }
 
 func (r *Router) setupContactGroupRoutes(group fiber.Router) {
@@ -102,4 +118,20 @@ func (r *Router) setupSessionRoutes(group fiber.Router) {
 	sessions.Put("/:id/participants/:participant_id", r.SessionHandler.UpdateParticipant)
 	sessions.Post("/:id/bills", r.SessionHandler.AddBillItem)
 	sessions.Put("/:id/calculate-splits", r.SessionHandler.CalculateSplits)
+}
+
+func (r *Router) setupProtectedPaymentRoutes(group fiber.Router) {
+	// Protected payment routes (auth required)
+	payments := group.Group("/payments")
+	payments.Post("/:proof_id/approve", r.PaymentHandler.ApprovePayment)
+	payments.Post("/:proof_id/reject", r.PaymentHandler.RejectPayment)
+	payments.Post("/bulk-approve", r.PaymentHandler.BulkApprove)
+	payments.Post("/bulk-reject", r.PaymentHandler.BulkReject)
+}
+
+func (r *Router) setupNotificationRoutes(group fiber.Router) {
+	// Notification routes
+	group.Post("/sessions/:id/send-notifications", r.NotificationHandler.SendNotifications)
+	group.Post("/sessions/:id/bulk-reminder", r.NotificationHandler.BulkReminder)
+	group.Post("/participants/:participant_id/reminder", r.NotificationHandler.SendReminder)
 }

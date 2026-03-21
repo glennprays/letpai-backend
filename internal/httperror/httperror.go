@@ -53,3 +53,23 @@ func FromError(err error) APIError {
 	return apiError
 }
 
+// ErrBadRequest creates a bad request error
+func ErrBadRequest(msg string) error {
+	return domain.NewError(domain.ErrBadRequest, errors.New(msg))
+}
+
+// ErrNotFound creates a not found error
+func ErrNotFound(msg string) error {
+	return domain.NewError(domain.ErrNotFound, errors.New(msg))
+}
+
+// ErrUnauthorized creates an unauthorized error
+func ErrUnauthorized(msg string) error {
+	return domain.NewError(domain.ErrUnauthorized, errors.New(msg))
+}
+
+// ErrForbidden creates a forbidden error
+func ErrForbidden(msg string) error {
+	return domain.NewError(domain.ErrForbidden, errors.New(msg))
+}
+

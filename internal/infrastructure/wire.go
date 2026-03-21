@@ -15,7 +15,9 @@ import (
 	"github.com/glennprays/letpai-backend/internal/usecase/billing"
 	"github.com/glennprays/letpai-backend/internal/usecase/contact"
 	"github.com/glennprays/letpai-backend/internal/usecase/contactgroup"
+	"github.com/glennprays/letpai-backend/internal/usecase/notification"
 	"github.com/glennprays/letpai-backend/internal/usecase/participant"
+	"github.com/glennprays/letpai-backend/internal/usecase/payment"
 	"github.com/glennprays/letpai-backend/internal/usecase/session"
 	"github.com/glennprays/letpai-backend/pkg/logger"
 )
@@ -41,6 +43,8 @@ var ServiceSet = wire.NewSet(
 	NewOTPService,
 	NewPasswordService,
 	NewWhatsAppService,
+	NewImageService,
+	NewRateLimitService,
 )
 
 var UseCaseSet = wire.NewSet(
@@ -74,6 +78,17 @@ var UseCaseSet = wire.NewSet(
 	// Billing use cases
 	billing.NewAddBillItemUseCase,
 	billing.NewCalculateSplitsUseCase,
+	// Payment use cases
+	payment.NewSubmitPaymentUseCase,
+	payment.NewApprovePaymentUseCase,
+	payment.NewRejectPaymentUseCase,
+	payment.NewBulkApproveUseCase,
+	payment.NewBulkRejectUseCase,
+	payment.NewGetPaymentPageUseCase,
+	// Notification use cases
+	notification.NewSendNotificationsUseCase,
+	notification.NewSendReminderUseCase,
+	notification.NewBulkReminderUseCase,
 )
 
 var HandlerSet = wire.NewSet(
@@ -82,6 +97,8 @@ var HandlerSet = wire.NewSet(
 	handler.NewContactGroupHandler,
 	handler.NewContactHandler,
 	handler.NewSessionHandler,
+	handler.NewPaymentHandler,
+	handler.NewNotificationHandler,
 )
 
 var ApiSet = wire.NewSet(
@@ -115,6 +132,23 @@ func NewWhatsAppService(cfg *config.Config) *service.WhatsAppService {
 		cfg.WhatsAppGatewayURL,
 		cfg.WhatsAppAPIKey,
 	)
+}
+
+// NewImageService creates a new image service
+func NewImageService(cfg *config.Config) *service.ImageService {
+	baseURL := cfg.AppName // For now, use AppName as base URL
+	if baseURL == "" {
+		baseURL = "http://localhost:3000"
+	}
+	return service.NewImageService(
+		baseURL,
+		"/uploads",
+	)
+}
+
+// NewRateLimitService creates a new rate limit service
+func NewRateLimitService() *service.RateLimitService {
+	return service.NewRateLimitService()
 }
 
 func InitializeApp() (*App, error) {

@@ -16,7 +16,9 @@ import (
 	"github.com/glennprays/letpai-backend/internal/usecase/billing"
 	"github.com/glennprays/letpai-backend/internal/usecase/contact"
 	"github.com/glennprays/letpai-backend/internal/usecase/contactgroup"
+	"github.com/glennprays/letpai-backend/internal/usecase/notification"
 	"github.com/glennprays/letpai-backend/internal/usecase/participant"
+	"github.com/glennprays/letpai-backend/internal/usecase/payment"
 	"github.com/glennprays/letpai-backend/internal/usecase/session"
 	"github.com/glennprays/letpai-backend/pkg/logger"
 	"github.com/google/wire"
@@ -78,7 +80,20 @@ func InitializeApp() (*App, error) {
 	addBillItemUseCase := billing.NewAddBillItemUseCase(sessionRepository, billItemRepository)
 	calculateSplitsUseCase := billing.NewCalculateSplitsUseCase(sessionRepository, participantRepository, billItemRepository)
 	sessionHandler := handler.NewSessionHandler(createSessionUseCase, getSessionsUseCase, getSessionDetailUseCase, updateSessionUseCase, cancelSessionUseCase, addParticipantsUseCase, removeParticipantUseCase, updateParticipantUseCase, addBillItemUseCase, calculateSplitsUseCase)
-	routerRouter := router.NewRouter(logLogger, healthHandler, authHandler, contactGroupHandler, contactHandler, sessionHandler, jwtService)
+	imageService := NewImageService(configConfig)
+	submitPaymentUseCase := payment.NewSubmitPaymentUseCase(participantRepository, sessionRepository, imageService)
+	approvePaymentUseCase := payment.NewApprovePaymentUseCase(participantRepository, sessionRepository)
+	rejectPaymentUseCase := payment.NewRejectPaymentUseCase(participantRepository, sessionRepository)
+	bulkApproveUseCase := payment.NewBulkApproveUseCase(participantRepository, sessionRepository)
+	bulkRejectUseCase := payment.NewBulkRejectUseCase(participantRepository, sessionRepository)
+	getPaymentPageUseCase := payment.NewGetPaymentPageUseCase(participantRepository, sessionRepository, billItemRepository, contactRepository)
+	paymentHandler := handler.NewPaymentHandler(submitPaymentUseCase, approvePaymentUseCase, rejectPaymentUseCase, bulkApproveUseCase, bulkRejectUseCase, getPaymentPageUseCase)
+	sendNotificationsUseCase := notification.NewSendNotificationsUseCase(sessionRepository, participantRepository, contactRepository, billItemRepository, whatsAppService)
+	rateLimitService := NewRateLimitService()
+	sendReminderUseCase := notification.NewSendReminderUseCase(participantRepository, sessionRepository, contactRepository, whatsAppService, rateLimitService)
+	bulkReminderUseCase := notification.NewBulkReminderUseCase(participantRepository, sessionRepository, contactRepository, whatsAppService, rateLimitService)
+	notificationHandler := handler.NewNotificationHandler(sendNotificationsUseCase, sendReminderUseCase, bulkReminderUseCase)
+	routerRouter := router.NewRouter(logLogger, healthHandler, authHandler, contactGroupHandler, contactHandler, sessionHandler, paymentHandler, notificationHandler, jwtService)
 	app := &App{
 		Config: configConfig,
 		Logger: logLogger,
@@ -99,11 +114,13 @@ var ServiceSet = wire.NewSet(
 	NewOTPService,
 	NewPasswordService,
 	NewWhatsAppService,
+	NewImageService,
+	NewRateLimitService,
 )
 
-var UseCaseSet = wire.NewSet(auth.NewRegisterUserUseCase, auth.NewVerifyOTPUseCase, auth.NewLoginUserUseCase, auth.NewLogoutUserUseCase, contactgroup.NewCreateGroupUseCase, contactgroup.NewGetGroupsUseCase, contactgroup.NewUpdateGroupUseCase, contactgroup.NewDeleteGroupUseCase, contact.NewCreateContactUseCase, contact.NewGetContactsUseCase, contact.NewGetContactByIDUseCase, contact.NewUpdateContactUseCase, contact.NewDeleteContactUseCase, contact.NewBulkOperationsUseCase, session.NewCreateSessionUseCase, session.NewGetSessionsUseCase, session.NewGetSessionDetailUseCase, session.NewUpdateSessionUseCase, session.NewCancelSessionUseCase, participant.NewAddParticipantsUseCase, participant.NewRemoveParticipantUseCase, participant.NewUpdateParticipantUseCase, billing.NewAddBillItemUseCase, billing.NewCalculateSplitsUseCase)
+var UseCaseSet = wire.NewSet(auth.NewRegisterUserUseCase, auth.NewVerifyOTPUseCase, auth.NewLoginUserUseCase, auth.NewLogoutUserUseCase, contactgroup.NewCreateGroupUseCase, contactgroup.NewGetGroupsUseCase, contactgroup.NewUpdateGroupUseCase, contactgroup.NewDeleteGroupUseCase, contact.NewCreateContactUseCase, contact.NewGetContactsUseCase, contact.NewGetContactByIDUseCase, contact.NewUpdateContactUseCase, contact.NewDeleteContactUseCase, contact.NewBulkOperationsUseCase, session.NewCreateSessionUseCase, session.NewGetSessionsUseCase, session.NewGetSessionDetailUseCase, session.NewUpdateSessionUseCase, session.NewCancelSessionUseCase, participant.NewAddParticipantsUseCase, participant.NewRemoveParticipantUseCase, participant.NewUpdateParticipantUseCase, billing.NewAddBillItemUseCase, billing.NewCalculateSplitsUseCase, payment.NewSubmitPaymentUseCase, payment.NewApprovePaymentUseCase, payment.NewRejectPaymentUseCase, payment.NewBulkApproveUseCase, payment.NewBulkRejectUseCase, payment.NewGetPaymentPageUseCase, notification.NewSendNotificationsUseCase, notification.NewSendReminderUseCase, notification.NewBulkReminderUseCase)
 
-var HandlerSet = wire.NewSet(handler.NewHealthHandler, handler.NewAuthHandler, handler.NewContactGroupHandler, handler.NewContactHandler, handler.NewSessionHandler)
+var HandlerSet = wire.NewSet(handler.NewHealthHandler, handler.NewAuthHandler, handler.NewContactGroupHandler, handler.NewContactHandler, handler.NewSessionHandler, handler.NewPaymentHandler, handler.NewNotificationHandler)
 
 var ApiSet = wire.NewSet(
 	HandlerSet, router.NewRouter,
@@ -135,4 +152,21 @@ func NewWhatsAppService(cfg *config.Config) *service.WhatsAppService {
 		cfg.WhatsAppGatewayURL,
 		cfg.WhatsAppAPIKey,
 	)
+}
+
+// NewImageService creates a new image service
+func NewImageService(cfg *config.Config) *service.ImageService {
+	baseURL := cfg.AppName
+	if baseURL == "" {
+		baseURL = "http://localhost:3000"
+	}
+	return service.NewImageService(
+		baseURL,
+		"/uploads",
+	)
+}
+
+// NewRateLimitService creates a new rate limit service
+func NewRateLimitService() *service.RateLimitService {
+	return service.NewRateLimitService()
 }
