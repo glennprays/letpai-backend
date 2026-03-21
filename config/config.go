@@ -30,6 +30,22 @@ type Config struct {
 
 	WhatsAppGatewayURL string `mapstructure:"WHATSAPP_GATEWAY_URL" default:"http://localhost:8080"`
 	WhatsAppAPIKey     string `mapstructure:"WHATSAPP_API_KEY" default:""`
+
+	RedisHost     string `mapstructure:"REDIS_HOST" default:"localhost"`
+	RedisPort     int    `mapstructure:"REDIS_PORT" default:"6379"`
+	RedisPassword string `mapstructure:"REDIS_PASSWORD" default:""`
+	RedisDB       int    `mapstructure:"REDIS_DB" default:"0"`
+
+	// S3/AWS Configuration for image upload
+	AWSEndpoint      string `mapstructure:"AWS_ENDPOINT" default:""` // Optional: for S3-compatible services
+	AWSRegion        string `mapstructure:"AWS_REGION" default:"us-east-1"`
+	AWSAccessID      string `mapstructure:"AWS_ACCESS_KEY_ID"`
+	AWSSecret        string `mapstructure:"AWS_SECRET_ACCESS_KEY"`
+	S3BucketName     string `mapstructure:"S3_BUCKET_NAME" default:"letpai-uploads"`
+	CDNURL           string `mapstructure:"CDN_URL" default:""`
+	EnableWebP       bool   `mapstructure:"ENABLE_WEBP" default:"true"`
+	WebPQuality      int    `mapstructure:"WEBP_QUALITY" default:"85"`
+	MaxImageSizeMB   int    `mapstructure:"MAX_IMAGE_SIZE_MB" default:"5"`
 }
 
 type Environment string

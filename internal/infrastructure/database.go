@@ -1,10 +1,12 @@
 package infrastructure
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/glennprays/letpai-backend/config"
 	"github.com/jmoiron/sqlx"
+	"github.com/redis/go-redis/v9"
 	_ "github.com/lib/pq"
 )
 
@@ -34,4 +36,21 @@ func NewPostgresConnection(cfg *config.Config) (*sqlx.DB, error) {
 	db.SetMaxIdleConns(5)
 
 	return db, nil
+}
+
+// NewRedisConnection creates a new Redis client connection
+func NewRedisConnection(cfg *config.Config) (*redis.Client, error) {
+	rdb := redis.NewClient(&redis.Options{
+		Addr:     fmt.Sprintf("%s:%d", cfg.RedisHost, cfg.RedisPort),
+		Password: cfg.RedisPassword,
+		DB:       cfg.RedisDB,
+	})
+
+	// Test connection
+	ctx := context.Background()
+	if err := rdb.Ping(ctx).Err(); err != nil {
+		return nil, fmt.Errorf("failed to connect to redis: %w", err)
+	}
+
+	return rdb, nil
 }

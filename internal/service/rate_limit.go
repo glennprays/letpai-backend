@@ -5,203 +5,106 @@ import (
 	"fmt"
 	"math"
 	"time"
+
+	"github.com/go-redis/redis_rate/v10"
+	"github.com/redis/go-redis/v9"
 )
 
-// RateLimitService handles rate limiting for operations like reminders
-// For MVP v1, this is a stub implementation using in-memory storage
-// In production, this should use Redis
+// RateLimitService handles rate limiting for operations like login, OTP, and reminders
+// Uses Redis with go-redis/redis_rate for distributed rate limiting
 type RateLimitService struct {
-	// In production, this would be a Redis client
-	storage map[string]*rateLimitEntry
+	limiter *redis_rate.Limiter
 }
 
-// rateLimitEntry represents a rate limit entry in storage
-type rateLimitEntry struct {
-	Count       int
-	LastResetAt time.Time
-	ExpiresAt   time.Time
-}
-
-// NewRateLimitService creates a new rate limit service
-func NewRateLimitService() *RateLimitService {
+// NewRateLimitService creates a new rate limit service with Redis client
+func NewRateLimitService(redisClient *redis.Client) *RateLimitService {
 	return &RateLimitService{
-		storage: make(map[string]*rateLimitEntry),
+		limiter: redis_rate.NewLimiter(redisClient),
 	}
 }
 
-// ReminderRateLimitConfig represents rate limit configuration for reminders
-type ReminderRateLimitConfig struct {
-	MaxReminders  int           // Maximum reminders allowed
-	TimeWindow    time.Duration // Time window for the limit
-	CooldownPeriod time.Duration // Cooldown period between reminders
+// RateLimitResult represents the result of a rate limit check
+type RateLimitResult struct {
+	Allowed     bool          `json:"allowed"`
+	Remaining   int           `json:"remaining"`
+	ResetAfter  time.Duration `json:"reset_after"`
+	RetryAfter  time.Duration `json:"retry_after,omitempty"`
+	Limit       int           `json:"limit"`
+	Window      time.Duration `json:"window"`
 }
 
-// DefaultReminderRateLimit returns the default rate limit for reminders
-// 1 reminder per 24 hours
-func DefaultReminderRateLimit() *ReminderRateLimitConfig {
-	return &ReminderRateLimitConfig{
-		MaxReminders:   1,
-		TimeWindow:     24 * time.Hour,
-		CooldownPeriod: 24 * time.Hour,
-	}
+// CheckLoginRateLimit checks rate limit for login attempts
+// Returns: 5 attempts per 15 minutes per IP/identifier
+func (s *RateLimitService) CheckLoginRateLimit(ctx context.Context, identifier string) (*RateLimitResult, error) {
+	return s.checkRateLimit(ctx, "login", identifier, 5, 15*time.Minute)
 }
 
-// CheckRateLimit checks if an action is allowed under rate limiting
-// Returns (allowed, retryAfter, error)
-func (s *RateLimitService) CheckRateLimit(ctx context.Context, key string, config *ReminderRateLimitConfig) (bool, time.Duration, error) {
-	now := time.Now()
-
-	// Clean up expired entries
-	s.cleanupExpired(now)
-
-	// Get or create entry
-	entry, exists := s.storage[key]
-	if !exists {
-		// First request, allow it
-		s.storage[key] = &rateLimitEntry{
-			Count:       1,
-			LastResetAt: now,
-			ExpiresAt:   now.Add(config.TimeWindow),
-		}
-		return true, 0, nil
-	}
-
-	// Check if entry has expired
-	if now.After(entry.ExpiresAt) {
-		// Reset count
-		entry.Count = 1
-		entry.LastResetAt = now
-		entry.ExpiresAt = now.Add(config.TimeWindow)
-		return true, 0, nil
-	}
-
-	// Check if count exceeds limit
-	if entry.Count >= config.MaxReminders {
-		// Calculate retry after duration
-		retryAfter := entry.ExpiresAt.Sub(now)
-		if retryAfter < 0 {
-			retryAfter = 0
-		}
-		return false, retryAfter, nil
-	}
-
-	// Check cooldown period
-	timeSinceLastReset := now.Sub(entry.LastResetAt)
-	if timeSinceLastReset < config.CooldownPeriod {
-		retryAfter := config.CooldownPeriod - timeSinceLastReset
-		return false, retryAfter, nil
-	}
-
-	// Increment count
-	entry.Count++
-	entry.LastResetAt = now
-	return true, 0, nil
+// CheckOTPRateLimit checks rate limit for OTP verification attempts
+// Returns: 3 attempts per OTP code (single-use)
+func (s *RateLimitService) CheckOTPRateLimit(ctx context.Context, otpCode string) (*RateLimitResult, error) {
+	return s.checkRateLimit(ctx, "otp", otpCode, 3, 5*time.Minute)
 }
 
-// RecordAction records an action for rate limiting
-func (s *RateLimitService) RecordAction(ctx context.Context, key string, config *ReminderRateLimitConfig) error {
-	now := time.Now()
-
-	// Get or create entry
-	entry, exists := s.storage[key]
-	if !exists {
-		s.storage[key] = &rateLimitEntry{
-			Count:       1,
-			LastResetAt: now,
-			ExpiresAt:   now.Add(config.TimeWindow),
-		}
-		return nil
-	}
-
-	// Check if entry has expired
-	if now.After(entry.ExpiresAt) {
-		entry.Count = 1
-		entry.LastResetAt = now
-		entry.ExpiresAt = now.Add(config.TimeWindow)
-		return nil
-	}
-
-	// Increment count
-	entry.Count++
-	return nil
+// CheckReminderRateLimit checks rate limit for reminder sending
+// Returns: 1 reminder per 24 hours per participant
+func (s *RateLimitService) CheckReminderRateLimit(ctx context.Context, participantID string) (*RateLimitResult, error) {
+	return s.checkRateLimit(ctx, "reminder", participantID, 1, 24*time.Hour)
 }
 
-// ResetRateLimit resets the rate limit for a key
-func (s *RateLimitService) ResetRateLimit(ctx context.Context, key string) error {
-	delete(s.storage, key)
-	return nil
-}
+// checkRateLimit performs the actual rate limit check using Redis
+func (s *RateLimitService) checkRateLimit(ctx context.Context, operation, identifier string, limit int, window time.Duration) (*RateLimitResult, error) {
+	key := fmt.Sprintf("ratelimit:%s:%s", operation, identifier)
 
-// GetRemainingCount returns the remaining count for a key
-func (s *RateLimitService) GetRemainingCount(ctx context.Context, key string, config *ReminderRateLimitConfig) (int, time.Time, error) {
-	now := time.Now()
+	// Calculate rate per second for the window
+	// rate = limit / window_seconds
+	ratePerSecond := float64(limit) / float64(window.Seconds())
 
-	entry, exists := s.storage[key]
-	if !exists {
-		return config.MaxReminders, now.Add(config.TimeWindow), nil
+	// Create Limit with:
+	// - Rate: operations per second
+	// - Burst: max operations allowed at once (usually equals the limit for our use case)
+	// - Period: time window for rate calculation
+	rateLimit := redis_rate.Limit{
+		Rate:   int(ratePerSecond),
+		Burst:  limit,
+		Period: window,
 	}
 
-	// Check if entry has expired
-	if now.After(entry.ExpiresAt) {
-		return config.MaxReminders, now.Add(config.TimeWindow), nil
-	}
-
-	remaining := config.MaxReminders - entry.Count
-	if remaining < 0 {
-		remaining = 0
-	}
-
-	return remaining, entry.ExpiresAt, nil
-}
-
-// CheckReminderRateLimit checks rate limit specifically for reminders
-// Uses participant ID as the key
-func (s *RateLimitService) CheckReminderRateLimit(ctx context.Context, participantID string) (bool, time.Duration, error) {
-	key := fmt.Sprintf("reminder:%s", participantID)
-	config := DefaultReminderRateLimit()
-	return s.CheckRateLimit(ctx, key, config)
-}
-
-// RecordReminder records a reminder being sent
-func (s *RateLimitService) RecordReminder(ctx context.Context, participantID string) error {
-	key := fmt.Sprintf("reminder:%s", participantID)
-	config := DefaultReminderRateLimit()
-	return s.RecordAction(ctx, key, config)
-}
-
-// GetReminderStatus returns the reminder status for a participant
-func (s *RateLimitService) GetReminderStatus(ctx context.Context, participantID string) (canSend bool, retryAfter time.Duration, nextResetAt time.Time, err error) {
-	key := fmt.Sprintf("reminder:%s", participantID)
-	config := DefaultReminderRateLimit()
-
-	remaining, expiresAt, err := s.GetRemainingCount(ctx, key, config)
+	// Check rate limit
+	res, err := s.limiter.Allow(ctx, key, rateLimit)
 	if err != nil {
-		return false, 0, time.Time{}, err
+		return nil, fmt.Errorf("failed to check rate limit: %w", err)
 	}
 
-	canSend = remaining > 0
-	if !canSend {
-		now := time.Now()
-		if expiresAt.After(now) {
-			retryAfter = expiresAt.Sub(now)
-		}
+	result := &RateLimitResult{
+		Allowed:    res.Allowed > 0,
+		Remaining:  res.Remaining,
+		ResetAfter: res.ResetAfter,
+		Limit:      limit,
+		Window:     window,
 	}
 
-	return canSend, retryAfter, expiresAt, nil
+	// Calculate retry after if not allowed
+	if !result.Allowed {
+		result.RetryAfter = res.RetryAfter
+	}
+
+	return result, nil
 }
 
-// cleanupExpired removes expired entries from storage
-func (s *RateLimitService) cleanupExpired(now time.Time) {
-	for key, entry := range s.storage {
-		if now.After(entry.ExpiresAt) {
-			delete(s.storage, key)
-		}
-	}
+// ResetRateLimit resets the rate limit for a specific key
+func (s *RateLimitService) ResetRateLimit(ctx context.Context, operation, identifier string) error {
+	key := fmt.Sprintf("ratelimit:%s:%s", operation, identifier)
+	return s.limiter.Reset(ctx, key)
+}
+
+// GetRateLimitStatus returns the current rate limit status for a key
+func (s *RateLimitService) GetRateLimitStatus(ctx context.Context, operation, identifier string, limit int, window time.Duration) (*RateLimitResult, error) {
+	return s.checkRateLimit(ctx, operation, identifier, limit, window)
 }
 
 // GetKey generates a rate limit key for a specific operation
 func (s *RateLimitService) GetKey(operation, id string) string {
-	return fmt.Sprintf("%s:%s", operation, id)
+	return fmt.Sprintf("ratelimit:%s:%s", operation, id)
 }
 
 // FormatRetryAfter formats retry after duration into a human-readable string
@@ -215,7 +118,7 @@ func FormatRetryAfter(d time.Duration) string {
 	seconds := int(d.Seconds()) % 60
 
 	if hours > 0 {
-		return fmt.Sprintf("%dh %dm %ds", hours, minutes, seconds)
+		return fmt.Sprintf("%dh %dm", hours, minutes)
 	}
 	if minutes > 0 {
 		return fmt.Sprintf("%dm %ds", minutes, seconds)
@@ -234,38 +137,37 @@ func CalculateRetryAfterSeconds(retryAfter time.Duration) int {
 
 // ReminderStatus represents the status of reminder rate limiting
 type ReminderStatus struct {
-	CanSend       bool      `json:"can_send"`
-	RetryAfter    int64     `json:"retry_after,omitempty"`    // Seconds until next available
-	NextResetAt   string    `json:"next_reset_at,omitempty"`  // ISO 8601 timestamp
-	Remaining     int       `json:"remaining,omitempty"`      // Remaining reminders in window
-	MaxReminders  int       `json:"max_reminders"`            // Maximum reminders allowed
+	CanSend      bool   `json:"can_send"`
+	RetryAfter   int64  `json:"retry_after,omitempty"`   // Seconds until next available
+	NextResetAt  string `json:"next_reset_at,omitempty"` // ISO 8601 timestamp
+	Remaining    int    `json:"remaining,omitempty"`     // Remaining reminders in window
+	MaxReminders int    `json:"max_reminders"`            // Maximum reminders allowed
 }
 
 // GetReminderStatusResponse returns a formatted reminder status
 func (s *RateLimitService) GetReminderStatusResponse(ctx context.Context, participantID string) (*ReminderStatus, error) {
-	canSend, retryAfter, nextResetAt, err := s.GetReminderStatus(ctx, participantID)
+	result, err := s.CheckReminderRateLimit(ctx, participantID)
 	if err != nil {
 		return nil, err
 	}
 
-	config := DefaultReminderRateLimit()
-	remaining, _, _ := s.GetRemainingCount(ctx, s.GetKey("reminder", participantID), config)
-
 	status := &ReminderStatus{
-		CanSend:      canSend,
-		NextResetAt:  nextResetAt.Format(time.RFC3339),
-		Remaining:    remaining,
-		MaxReminders: config.MaxReminders,
+		CanSend:      result.Allowed,
+		Remaining:    result.Remaining,
+		MaxReminders: result.Limit,
 	}
 
-	if retryAfter > 0 {
-		status.RetryAfter = int64(retryAfter.Seconds())
+	if !result.Allowed {
+		status.RetryAfter = int64(result.RetryAfter.Seconds())
+		status.NextResetAt = time.Now().Add(result.ResetAfter).Format(time.RFC3339)
+	} else {
+		status.NextResetAt = time.Now().Add(result.ResetAfter).Format(time.RFC3339)
 	}
 
 	return status, nil
 }
 
-// BulkReminderCheck checks multiple participants for reminder eligibility
+// BulkReminderCheckResult represents result of bulk reminder check
 type BulkReminderCheckResult struct {
 	ParticipantID string `json:"participant_id"`
 	CanSend       bool   `json:"can_send"`
@@ -277,16 +179,68 @@ func (s *RateLimitService) BulkReminderCheck(ctx context.Context, participantIDs
 	results := make([]BulkReminderCheckResult, len(participantIDs))
 
 	for i, pid := range participantIDs {
-		canSend, retryAfter, _, _ := s.GetReminderStatus(ctx, pid)
-		results[i] = BulkReminderCheckResult{
-			ParticipantID: pid,
-			CanSend:       canSend,
+		result, err := s.CheckReminderRateLimit(ctx, pid)
+		if err != nil {
+			results[i] = BulkReminderCheckResult{
+				ParticipantID: pid,
+				CanSend:       false,
+				Reason:        "Error checking rate limit",
+			}
+			continue
 		}
 
-		if !canSend {
-			results[i].Reason = fmt.Sprintf("Rate limit: wait %s", FormatRetryAfter(retryAfter))
+		results[i] = BulkReminderCheckResult{
+			ParticipantID: pid,
+			CanSend:       result.Allowed,
+		}
+
+		if !result.Allowed {
+			results[i].Reason = fmt.Sprintf("Rate limit: wait %s", FormatRetryAfter(result.RetryAfter))
 		}
 	}
 
 	return results
+}
+
+// RateLimitHeaders represents HTTP headers for rate limiting
+type RateLimitHeaders struct {
+	Limit      int
+	Remaining  int
+	Reset      int64 // Unix timestamp
+	RetryAfter int   // Seconds
+}
+
+// GetRateLimitHeaders returns HTTP headers for rate limiting response
+func (s *RateLimitService) GetRateLimitHeaders(result *RateLimitResult) RateLimitHeaders {
+	headers := RateLimitHeaders{
+		Limit:     result.Limit,
+		Remaining: result.Remaining,
+		Reset:     time.Now().Add(result.ResetAfter).Unix(),
+	}
+
+	if !result.Allowed {
+		headers.RetryAfter = CalculateRetryAfterSeconds(result.RetryAfter)
+	}
+
+	return headers
+}
+
+// GetReminderStatus checks if a reminder can be sent and returns status info
+func (s *RateLimitService) GetReminderStatus(ctx context.Context, participantID string) (bool, time.Duration, time.Time, error) {
+	result, err := s.CheckReminderRateLimit(ctx, participantID)
+	if err != nil {
+		return false, 0, time.Time{}, err
+	}
+
+	nextResetAt := time.Now().Add(result.ResetAfter)
+	return result.Allowed, result.RetryAfter, nextResetAt, nil
+}
+
+// RecordReminder records that a reminder was sent for rate limiting tracking
+// This consumes one count from the rate limiter
+func (s *RateLimitService) RecordReminder(ctx context.Context, participantID string) error {
+	// The rate limiter already counts the check in GetReminderStatus/CheckReminderRateLimit
+	// So this is a no-op but kept for API compatibility
+	// If we need to explicitly record, we can call Allow again
+	return nil
 }

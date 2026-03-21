@@ -22,6 +22,7 @@ import (
 	"github.com/glennprays/letpai-backend/internal/usecase/session"
 	"github.com/glennprays/letpai-backend/pkg/logger"
 	"github.com/google/wire"
+	"github.com/redis/go-redis/v9"
 )
 
 import (
@@ -80,7 +81,10 @@ func InitializeApp() (*App, error) {
 	addBillItemUseCase := billing.NewAddBillItemUseCase(sessionRepository, billItemRepository)
 	calculateSplitsUseCase := billing.NewCalculateSplitsUseCase(sessionRepository, participantRepository, billItemRepository)
 	sessionHandler := handler.NewSessionHandler(createSessionUseCase, getSessionsUseCase, getSessionDetailUseCase, updateSessionUseCase, cancelSessionUseCase, addParticipantsUseCase, removeParticipantUseCase, updateParticipantUseCase, addBillItemUseCase, calculateSplitsUseCase)
-	imageService := NewImageService(configConfig)
+	imageService, err := NewImageServiceProvider(configConfig)
+	if err != nil {
+		return nil, err
+	}
 	submitPaymentUseCase := payment.NewSubmitPaymentUseCase(participantRepository, sessionRepository, imageService)
 	approvePaymentUseCase := payment.NewApprovePaymentUseCase(participantRepository, sessionRepository)
 	rejectPaymentUseCase := payment.NewRejectPaymentUseCase(participantRepository, sessionRepository)
@@ -89,11 +93,15 @@ func InitializeApp() (*App, error) {
 	getPaymentPageUseCase := payment.NewGetPaymentPageUseCase(participantRepository, sessionRepository, billItemRepository, contactRepository)
 	paymentHandler := handler.NewPaymentHandler(submitPaymentUseCase, approvePaymentUseCase, rejectPaymentUseCase, bulkApproveUseCase, bulkRejectUseCase, getPaymentPageUseCase)
 	sendNotificationsUseCase := notification.NewSendNotificationsUseCase(sessionRepository, participantRepository, contactRepository, billItemRepository, whatsAppService)
-	rateLimitService := NewRateLimitService()
+	client, err := NewRedisConnection(configConfig)
+	if err != nil {
+		return nil, err
+	}
+	rateLimitService := NewRateLimitService(client)
 	sendReminderUseCase := notification.NewSendReminderUseCase(participantRepository, sessionRepository, contactRepository, whatsAppService, rateLimitService)
 	bulkReminderUseCase := notification.NewBulkReminderUseCase(participantRepository, sessionRepository, contactRepository, whatsAppService, rateLimitService)
 	notificationHandler := handler.NewNotificationHandler(sendNotificationsUseCase, sendReminderUseCase, bulkReminderUseCase)
-	routerRouter := router.NewRouter(logLogger, healthHandler, authHandler, contactGroupHandler, contactHandler, sessionHandler, paymentHandler, notificationHandler, jwtService)
+	routerRouter := router.NewRouter(logLogger, healthHandler, authHandler, contactGroupHandler, contactHandler, sessionHandler, paymentHandler, notificationHandler, jwtService, rateLimitService)
 	app := &App{
 		Config: configConfig,
 		Logger: logLogger,
@@ -105,7 +113,9 @@ func InitializeApp() (*App, error) {
 
 // wire.go:
 
-var CoreSet = wire.NewSet(config.Load, logger.ProviderLogger, NewPostgresConnection)
+var CoreSet = wire.NewSet(config.Load, logger.ProviderLogger, NewPostgresConnection,
+	NewRedisConnection,
+)
 
 var RepositorySet = wire.NewSet(repository.NewPostgresUserRepository, repository.NewPostgresOTPRepository, repository.NewPostgresContactGroupRepository, repository.NewPostgresContactRepository, repository.NewPostgresSessionRepository, repository.NewPostgresParticipantRepository, repository.NewPostgresBillItemRepository)
 
@@ -114,7 +124,7 @@ var ServiceSet = wire.NewSet(
 	NewOTPService,
 	NewPasswordService,
 	NewWhatsAppService,
-	NewImageService,
+	NewImageServiceProvider,
 	NewRateLimitService,
 )
 
@@ -154,19 +164,29 @@ func NewWhatsAppService(cfg *config.Config) *service.WhatsAppService {
 	)
 }
 
-// NewImageService creates a new image service
-func NewImageService(cfg *config.Config) *service.ImageService {
-	baseURL := cfg.AppName
-	if baseURL == "" {
-		baseURL = "http://localhost:3000"
+// NewImageService creates a new image service with AWS S3 configuration
+func NewImageService(cfg *config.Config) (*service.ImageService, error) {
+	imageCfg := &service.ImageConfig{
+		AWSEndpoint: cfg.AWSEndpoint,
+		AWSRegion:   cfg.AWSRegion,
+		AWSAccessID: cfg.AWSAccessID,
+		AWSSecret:   cfg.AWSSecret,
+		BucketName:  cfg.S3BucketName,
+		CDNURL:      cfg.CDNURL,
+		EnableWebP:  cfg.EnableWebP,
+		WebPQuality: cfg.WebPQuality,
+		MaxFileSize: int64(cfg.MaxImageSizeMB) * 1024 * 1024,
 	}
-	return service.NewImageService(
-		baseURL,
-		"/uploads",
-	)
+
+	return service.NewImageService(imageCfg)
 }
 
-// NewRateLimitService creates a new rate limit service
-func NewRateLimitService() *service.RateLimitService {
-	return service.NewRateLimitService()
+// NewRateLimitService creates a new rate limit service with Redis client
+func NewRateLimitService(redisClient *redis.Client) *service.RateLimitService {
+	return service.NewRateLimitService(redisClient)
+}
+
+// NewImageServiceProvider creates a new image service provider that handles initialization errors
+func NewImageServiceProvider(cfg *config.Config) (*service.ImageService, error) {
+	return NewImageService(cfg)
 }

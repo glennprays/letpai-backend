@@ -5,6 +5,7 @@ package infrastructure
 
 import (
 	"github.com/google/wire"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/glennprays/letpai-backend/config"
 	"github.com/glennprays/letpai-backend/internal/handler"
@@ -26,6 +27,7 @@ var CoreSet = wire.NewSet(
 	config.Load,
 	logger.ProviderLogger,
 	NewPostgresConnection,
+	NewRedisConnection,
 )
 
 var RepositorySet = wire.NewSet(
@@ -43,7 +45,7 @@ var ServiceSet = wire.NewSet(
 	NewOTPService,
 	NewPasswordService,
 	NewWhatsAppService,
-	NewImageService,
+	NewImageServiceProvider,
 	NewRateLimitService,
 )
 
@@ -134,21 +136,31 @@ func NewWhatsAppService(cfg *config.Config) *service.WhatsAppService {
 	)
 }
 
-// NewImageService creates a new image service
-func NewImageService(cfg *config.Config) *service.ImageService {
-	baseURL := cfg.AppName // For now, use AppName as base URL
-	if baseURL == "" {
-		baseURL = "http://localhost:3000"
+// NewImageService creates a new image service with AWS S3 configuration
+func NewImageService(cfg *config.Config) (*service.ImageService, error) {
+	imageCfg := &service.ImageConfig{
+		AWSEndpoint:    cfg.AWSEndpoint,
+		AWSRegion:      cfg.AWSRegion,
+		AWSAccessID:    cfg.AWSAccessID,
+		AWSSecret:      cfg.AWSSecret,
+		BucketName:     cfg.S3BucketName,
+		CDNURL:         cfg.CDNURL,
+		EnableWebP:     cfg.EnableWebP,
+		WebPQuality:    cfg.WebPQuality,
+		MaxFileSize:    int64(cfg.MaxImageSizeMB) * 1024 * 1024, // Convert MB to bytes
 	}
-	return service.NewImageService(
-		baseURL,
-		"/uploads",
-	)
+
+	return service.NewImageService(imageCfg)
 }
 
-// NewRateLimitService creates a new rate limit service
-func NewRateLimitService() *service.RateLimitService {
-	return service.NewRateLimitService()
+// NewRateLimitService creates a new rate limit service with Redis client
+func NewRateLimitService(redisClient *redis.Client) *service.RateLimitService {
+	return service.NewRateLimitService(redisClient)
+}
+
+// NewImageServiceProvider creates a new image service provider that handles initialization errors
+func NewImageServiceProvider(cfg *config.Config) (*service.ImageService, error) {
+	return NewImageService(cfg)
 }
 
 func InitializeApp() (*App, error) {
