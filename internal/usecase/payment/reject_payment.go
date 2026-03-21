@@ -63,8 +63,8 @@ func (uc *RejectPaymentUseCase) Execute(ctx context.Context, userID, participant
 		return nil, domain.NewError(domain.ErrBadRequest, errors.New("payment is not in submitted status"))
 	}
 
-	// Reject payment
-	if err := participant.RejectPayment(); err != nil {
+	// Reject payment with reason (increments rejection count)
+	if err := participant.RejectPayment(req.RejectionReason); err != nil {
 		return nil, domain.NewError(domain.ErrInvalidPaymentStatusTransition, err)
 	}
 
@@ -78,7 +78,7 @@ func (uc *RejectPaymentUseCase) Execute(ctx context.Context, userID, participant
 
 	return &RejectPaymentResponse{
 		PaymentStatus:   participant.PaymentStatus.String(),
-		RejectionCount:  0, // TODO: Track rejection count in entity
+		RejectionCount:  participant.RejectionCount,
 		RejectedAt:      participant.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		RejectionReason: req.RejectionReason,
 	}, nil

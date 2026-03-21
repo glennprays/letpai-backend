@@ -70,7 +70,7 @@ func (uc *BulkRejectUseCase) Execute(ctx context.Context, userID string, req *Bu
 		}
 
 		// Reject payment
-		if err := participant.RejectPayment(); err != nil {
+		if err := participant.RejectPayment(req.RejectionReason); err != nil {
 			skippedCount++
 			continue
 		}

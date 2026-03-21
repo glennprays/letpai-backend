@@ -20,6 +20,8 @@ type SessionParticipant struct {
 	ShareAmount      float64                     `json:"share_amount" db:"share_amount"`
 	PaymentStatus    valueobject.PaymentStatus   `json:"payment_status" db:"payment_status"`
 	PaymentProofURL  *string                     `json:"payment_proof_url,omitempty" db:"payment_proof_url"`
+	RejectionCount   int                         `json:"rejection_count" db:"rejection_count"`
+	RejectionReason  *string                     `json:"rejection_reason,omitempty" db:"rejection_reason"`
 	JoinedAt         time.Time                   `json:"joined_at" db:"joined_at"`
 	UpdatedAt        time.Time                   `json:"updated_at" db:"updated_at"`
 
@@ -86,23 +88,38 @@ func (p *SessionParticipant) UpdatePaymentStatus(newStatus valueobject.PaymentSt
 	return nil
 }
 
-// SubmitPayment submits a payment proof
+// SubmitPayment submits a payment proof (keeps rejection count for resubmissions)
 func (p *SessionParticipant) SubmitPayment(proofURL string) error {
 	if err := p.UpdatePaymentStatus(valueobject.PaymentStatusSubmitted); err != nil {
 		return err
 	}
 	p.PaymentProofURL = &proofURL
+	// Don't reset rejection count on resubmit - it persists across re-submissions
+	p.UpdatedAt = time.Now()
 	return nil
 }
 
-// ApprovePayment approves the payment
+// ApprovePayment approves the payment and resets rejection count
 func (p *SessionParticipant) ApprovePayment() error {
-	return p.UpdatePaymentStatus(valueobject.PaymentStatusPaid)
+	if err := p.UpdatePaymentStatus(valueobject.PaymentStatusPaid); err != nil {
+		return err
+	}
+	p.RejectionCount = 0
+	p.RejectionReason = nil
+	return nil
 }
 
-// RejectPayment rejects the payment
-func (p *SessionParticipant) RejectPayment() error {
-	return p.UpdatePaymentStatus(valueobject.PaymentStatusRejected)
+// RejectPayment rejects the payment and increments the rejection count
+func (p *SessionParticipant) RejectPayment(reason string) error {
+	if err := p.UpdatePaymentStatus(valueobject.PaymentStatusRejected); err != nil {
+		return err
+	}
+	p.RejectionCount++
+	p.UpdatedAt = time.Now()
+	if reason != "" {
+		p.RejectionReason = &reason
+	}
+	return nil
 }
 
 // IsCustom checks if this is a custom participant (not from contacts)
