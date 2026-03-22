@@ -148,8 +148,9 @@ func (s *ImageService) UploadFromMultipart(ctx context.Context, fileHeader *mult
 
 // processAndUpload processes the image (convert if needed) and uploads to S3
 func (s *ImageService) processAndUpload(ctx context.Context, imageData []byte, fileFormat, fileName string) (*UploadResult, error) {
-	// Get image info using bimg.Size function
-	imgInfo, err := bimg.Size(imageData)
+	// Get image info using bimg.Image method
+	img := bimg.NewImage(imageData)
+	imgInfo, err := img.Size()
 	if err != nil {
 		return nil, fmt.Errorf("invalid image: %w", err)
 	}
