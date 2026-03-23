@@ -17,6 +17,7 @@ type Router struct {
 	SessionHandler      *handler.SessionHandler
 	PaymentHandler      *handler.PaymentHandler
 	NotificationHandler *handler.NotificationHandler
+	WebhookHandler      *handler.WebhookHandler
 	jwtService          *service.JWTService
 	rateLimitService    *service.RateLimitService
 }
@@ -30,6 +31,7 @@ func NewRouter(
 	sessionHandler *handler.SessionHandler,
 	paymentHandler *handler.PaymentHandler,
 	notificationHandler *handler.NotificationHandler,
+	webhookHandler *handler.WebhookHandler,
 	jwtService *service.JWTService,
 	rateLimitService *service.RateLimitService,
 ) *Router {
@@ -43,6 +45,7 @@ func NewRouter(
 		SessionHandler:      sessionHandler,
 		PaymentHandler:      paymentHandler,
 		NotificationHandler: notificationHandler,
+		WebhookHandler:      webhookHandler,
 		jwtService:          jwtService,
 		rateLimitService:    rateLimitService,
 	}
@@ -60,6 +63,7 @@ func (r *Router) Setup(app *fiber.App) {
 
 	// Public routes (no auth required)
 	r.setupHealthRoutes(v1)
+	r.setupWebhookRoutes(v1)
 	r.setupAuthRoutes(v1)
 	r.setupPublicPaymentRoutes(v1)
 
@@ -74,6 +78,11 @@ func (r *Router) Setup(app *fiber.App) {
 
 func (r *Router) setupHealthRoutes(group fiber.Router) {
 	group.Get("/health", r.HealthHandler.Check)
+}
+
+func (r *Router) setupWebhookRoutes(group fiber.Router) {
+	webhooks := group.Group("/webhooks")
+	webhooks.Post("/whatsapp-status", r.WebhookHandler.HandleWhatsAppStatus)
 }
 
 func (r *Router) setupAuthRoutes(group fiber.Router) {

@@ -101,7 +101,8 @@ func InitializeApp() (*App, error) {
 	sendReminderUseCase := notification.NewSendReminderUseCase(participantRepository, sessionRepository, contactRepository, whatsAppService, rateLimitService)
 	bulkReminderUseCase := notification.NewBulkReminderUseCase(participantRepository, sessionRepository, contactRepository, whatsAppService, rateLimitService)
 	notificationHandler := handler.NewNotificationHandler(sendNotificationsUseCase, sendReminderUseCase, bulkReminderUseCase)
-	routerRouter := router.NewRouter(logLogger, healthHandler, authHandler, contactGroupHandler, contactHandler, sessionHandler, paymentHandler, notificationHandler, jwtService, rateLimitService)
+	webhookHandler := handler.NewWebhookHandler(configConfig)
+	routerRouter := router.NewRouter(logLogger, healthHandler, authHandler, contactGroupHandler, contactHandler, sessionHandler, paymentHandler, notificationHandler, webhookHandler, jwtService, rateLimitService)
 	app := &App{
 		Config: configConfig,
 		Logger: logLogger,
@@ -130,7 +131,7 @@ var ServiceSet = wire.NewSet(
 
 var UseCaseSet = wire.NewSet(auth.NewRegisterUserUseCase, auth.NewVerifyOTPUseCase, auth.NewLoginUserUseCase, auth.NewLogoutUserUseCase, contactgroup.NewCreateGroupUseCase, contactgroup.NewGetGroupsUseCase, contactgroup.NewUpdateGroupUseCase, contactgroup.NewDeleteGroupUseCase, contact.NewCreateContactUseCase, contact.NewGetContactsUseCase, contact.NewGetContactByIDUseCase, contact.NewUpdateContactUseCase, contact.NewDeleteContactUseCase, contact.NewBulkOperationsUseCase, session.NewCreateSessionUseCase, session.NewGetSessionsUseCase, session.NewGetSessionDetailUseCase, session.NewUpdateSessionUseCase, session.NewCancelSessionUseCase, participant.NewAddParticipantsUseCase, participant.NewRemoveParticipantUseCase, participant.NewUpdateParticipantUseCase, billing.NewAddBillItemUseCase, billing.NewCalculateSplitsUseCase, payment.NewSubmitPaymentUseCase, payment.NewApprovePaymentUseCase, payment.NewRejectPaymentUseCase, payment.NewBulkApproveUseCase, payment.NewBulkRejectUseCase, payment.NewGetPaymentPageUseCase, notification.NewSendNotificationsUseCase, notification.NewSendReminderUseCase, notification.NewBulkReminderUseCase)
 
-var HandlerSet = wire.NewSet(handler.NewHealthHandler, handler.NewAuthHandler, handler.NewContactGroupHandler, handler.NewContactHandler, handler.NewSessionHandler, handler.NewPaymentHandler, handler.NewNotificationHandler)
+var HandlerSet = wire.NewSet(handler.NewHealthHandler, handler.NewAuthHandler, handler.NewContactGroupHandler, handler.NewContactHandler, handler.NewSessionHandler, handler.NewPaymentHandler, handler.NewNotificationHandler, handler.NewWebhookHandler)
 
 var ApiSet = wire.NewSet(
 	HandlerSet, router.NewRouter,

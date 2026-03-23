@@ -101,6 +101,7 @@ var HandlerSet = wire.NewSet(
 	handler.NewSessionHandler,
 	handler.NewPaymentHandler,
 	handler.NewNotificationHandler,
+	handler.NewWebhookHandler,
 )
 
 var ApiSet = wire.NewSet(
@@ -157,6 +158,8 @@ func NewImageService(cfg *config.Config) (*service.ImageService, error) {
 func NewRateLimitService(redisClient *redis.Client) *service.RateLimitService {
 	return service.NewRateLimitService(redisClient)
 }
+
+
 
 // NewImageServiceProvider creates a new image service provider that handles initialization errors
 func NewImageServiceProvider(cfg *config.Config) (*service.ImageService, error) {
