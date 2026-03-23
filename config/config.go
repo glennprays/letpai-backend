@@ -28,8 +28,9 @@ type Config struct {
 	JWTExpiryHours      int    `mapstructure:"JWT_EXPIRY_HOURS" default:"168"` // 7 days
 	OTPExpiryMinutes    int    `mapstructure:"OTP_EXPIRY_MINUTES" default:"5"`
 
-	WhatsAppGatewayURL string `mapstructure:"WHATSAPP_GATEWAY_URL" default:"http://localhost:8080"`
-	WhatsAppAPIKey     string `mapstructure:"WHATSAPP_API_KEY" default:""`
+	WhatsAppGatewayURL    string `mapstructure:"WHATSAPP_GATEWAY_URL" default:"http://localhost:8080"`
+	WhatsAppAPIKey         string `mapstructure:"WHATSAPP_API_KEY" default:""`
+	WhatsAppWebhookSecret string `mapstructure:"WHATSAPP_WEBHOOK_SECRET" default:""`
 
 	RedisHost     string `mapstructure:"REDIS_HOST" default:"localhost"`
 	RedisPort     int    `mapstructure:"REDIS_PORT" default:"6379"`
