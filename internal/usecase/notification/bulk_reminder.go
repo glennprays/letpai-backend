@@ -9,7 +9,6 @@ import (
 	"github.com/glennprays/letpai-backend/domain"
 	"github.com/glennprays/letpai-backend/domain/ports"
 	"github.com/glennprays/letpai-backend/internal/service"
-	"github.com/google/uuid"
 )
 
 // BulkReminderSkipped represents a skipped reminder
@@ -119,8 +118,9 @@ func (uc *BulkReminderUseCase) Execute(ctx context.Context, userID, sessionID st
 		// Format reminder message
 		message := uc.formatReminderMessage(session.Title, participantName, participant.ShareAmount)
 
-		// Send reminder
-		if err := uc.whatsappSvc.SendNotification(ctx, whatsappNumber, message); err != nil {
+		// Send reminder and get message ID
+		messageID, err := uc.whatsappSvc.SendNotification(ctx, whatsappNumber, message)
+		if err != nil {
 			skipped = append(skipped, BulkReminderSkipped{
 				ParticipantID: participant.ParticipantID.String(),
 				Reason:        "Failed to send",
@@ -130,9 +130,6 @@ func (uc *BulkReminderUseCase) Execute(ctx context.Context, userID, sessionID st
 
 		// Record reminder for rate limiting
 		_ = uc.rateLimitSvc.RecordReminder(ctx, participant.ParticipantID.String())
-
-		// Generate message ID
-		messageID := fmt.Sprintf("msg_%s", uuid.New().String()[:8])
 
 		notifications = append(notifications, NotificationItem{
 			ParticipantID:     participant.ParticipantID.String(),

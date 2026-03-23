@@ -8,7 +8,6 @@ import (
 	"github.com/glennprays/letpai-backend/domain"
 	"github.com/glennprays/letpai-backend/domain/ports"
 	"github.com/glennprays/letpai-backend/internal/service"
-	"github.com/google/uuid"
 )
 
 // SendReminderResponse represents the response after sending a reminder
@@ -104,16 +103,14 @@ func (uc *SendReminderUseCase) Execute(ctx context.Context, userID, participantI
 	// Format reminder message
 	message := uc.formatReminderMessage(session.Title, participantName, participant.ShareAmount)
 
-	// Send reminder
-	if err := uc.whatsappSvc.SendNotification(ctx, whatsappNumber, message); err != nil {
+	// Send reminder and get message ID
+	messageID, err := uc.whatsappSvc.SendNotification(ctx, whatsappNumber, message)
+	if err != nil {
 		return nil, domain.NewError(domain.ErrInternalFailure, err)
 	}
 
 	// Record reminder for rate limiting
 	_ = uc.rateLimitSvc.RecordReminder(ctx, participantID)
-
-	// Generate message ID
-	messageID := fmt.Sprintf("msg_%s", uuid.New().String()[:8])
 
 	return &SendReminderResponse{
 		Message:           fmt.Sprintf("Reminder sent to %s", participantName),

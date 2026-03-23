@@ -9,7 +9,6 @@ import (
 	"github.com/glennprays/letpai-backend/domain"
 	"github.com/glennprays/letpai-backend/domain/ports"
 	"github.com/glennprays/letpai-backend/internal/service"
-	"github.com/google/uuid"
 )
 
 // NotificationItem represents a sent notification
@@ -103,14 +102,12 @@ func (uc *SendNotificationsUseCase) Execute(ctx context.Context, userID, session
 		// Format notification message
 		message := uc.formatSessionNotification(session.Title, participantName, participant.ShareAmount, totalAmount)
 
-		// Send notification
-		if err := uc.whatsappSvc.SendNotification(ctx, whatsappNumber, message); err != nil {
+		// Send notification and get message ID
+		messageID, err := uc.whatsappSvc.SendNotification(ctx, whatsappNumber, message)
+		if err != nil {
 			// Log error but continue with other participants
 			continue
 		}
-
-		// Generate message ID (in production, this would come from WhatsApp Gateway)
-		messageID := fmt.Sprintf("msg_%s", uuid.New().String()[:8])
 
 		notifications = append(notifications, NotificationItem{
 			ParticipantID:     participant.ParticipantID.String(),

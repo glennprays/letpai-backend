@@ -95,7 +95,7 @@ func (uc *RegisterUserUseCase) Execute(ctx context.Context, req *RegisterUserReq
 
 	// Send OTP via WhatsApp
 	message := uc.otpSvc.FormatWhatsAppMessage(otpCode)
-	if err := uc.whatsappSvc.SendOTP(ctx, req.WhatsAppNumber, message); err != nil {
+	if _, err := uc.whatsappSvc.SendOTP(ctx, req.WhatsAppNumber, message); err != nil {
 		// Log error but don't fail registration
 		// OTP is saved, user can retry verification
 	}
