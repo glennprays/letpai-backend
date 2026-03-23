@@ -8,14 +8,14 @@ import (
 
 // OTPVerification represents an OTP verification record
 type OTPVerification struct {
-	OTPID           uuid.UUID  `json:"otp_id"`
-	UserID          *uuid.UUID `json:"user_id,omitempty"`
-	WhatsAppNumber  string     `json:"whatsapp_number"`
-	OTPCode         string     `json:"-"` // Never expose OTP in JSON
-	ExpiresAt       time.Time  `json:"expires_at"`
-	IsUsed          bool       `json:"is_used"`
-	CreatedAt       time.Time  `json:"created_at"`
-	UsedAt          *time.Time `json:"used_at,omitempty"`
+	OTPID          uuid.UUID  `json:"otp_id"`
+	UserID         *uuid.UUID `json:"user_id,omitempty"`
+	WhatsAppNumber string     `json:"whatsapp_number"`
+	OTPCode        string     `json:"-"` // Never expose OTP in JSON
+	ExpiresAt      time.Time  `json:"expires_at"`
+	IsUsed         bool       `json:"is_used"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UsedAt         *time.Time `json:"used_at,omitempty"`
 }
 
 // NewOTPVerification creates a new OTP verification instance

@@ -20,12 +20,12 @@ import (
 
 // ImageService handles image upload operations with MinIO/S3 and bimg
 type ImageService struct {
-	s3Client     *minio.Client
-	bucketName   string
-	cdnURL       string // Optional CDN URL for serving images
-	enableWebP   bool
-	webPQuality  int
-	maxFileSize  int64
+	s3Client    *minio.Client
+	bucketName  string
+	cdnURL      string // Optional CDN URL for serving images
+	enableWebP  bool
+	webPQuality int
+	maxFileSize int64
 }
 
 // ImageConfig holds configuration for the image service

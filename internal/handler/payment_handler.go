@@ -9,12 +9,12 @@ import (
 
 // PaymentHandler handles payment requests
 type PaymentHandler struct {
-	submitPayment   *payment.SubmitPaymentUseCase
-	approvePayment  *payment.ApprovePaymentUseCase
-	rejectPayment   *payment.RejectPaymentUseCase
-	bulkApprove     *payment.BulkApproveUseCase
-	bulkReject      *payment.BulkRejectUseCase
-	getPaymentPage  *payment.GetPaymentPageUseCase
+	submitPayment  *payment.SubmitPaymentUseCase
+	approvePayment *payment.ApprovePaymentUseCase
+	rejectPayment  *payment.RejectPaymentUseCase
+	bulkApprove    *payment.BulkApproveUseCase
+	bulkReject     *payment.BulkRejectUseCase
+	getPaymentPage *payment.GetPaymentPageUseCase
 }
 
 // NewPaymentHandler creates a new payment handler

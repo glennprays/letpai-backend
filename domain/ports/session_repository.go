@@ -9,12 +9,12 @@ import (
 
 // SessionFilterOptions represents filter options for listing sessions
 type SessionFilterOptions struct {
-	Status      *valueobject.SessionStatus
-	Search      *string
-	SortBy      string // created_at, session_date, title, total_amount
-	SortOrder   string // asc, desc
-	Page        int
-	Limit       int
+	Status    *valueobject.SessionStatus
+	Search    *string
+	SortBy    string // created_at, session_date, title, total_amount
+	SortOrder string // asc, desc
+	Page      int
+	Limit     int
 }
 
 // SessionListResult represents the result of listing sessions

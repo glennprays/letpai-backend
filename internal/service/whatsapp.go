@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	waga "github.com/glennprays/whatsapp-gateway-sdk-go"
 	"github.com/glennprays/letpai-backend/domain"
+	waga "github.com/glennprays/whatsapp-gateway-sdk-go"
 )
 
 // WhatsAppService handles sending messages via WhatsApp Gateway

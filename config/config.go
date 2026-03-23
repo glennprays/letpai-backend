@@ -24,12 +24,12 @@ type Config struct {
 	DBPassword string `mapstructure:"DB_PASSWORD"`
 	DBName     string `mapstructure:"DB_NAME"`
 
-	JWTSecret           string `mapstructure:"JWT_SECRET" default:"your-secret-key-change-in-production"`
-	JWTExpiryHours      int    `mapstructure:"JWT_EXPIRY_HOURS" default:"168"` // 7 days
-	OTPExpiryMinutes    int    `mapstructure:"OTP_EXPIRY_MINUTES" default:"5"`
+	JWTSecret        string `mapstructure:"JWT_SECRET" default:"your-secret-key-change-in-production"`
+	JWTExpiryHours   int    `mapstructure:"JWT_EXPIRY_HOURS" default:"168"` // 7 days
+	OTPExpiryMinutes int    `mapstructure:"OTP_EXPIRY_MINUTES" default:"5"`
 
 	WhatsAppGatewayURL    string `mapstructure:"WHATSAPP_GATEWAY_URL" default:"http://localhost:8080"`
-	WhatsAppAPIKey         string `mapstructure:"WHATSAPP_API_KEY" default:""`
+	WhatsAppAPIKey        string `mapstructure:"WHATSAPP_API_KEY" default:""`
 	WhatsAppWebhookSecret string `mapstructure:"WHATSAPP_WEBHOOK_SECRET" default:""`
 
 	RedisHost     string `mapstructure:"REDIS_HOST" default:"localhost"`
@@ -38,15 +38,15 @@ type Config struct {
 	RedisDB       int    `mapstructure:"REDIS_DB" default:"0"`
 
 	// S3/AWS Configuration for image upload
-	AWSEndpoint      string `mapstructure:"AWS_ENDPOINT" default:""` // Optional: for S3-compatible services
-	AWSRegion        string `mapstructure:"AWS_REGION" default:"us-east-1"`
-	AWSAccessID      string `mapstructure:"AWS_ACCESS_KEY_ID"`
-	AWSSecret        string `mapstructure:"AWS_SECRET_ACCESS_KEY"`
-	S3BucketName     string `mapstructure:"S3_BUCKET_NAME" default:"letpai-uploads"`
-	CDNURL           string `mapstructure:"CDN_URL" default:""`
-	EnableWebP       bool   `mapstructure:"ENABLE_WEBP" default:"true"`
-	WebPQuality      int    `mapstructure:"WEBP_QUALITY" default:"85"`
-	MaxImageSizeMB   int    `mapstructure:"MAX_IMAGE_SIZE_MB" default:"5"`
+	AWSEndpoint    string `mapstructure:"AWS_ENDPOINT" default:""` // Optional: for S3-compatible services
+	AWSRegion      string `mapstructure:"AWS_REGION" default:"us-east-1"`
+	AWSAccessID    string `mapstructure:"AWS_ACCESS_KEY_ID"`
+	AWSSecret      string `mapstructure:"AWS_SECRET_ACCESS_KEY"`
+	S3BucketName   string `mapstructure:"S3_BUCKET_NAME" default:"letpai-uploads"`
+	CDNURL         string `mapstructure:"CDN_URL" default:""`
+	EnableWebP     bool   `mapstructure:"ENABLE_WEBP" default:"true"`
+	WebPQuality    int    `mapstructure:"WEBP_QUALITY" default:"85"`
+	MaxImageSizeMB int    `mapstructure:"MAX_IMAGE_SIZE_MB" default:"5"`
 }
 
 type Environment string

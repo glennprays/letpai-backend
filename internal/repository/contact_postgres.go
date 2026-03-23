@@ -6,8 +6,8 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/glennprays/letpai-backend/domain/entity"
 	"github.com/glennprays/letpai-backend/domain"
+	"github.com/glennprays/letpai-backend/domain/entity"
 	"github.com/glennprays/letpai-backend/domain/ports"
 	"github.com/jmoiron/sqlx"
 )
@@ -96,9 +96,9 @@ func (r *PostgresContactRepository) FindByID(ctx context.Context, contactID stri
 func (r *PostgresContactRepository) FindAll(ctx context.Context, userID string, opts *ports.ContactFilterOptions) (*ports.ContactListResult, error) {
 	if opts == nil {
 		opts = &ports.ContactFilterOptions{
-			Page:    1,
-			Limit:   20,
-			SortBy:  "created_at",
+			Page:      1,
+			Limit:     20,
+			SortBy:    "created_at",
 			SortOrder: "desc",
 		}
 	}
@@ -140,9 +140,9 @@ func (r *PostgresContactRepository) FindAll(ctx context.Context, userID string, 
 
 	// Validate sort
 	validSortBy := map[string]bool{
-		"name":        true,
-		"created_at":  true,
-		"group_name":  true,
+		"name":            true,
+		"created_at":      true,
+		"group_name":      true,
 		"whatsapp_number": true,
 	}
 	if !validSortBy[opts.SortBy] {

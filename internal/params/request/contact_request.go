@@ -17,9 +17,9 @@ type UpdateContactRequest struct {
 
 // BulkContactsRequest represents the request for bulk contact operations
 type BulkContactsRequest struct {
-	Operation   string   `json:"operation" validate:"required,oneof=add_to_group delete"`
-	ContactIDs  []string `json:"contact_ids" validate:"required,min=1"`
-	GroupID     string   `json:"group_id,omitempty"`
+	Operation  string   `json:"operation" validate:"required,oneof=add_to_group delete"`
+	ContactIDs []string `json:"contact_ids" validate:"required,min=1"`
+	GroupID    string   `json:"group_id,omitempty"`
 }
 
 // GetContactsQuery represents query parameters for listing contacts

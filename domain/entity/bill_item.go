@@ -8,13 +8,13 @@ import (
 
 // BillItem represents a bill item in a session
 type BillItem struct {
-	BillItemID   uuid.UUID  `json:"bill_item_id" db:"bill_item_id"`
-	SessionID    uuid.UUID  `json:"session_id" db:"session_id"`
-	Description  string     `json:"description" db:"description"`
-	Amount       float64    `json:"amount" db:"amount"`
-	Category     *string    `json:"category,omitempty" db:"category"`
-	CreatedAt    time.Time  `json:"created_at" db:"created_at"`
-	UpdatedAt    time.Time  `json:"updated_at" db:"updated_at"`
+	BillItemID  uuid.UUID `json:"bill_item_id" db:"bill_item_id"`
+	SessionID   uuid.UUID `json:"session_id" db:"session_id"`
+	Description string    `json:"description" db:"description"`
+	Amount      float64   `json:"amount" db:"amount"`
+	Category    *string   `json:"category,omitempty" db:"category"`
+	CreatedAt   time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at" db:"updated_at"`
 }
 
 // NewBillItem creates a new bill item

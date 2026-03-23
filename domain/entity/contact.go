@@ -8,15 +8,15 @@ import (
 
 // Contact represents a contact in the system
 type Contact struct {
-	ContactID      uuid.UUID   `json:"contact_id" db:"contact_id"`
-	UserID         uuid.UUID   `json:"user_id" db:"user_id"`
-	Name           string      `json:"name" db:"name"`
-	WhatsAppNumber string      `json:"whatsapp_number" db:"whatsapp_number"`
-	GroupID        *uuid.UUID  `json:"group_id,omitempty" db:"group_id"`
-	IsFavorite     bool        `json:"is_favorite" db:"is_favorite"`
-	CreatedAt      time.Time   `json:"created_at" db:"created_at"`
-	UpdatedAt      time.Time   `json:"updated_at" db:"updated_at"`
-	DeletedAt      *time.Time  `json:"deleted_at,omitempty" db:"deleted_at"`
+	ContactID      uuid.UUID  `json:"contact_id" db:"contact_id"`
+	UserID         uuid.UUID  `json:"user_id" db:"user_id"`
+	Name           string     `json:"name" db:"name"`
+	WhatsAppNumber string     `json:"whatsapp_number" db:"whatsapp_number"`
+	GroupID        *uuid.UUID `json:"group_id,omitempty" db:"group_id"`
+	IsFavorite     bool       `json:"is_favorite" db:"is_favorite"`
+	CreatedAt      time.Time  `json:"created_at" db:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at" db:"updated_at"`
+	DeletedAt      *time.Time `json:"deleted_at,omitempty" db:"deleted_at"`
 
 	// Joined fields (not in database)
 	GroupName  *string `json:"group_name,omitempty" db:"group_name"`

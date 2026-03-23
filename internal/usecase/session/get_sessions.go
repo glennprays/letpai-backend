@@ -10,14 +10,14 @@ import (
 
 // SessionItem represents a session item in the list
 type SessionItem struct {
-	SessionID        string    `json:"session_id"`
-	Title            string    `json:"title"`
-	Description      string    `json:"description"`
-	Status           string    `json:"status"`
-	TotalAmount      float64   `json:"total_amount"`
-	Currency         string    `json:"currency"`
-	SessionDate      *string   `json:"session_date,omitempty"`
-	CreatedAt        string    `json:"created_at"`
+	SessionID   string  `json:"session_id"`
+	Title       string  `json:"title"`
+	Description string  `json:"description"`
+	Status      string  `json:"status"`
+	TotalAmount float64 `json:"total_amount"`
+	Currency    string  `json:"currency"`
+	SessionDate *string `json:"session_date,omitempty"`
+	CreatedAt   string  `json:"created_at"`
 }
 
 // GetSessionsRequest represents the request to get sessions

@@ -8,15 +8,15 @@ import (
 
 // User represents a user in the system
 type User struct {
-	UserID          uuid.UUID  `json:"user_id"`
-	WhatsAppNumber  string     `json:"whatsapp_number"`
-	PasswordHash    string     `json:"-"`
-	FullName        string     `json:"full_name,omitempty"`
-	AvatarURL       string     `json:"avatar_url,omitempty"`
-	IsVerified      bool       `json:"is_verified"`
-	CreatedAt       time.Time  `json:"created_at"`
-	UpdatedAt       time.Time  `json:"updated_at"`
-	DeletedAt       *time.Time `json:"deleted_at,omitempty"`
+	UserID         uuid.UUID  `json:"user_id"`
+	WhatsAppNumber string     `json:"whatsapp_number"`
+	PasswordHash   string     `json:"-"`
+	FullName       string     `json:"full_name,omitempty"`
+	AvatarURL      string     `json:"avatar_url,omitempty"`
+	IsVerified     bool       `json:"is_verified"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
+	DeletedAt      *time.Time `json:"deleted_at,omitempty"`
 }
 
 // NewUser creates a new user instance

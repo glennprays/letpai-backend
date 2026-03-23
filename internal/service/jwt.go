@@ -16,14 +16,14 @@ type JWTClaims struct {
 
 // JWTService handles JWT token generation and validation
 type JWTService struct {
-	secretKey     []byte
+	secretKey      []byte
 	expiryDuration time.Duration
 }
 
 // NewJWTService creates a new JWT service
 func NewJWTService(secretKey string, expiryHours int) *JWTService {
 	return &JWTService{
-		secretKey:     []byte(secretKey),
+		secretKey:      []byte(secretKey),
 		expiryDuration: time.Duration(expiryHours) * time.Hour,
 	}
 }

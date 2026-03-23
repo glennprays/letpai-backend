@@ -38,6 +38,7 @@ var RepositorySet = wire.NewSet(
 	repository.NewPostgresSessionRepository,
 	repository.NewPostgresParticipantRepository,
 	repository.NewPostgresBillItemRepository,
+	repository.NewPostgresNotificationLogRepository,
 )
 
 var ServiceSet = wire.NewSet(
@@ -140,15 +141,15 @@ func NewWhatsAppService(cfg *config.Config) *service.WhatsAppService {
 // NewImageService creates a new image service with AWS S3 configuration
 func NewImageService(cfg *config.Config) (*service.ImageService, error) {
 	imageCfg := &service.ImageConfig{
-		AWSEndpoint:    cfg.AWSEndpoint,
-		AWSRegion:      cfg.AWSRegion,
-		AWSAccessID:    cfg.AWSAccessID,
-		AWSSecret:      cfg.AWSSecret,
-		BucketName:     cfg.S3BucketName,
-		CDNURL:         cfg.CDNURL,
-		EnableWebP:     cfg.EnableWebP,
-		WebPQuality:    cfg.WebPQuality,
-		MaxFileSize:    int64(cfg.MaxImageSizeMB) * 1024 * 1024, // Convert MB to bytes
+		AWSEndpoint: cfg.AWSEndpoint,
+		AWSRegion:   cfg.AWSRegion,
+		AWSAccessID: cfg.AWSAccessID,
+		AWSSecret:   cfg.AWSSecret,
+		BucketName:  cfg.S3BucketName,
+		CDNURL:      cfg.CDNURL,
+		EnableWebP:  cfg.EnableWebP,
+		WebPQuality: cfg.WebPQuality,
+		MaxFileSize: int64(cfg.MaxImageSizeMB) * 1024 * 1024, // Convert MB to bytes
 	}
 
 	return service.NewImageService(imageCfg)
@@ -158,8 +159,6 @@ func NewImageService(cfg *config.Config) (*service.ImageService, error) {
 func NewRateLimitService(redisClient *redis.Client) *service.RateLimitService {
 	return service.NewRateLimitService(redisClient)
 }
-
-
 
 // NewImageServiceProvider creates a new image service provider that handles initialization errors
 func NewImageServiceProvider(cfg *config.Config) (*service.ImageService, error) {

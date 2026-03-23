@@ -19,14 +19,14 @@ type UpdateSessionRequest struct {
 
 // UpdateSessionResponse represents the response after updating a session
 type UpdateSessionResponse struct {
-	SessionID    string    `json:"session_id"`
-	Title        string    `json:"title"`
-	Description  string    `json:"description"`
-	Status       string    `json:"status"`
-	TotalAmount  float64   `json:"total_amount"`
-	Currency     string    `json:"currency"`
-	SessionDate  *string   `json:"session_date,omitempty"`
-	UpdatedAt    string    `json:"updated_at"`
+	SessionID   string  `json:"session_id"`
+	Title       string  `json:"title"`
+	Description string  `json:"description"`
+	Status      string  `json:"status"`
+	TotalAmount float64 `json:"total_amount"`
+	Currency    string  `json:"currency"`
+	SessionDate *string `json:"session_date,omitempty"`
+	UpdatedAt   string  `json:"updated_at"`
 }
 
 // UpdateSessionUseCase handles updating a session

@@ -12,9 +12,9 @@ import (
 
 // RateLimitConfig holds configuration for rate limiting middleware
 type RateLimitConfig struct {
-	KeyExtractor    func(c *fiber.Ctx) string
-	CheckRateLimit  func(ctx context.Context, key string) (*service.RateLimitResult, error)
-	OnRateLimited   func(c *fiber.Ctx, result *service.RateLimitResult) error
+	KeyExtractor   func(c *fiber.Ctx) string
+	CheckRateLimit func(ctx context.Context, key string) (*service.RateLimitResult, error)
+	OnRateLimited  func(c *fiber.Ctx, result *service.RateLimitResult) error
 }
 
 // RateLimitMiddleware returns a middleware that applies rate limiting

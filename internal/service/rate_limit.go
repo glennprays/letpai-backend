@@ -25,12 +25,12 @@ func NewRateLimitService(redisClient *redis.Client) *RateLimitService {
 
 // RateLimitResult represents the result of a rate limit check
 type RateLimitResult struct {
-	Allowed     bool          `json:"allowed"`
-	Remaining   int           `json:"remaining"`
-	ResetAfter  time.Duration `json:"reset_after"`
-	RetryAfter  time.Duration `json:"retry_after,omitempty"`
-	Limit       int           `json:"limit"`
-	Window      time.Duration `json:"window"`
+	Allowed    bool          `json:"allowed"`
+	Remaining  int           `json:"remaining"`
+	ResetAfter time.Duration `json:"reset_after"`
+	RetryAfter time.Duration `json:"retry_after,omitempty"`
+	Limit      int           `json:"limit"`
+	Window     time.Duration `json:"window"`
 }
 
 // CheckLoginRateLimit checks rate limit for login attempts
@@ -141,7 +141,7 @@ type ReminderStatus struct {
 	RetryAfter   int64  `json:"retry_after,omitempty"`   // Seconds until next available
 	NextResetAt  string `json:"next_reset_at,omitempty"` // ISO 8601 timestamp
 	Remaining    int    `json:"remaining,omitempty"`     // Remaining reminders in window
-	MaxReminders int    `json:"max_reminders"`            // Maximum reminders allowed
+	MaxReminders int    `json:"max_reminders"`           // Maximum reminders allowed
 }
 
 // GetReminderStatusResponse returns a formatted reminder status

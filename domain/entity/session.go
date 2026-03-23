@@ -12,17 +12,17 @@ var ErrInvalidStatusTransitionError = errors.New("invalid status transition")
 
 // Session represents a bill splitting session
 type Session struct {
-	SessionID        uuid.UUID                      `json:"session_id" db:"session_id"`
-	UserID           uuid.UUID                      `json:"user_id" db:"user_id"`
-	Title            string                         `json:"title" db:"title"`
-	Description      string                         `json:"description" db:"description"`
-	Status           valueobject.SessionStatus      `json:"status" db:"status"`
-	TotalAmount      float64                        `json:"total_amount" db:"total_amount"`
-	Currency         string                         `json:"currency" db:"currency"`
-	SessionDate      *time.Time                     `json:"session_date,omitempty" db:"session_date"`
-	CreatedAt        time.Time                      `json:"created_at" db:"created_at"`
-	UpdatedAt        time.Time                      `json:"updated_at" db:"updated_at"`
-	DeletedAt        *time.Time                     `json:"deleted_at,omitempty" db:"deleted_at"`
+	SessionID   uuid.UUID                 `json:"session_id" db:"session_id"`
+	UserID      uuid.UUID                 `json:"user_id" db:"user_id"`
+	Title       string                    `json:"title" db:"title"`
+	Description string                    `json:"description" db:"description"`
+	Status      valueobject.SessionStatus `json:"status" db:"status"`
+	TotalAmount float64                   `json:"total_amount" db:"total_amount"`
+	Currency    string                    `json:"currency" db:"currency"`
+	SessionDate *time.Time                `json:"session_date,omitempty" db:"session_date"`
+	CreatedAt   time.Time                 `json:"created_at" db:"created_at"`
+	UpdatedAt   time.Time                 `json:"updated_at" db:"updated_at"`
+	DeletedAt   *time.Time                `json:"deleted_at,omitempty" db:"deleted_at"`
 
 	// Computed fields (not in database)
 	ParticipantCount *int `json:"participant_count,omitempty" db:"participant_count"`
@@ -34,16 +34,16 @@ type Session struct {
 func NewSession(userID uuid.UUID, title, description, currency string, sessionDate *time.Time) *Session {
 	now := time.Now()
 	return &Session{
-		SessionID:    uuid.New(),
-		UserID:       userID,
-		Title:        title,
-		Description:  description,
-		Status:       valueobject.SessionStatusActive,
-		TotalAmount:  0,
-		Currency:     currency,
-		SessionDate:  sessionDate,
-		CreatedAt:    now,
-		UpdatedAt:    now,
+		SessionID:   uuid.New(),
+		UserID:      userID,
+		Title:       title,
+		Description: description,
+		Status:      valueobject.SessionStatusActive,
+		TotalAmount: 0,
+		Currency:    currency,
+		SessionDate: sessionDate,
+		CreatedAt:   now,
+		UpdatedAt:   now,
 	}
 }
 

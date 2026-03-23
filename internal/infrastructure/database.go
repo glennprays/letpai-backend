@@ -6,8 +6,8 @@ import (
 
 	"github.com/glennprays/letpai-backend/config"
 	"github.com/jmoiron/sqlx"
-	"github.com/redis/go-redis/v9"
 	_ "github.com/lib/pq"
+	"github.com/redis/go-redis/v9"
 )
 
 // NewPostgresConnection creates a new PostgreSQL database connection

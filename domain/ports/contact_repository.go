@@ -8,13 +8,13 @@ import (
 
 // ContactFilterOptions represents filter options for listing contacts
 type ContactFilterOptions struct {
-	GroupID     *string
-	IsFavorite  *bool
-	Search      *string
-	SortBy      string // name, created_at, group_name
-	SortOrder   string // asc, desc
-	Page        int
-	Limit       int
+	GroupID    *string
+	IsFavorite *bool
+	Search     *string
+	SortBy     string // name, created_at, group_name
+	SortOrder  string // asc, desc
+	Page       int
+	Limit      int
 }
 
 // ContactListResult represents the result of listing contacts

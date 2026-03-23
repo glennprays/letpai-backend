@@ -10,9 +10,9 @@ type PaginationMeta struct {
 
 // PaginatedResponse wraps a response with pagination metadata
 type PaginatedResponse struct {
-	Success    bool             `json:"success"`
-	Data       interface{}      `json:"data"`
-	Pagination *PaginationMeta  `json:"pagination,omitempty"`
+	Success    bool            `json:"success"`
+	Data       interface{}     `json:"data"`
+	Pagination *PaginationMeta `json:"pagination,omitempty"`
 }
 
 // CalculatePages calculates the total number of pages

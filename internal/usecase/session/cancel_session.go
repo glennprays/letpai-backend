@@ -1,8 +1,8 @@
 package session
 
 import (
-	"errors"
 	"context"
+	"errors"
 
 	"github.com/glennprays/letpai-backend/domain"
 	"github.com/glennprays/letpai-backend/domain/ports"

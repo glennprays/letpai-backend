@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/glennprays/letpai-backend/domain/entity"
 	"github.com/glennprays/letpai-backend/domain"
+	"github.com/glennprays/letpai-backend/domain/entity"
 	"github.com/glennprays/letpai-backend/domain/ports"
 	"github.com/glennprays/letpai-backend/domain/valueobject"
 	"github.com/jmoiron/sqlx"

@@ -12,18 +12,18 @@ var ErrInvalidPaymentStatusTransitionError = errors.New("invalid payment status 
 
 // SessionParticipant represents a participant in a session
 type SessionParticipant struct {
-	ParticipantID    uuid.UUID                   `json:"participant_id" db:"participant_id"`
-	SessionID        uuid.UUID                   `json:"session_id" db:"session_id"`
-	ContactID        *uuid.UUID                  `json:"contact_id,omitempty" db:"contact_id"`
-	CustomName       string                      `json:"custom_name,omitempty" db:"custom_name"`
-	CustomWhatsApp   string                      `json:"custom_whatsapp,omitempty" db:"custom_whatsapp"`
-	ShareAmount      float64                     `json:"share_amount" db:"share_amount"`
-	PaymentStatus    valueobject.PaymentStatus   `json:"payment_status" db:"payment_status"`
-	PaymentProofURL  *string                     `json:"payment_proof_url,omitempty" db:"payment_proof_url"`
-	RejectionCount   int                         `json:"rejection_count" db:"rejection_count"`
-	RejectionReason  *string                     `json:"rejection_reason,omitempty" db:"rejection_reason"`
-	JoinedAt         time.Time                   `json:"joined_at" db:"joined_at"`
-	UpdatedAt        time.Time                   `json:"updated_at" db:"updated_at"`
+	ParticipantID   uuid.UUID                 `json:"participant_id" db:"participant_id"`
+	SessionID       uuid.UUID                 `json:"session_id" db:"session_id"`
+	ContactID       *uuid.UUID                `json:"contact_id,omitempty" db:"contact_id"`
+	CustomName      string                    `json:"custom_name,omitempty" db:"custom_name"`
+	CustomWhatsApp  string                    `json:"custom_whatsapp,omitempty" db:"custom_whatsapp"`
+	ShareAmount     float64                   `json:"share_amount" db:"share_amount"`
+	PaymentStatus   valueobject.PaymentStatus `json:"payment_status" db:"payment_status"`
+	PaymentProofURL *string                   `json:"payment_proof_url,omitempty" db:"payment_proof_url"`
+	RejectionCount  int                       `json:"rejection_count" db:"rejection_count"`
+	RejectionReason *string                   `json:"rejection_reason,omitempty" db:"rejection_reason"`
+	JoinedAt        time.Time                 `json:"joined_at" db:"joined_at"`
+	UpdatedAt       time.Time                 `json:"updated_at" db:"updated_at"`
 
 	// Joined fields (not in database)
 	ContactAvatarURL *string `json:"contact_avatar_url,omitempty" db:"contact_avatar_url"`

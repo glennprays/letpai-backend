@@ -8,14 +8,14 @@ import (
 
 // ContactGroup represents a contact group for organizing contacts
 type ContactGroup struct {
-	GroupID      uuid.UUID  `json:"group_id" db:"group_id"`
-	UserID       uuid.UUID  `json:"user_id" db:"user_id"`
-	Name         string     `json:"name" db:"name"`
-	Color        string     `json:"color" db:"color"`
-	SortOrder    int        `json:"sort_order" db:"sort_order"`
-	CreatedAt    time.Time  `json:"created_at" db:"created_at"`
-	UpdatedAt    time.Time  `json:"updated_at" db:"updated_at"`
-	DeletedAt    *time.Time `json:"deleted_at,omitempty" db:"deleted_at"`
+	GroupID   uuid.UUID  `json:"group_id" db:"group_id"`
+	UserID    uuid.UUID  `json:"user_id" db:"user_id"`
+	Name      string     `json:"name" db:"name"`
+	Color     string     `json:"color" db:"color"`
+	SortOrder int        `json:"sort_order" db:"sort_order"`
+	CreatedAt time.Time  `json:"created_at" db:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at" db:"updated_at"`
+	DeletedAt *time.Time `json:"deleted_at,omitempty" db:"deleted_at"`
 }
 
 // NewContactGroup creates a new contact group

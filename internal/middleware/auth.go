@@ -3,15 +3,15 @@ package middleware
 import (
 	"strings"
 
-	"github.com/gofiber/fiber/v2"
 	"github.com/glennprays/letpai-backend/internal/service"
+	"github.com/gofiber/fiber/v2"
 )
 
 const (
-	userIDKey       = "user_id"
-	whatsappKey     = "whatsapp_number"
+	userIDKey           = "user_id"
+	whatsappKey         = "whatsapp_number"
 	authorizationHeader = "Authorization"
-	bearerPrefix    = "Bearer "
+	bearerPrefix        = "Bearer "
 )
 
 // Authenticate creates a JWT authentication middleware

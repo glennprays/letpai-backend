@@ -6,8 +6,8 @@ import (
 	"errors"
 	"time"
 
-	"github.com/glennprays/letpai-backend/domain/entity"
 	"github.com/glennprays/letpai-backend/domain"
+	"github.com/glennprays/letpai-backend/domain/entity"
 	"github.com/glennprays/letpai-backend/domain/ports"
 	"github.com/jmoiron/sqlx"
 )

@@ -72,4 +72,3 @@ func ErrUnauthorized(msg string) error {
 func ErrForbidden(msg string) error {
 	return domain.NewError(domain.ErrForbidden, errors.New(msg))
 }
-
