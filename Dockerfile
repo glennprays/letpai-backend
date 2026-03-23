@@ -1,6 +1,13 @@
 # Stage 1: Build the Go application
 FROM golang:1.25 AS builder
 
+# Install build dependencies for bimg (libvips)
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    pkg-config \
+    libvips-dev \
+    && rm -rf /var/lib/apt/lists/*
+
 # Set the current working directory inside the container
 WORKDIR /app
 
@@ -16,8 +23,8 @@ COPY . .
 # Delete the template directory from the builder stage to prevent it from being compiled
 RUN rm -rf /app/template
 
-# Build the Go application
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /app/main ./cmd/api/main.go
+# Build the Go application with CGO enabled (required for bimg)
+RUN CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -o /app/main ./cmd/api/main.go
 
 # Stage 2: Prepare CA certificates and timezone data
 FROM debian:bullseye-slim AS certs-tzdata
