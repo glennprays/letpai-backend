@@ -659,10 +659,10 @@ paths:
               schema:
                 $ref: '#/components/schemas/RateLimitError'
 
-  /payments/{participant_id}/submit:
+   /payments/{participant_id}/submit:
     post:
       summary: Submit payment proof
-      description: Submit payment proof (public link, no auth required)
+      description: Submit payment proof (public link, no auth required). Payment submissions are rejected if the session has expired (session_date has passed).
       operationId: submitPayment
       tags:
         - Payments
@@ -681,6 +681,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PaymentSubmitResponse'
+        '400':
+          description: Bad request (session expired, payment already submitted, or invalid file)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /payments/{proof_id}/approve:
     post:
