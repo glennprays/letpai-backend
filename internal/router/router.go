@@ -34,8 +34,8 @@ func NewRouter(
 	notificationHandler *handler.NotificationHandler,
 	webhookHandler *handler.WebhookHandler,
 	dashboardHandler *handler.DashboardHandler,
-	jwtService          *service.JWTService,
-	rateLimitService    *service.RateLimitService,
+	jwtService *service.JWTService,
+	rateLimitService *service.RateLimitService,
 ) *Router {
 	routerLogger := logger.With(log.String("component", "router"))
 	return &Router{
@@ -48,11 +48,10 @@ func NewRouter(
 		PaymentHandler:      paymentHandler,
 		NotificationHandler: notificationHandler,
 		WebhookHandler:      webhookHandler,
-		DashboardHandler:   dashboardHandler,
+		DashboardHandler:    dashboardHandler,
 		jwtService:          jwtService,
 		rateLimitService:    rateLimitService,
 	}
-}
 }
 
 // Setup configures all application routes
@@ -155,11 +154,6 @@ func (r *Router) setupNotificationRoutes(group fiber.Router) {
 	group.Post("/sessions/:id/send-notifications", r.NotificationHandler.SendNotifications)
 	group.Post("/sessions/:id/bulk-reminder", r.NotificationHandler.BulkReminder)
 	group.Post("/participants/:participant_id/reminder", middleware.ReminderRateLimiter(r.rateLimitService), r.NotificationHandler.SendReminder)
-}
-
-func (r *Router) setupPaymentRoutes(group fiber.Router) {
-	payments := group.Group("/payments")
-	payments.Get("/:participant_id/public", r.PaymentHandler.GetPaymentPage)
 }
 
 func (r *Router) setupDashboardRoutes(group fiber.Router) {
