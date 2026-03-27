@@ -15,6 +15,7 @@ import (
 	"github.com/glennprays/letpai-backend/internal/repository"
 	"github.com/glennprays/letpai-backend/internal/router"
 	"github.com/glennprays/letpai-backend/internal/service"
+	"github.com/glennprays/letpai-backend/internal/usecase/admin"
 	"github.com/glennprays/letpai-backend/internal/usecase/auth"
 	"github.com/glennprays/letpai-backend/internal/usecase/billing"
 	"github.com/glennprays/letpai-backend/internal/usecase/contact"
@@ -63,6 +64,19 @@ var UseCaseSet = wire.NewSet(
 	auth.NewLoginUserUseCase,
 	auth.NewLogoutUserUseCase,
 	auth.NewUpdateProfileUseCase,
+	// Admin use cases
+	admin.NewInitiateLoginUseCase,
+	admin.NewVerifyOTPUseCase,
+	admin.NewGetProfileUseCase,
+	admin.NewSetupPasswordUseCase,
+	admin.NewListAdminsUseCase,
+	admin.NewCreateAdminUseCase,
+	admin.NewUpdateAdminUseCase,
+	admin.NewDeleteAdminUseCase,
+	admin.NewGetStatusUseCase,
+	admin.NewGetQRCodeUseCase,
+	admin.NewLogoutUseCase,
+	admin.NewUpdateConfigUseCase,
 	// Contact use cases
 	contact.NewCreateContactUseCase,
 	contact.NewGetContactsUseCase,

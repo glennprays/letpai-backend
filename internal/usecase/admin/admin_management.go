@@ -2,167 +2,144 @@ package admin
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
+	"github.com/google/uuid"
+
 	"github.com/glennprays/letpai-backend/domain"
+	"github.com/glennprays/letpai-backend/domain/entity"
 	"github.com/glennprays/letpai-backend/domain/ports"
 )
 
-// ListAdminsUseCase lists all admins (super_admin only)
-type ListAdminsUseCase struct {
-	adminRepo ports.AdminRepository
-}
-
-// NewListAdminsUseCase creates a new list admins use case instance
-func NewListAdminsUseCase(adminRepo ports.AdminRepository) *ListAdminsUseCase {
-	return &ListAdminsUseCase{
-		adminRepo: adminRepo,
-	}
-}
-
-// Execute retrieves all admins
-func (uc *ListAdminsUseCase) Execute(ctx context.Context) ([]*entity.Admin, error) {
-	admins, err := uc.adminRepo.List(ctx)
-	if err != nil {
-		return nil, domain.NewError(domain.ErrInternalFailure, fmt.Errorf("failed to list admins: %w", err))
-	}
-	return admins, nil
-}
-
-type CreateAdminUseCase struct {
-	adminRepo ports.AdminRepository
-}
-
-func NewCreateAdminUseCase(adminRepo ports.AdminRepository) *CreateAdminUseCase {
-	return &CreateAdminUseCase{
-		adminRepo: adminRepo,
-	}
-}
-
+// CreateAdminRequest represents create admin request
 type CreateAdminRequest struct {
 	WhatsAppNumber string `json:"whatsapp_number" validate:"required,len=13,max=20"`
 	FullName       string `json:"full_name" validate:"required,max=100"`
 	Role           string `json:"role" validate:"required,oneof=super_admin,admin"`
 }
 
-type CreateAdminResponse struct {
+// CreateAdminResult represents create admin result
+type CreateAdminResult struct {
 	AdminID string `json:"admin_id"`
 	Message string `json:"message"`
 }
 
-func (uc *CreateAdminUseCase) Execute(ctx context.Context, req *CreateAdminRequest) (*CreateAdminResponse, error) {
-	existingAdmin, err := uc.adminRepo.FindByWhatsAppNumber(ctx, req.WhatsAppNumber)
+// CreateAdminUseCase handles creating a new admin
+type CreateAdminUseCase struct {
+	adminRepo ports.AdminRepository
+}
+
+// NewCreateAdminUseCase creates a new create admin use case
+func NewCreateAdminUseCase(adminRepo ports.AdminRepository) *CreateAdminUseCase {
+	return &CreateAdminUseCase{
+		adminRepo: adminRepo,
+	}
+}
+
+// Execute creates a new admin
+func (uc *CreateAdminUseCase) Execute(ctx context.Context, req *CreateAdminRequest) (*CreateAdminResult, error) {
+	// Check if admin already exists
+	exists, err := uc.adminRepo.CheckExistsByWhatsAppNumber(ctx, req.WhatsAppNumber)
 	if err != nil {
 		return nil, domain.NewError(domain.ErrInternalFailure, fmt.Errorf("failed to check existing admin: %w", err))
 	}
 
-	if existingAdmin != nil {
-		return nil, domain.NewError(domain.ErrConflict, fmt.Errorf("whatsapp number already in use: %s", req.WhatsAppNumber))
+	if exists {
+		return nil, domain.NewError(domain.ErrConflict, errors.New("whatsapp number already in use"))
 	}
 
-	admin := &entity.Admin{
-		AdminID:        entity.AdminRoleSuper,
-		WhatsAppNumber: req.WhatsAppNumber,
-		FullName:       req.FullName,
-		Role:           req.Role,
-		IsActive:       true,
-	}
+	// Create new admin
+	newAdmin := entity.NewAdmin(req.WhatsAppNumber, "", req.FullName, req.Role)
 
-	err = uc.adminRepo.Create(ctx, admin)
-	if err != nil {
+	if err := uc.adminRepo.Create(ctx, newAdmin); err != nil {
 		return nil, domain.NewError(domain.ErrInternalFailure, fmt.Errorf("failed to create admin: %w", err))
 	}
 
-	return &CreateAdminResponse{
-		AdminID: admin.AdminID.String(),
+	return &CreateAdminResult{
+		AdminID: newAdmin.AdminID.String(),
 		Message: "Admin created successfully",
 	}, nil
 }
 
+// UpdateAdminRequest represents update admin request
+type UpdateAdminRequest struct {
+	FullName string `json:"full_name" validate:"omitempty,max=100"`
+	Role     string `json:"role" validate:"omitempty,oneof=super_admin,admin"`
+	IsActive *bool  `json:"is_active" validate:"omitempty"`
+}
+
+// UpdateAdminResult represents update admin result
+type UpdateAdminResult struct {
+	AdminID string `json:"admin_id"`
+	Message string `json:"message"`
+}
+
+// UpdateAdminUseCase handles updating admin details
 type UpdateAdminUseCase struct {
 	adminRepo ports.AdminRepository
 }
 
+// NewUpdateAdminUseCase creates a new update admin use case
 func NewUpdateAdminUseCase(adminRepo ports.AdminRepository) *UpdateAdminUseCase {
 	return &UpdateAdminUseCase{
 		adminRepo: adminRepo,
 	}
 }
 
-type UpdateAdminRequest struct {
-	FullName string `json:"full_name" validate:"omitempty,max=100"`
-	Role     string `json:"role" validate:"omitempty,oneof=super_admin,admin"`
-	IsActive bool   `json:"is_active" validate:"omitempty"`
-}
-
-type UpdateAdminResponse struct {
-	AdminID string `json:"admin_id"`
-	Message string `json:"message"`
-}
-
-func (uc *UpdateAdminUseCase) Execute(ctx context.Context, adminID string, req *UpdateAdminRequest) (*UpdateAdminResponse, error) {
+// Execute updates admin details
+func (uc *UpdateAdminUseCase) Execute(ctx context.Context, adminID string, req *UpdateAdminRequest) (*UpdateAdminResult, error) {
 	admin, err := uc.adminRepo.FindByID(ctx, adminID)
 	if err != nil {
-		return nil, domain.NewError(domain.ErrInternalFailure, fmt.Errorf("failed to find admin: %w", err))
+		return nil, domain.NewError(domain.ErrNotFound, fmt.Errorf("admin not found: %w", err))
 	}
 
-	if admin == nil {
-		return nil, domain.NewError(domain.ErrNotFound, fmt.Errorf("admin not found"))
+	// Update fields if provided
+	if req.FullName != "" {
+		admin.UpdateProfile(req.FullName)
 	}
 
-	if admin.Role == entity.AdminRoleSuper && req.Role == entity.AdminRoleAdmin {
-		return nil, domain.NewError(domain.ErrForbidden, fmt.Errorf("cannot change super admin role"))
+	if req.Role != "" {
+		admin.Role = req.Role
 	}
 
-	admin.FullName = req.FullName
-	admin.IsActive = req.IsActive
-	admin.UpdatedAt = time.Now()
+	if req.IsActive != nil {
+		admin.IsActive = *req.IsActive
+	}
 
-	err = uc.adminRepo.Update(ctx, admin)
-	if err != nil {
+	if err := uc.adminRepo.Update(ctx, admin); err != nil {
 		return nil, domain.NewError(domain.ErrInternalFailure, fmt.Errorf("failed to update admin: %w", err))
 	}
 
-	return &UpdateAdminResponse{
-		AdminID: adminID.String(),
+	return &UpdateAdminResult{
+		AdminID: admin.AdminID.String(),
 		Message: "Admin updated successfully",
 	}, nil
 }
 
+// DeleteAdminUseCase handles deleting an admin
 type DeleteAdminUseCase struct {
 	adminRepo ports.AdminRepository
 }
 
+// NewDeleteAdminUseCase creates a new delete admin use case
 func NewDeleteAdminUseCase(adminRepo ports.AdminRepository) *DeleteAdminUseCase {
 	return &DeleteAdminUseCase{
 		adminRepo: adminRepo,
 	}
 }
 
-type DeleteAdminResponse struct {
-	Message string `json:"message"`
-}
-
-func (uc *DeleteAdminUseCase) Execute(ctx context.Context, adminID string) (*DeleteAdminResponse, error) {
-	admin, err := uc.adminRepo.FindByID(ctx, adminID)
+// Execute deletes an admin
+func (uc *DeleteAdminUseCase) Execute(ctx context.Context, adminID string) error {
+	// Parse admin ID to verify it's valid
+	_, err := uuid.Parse(adminID)
 	if err != nil {
-		return nil, domain.NewError(domain.ErrInternalFailure, fmt.Errorf("failed to find admin: %w", err))
+		return domain.NewError(domain.ErrBadRequest, errors.New("invalid admin ID"))
 	}
 
-	if admin == nil {
-		return nil, domain.NewError(domain.ErrNotFound, fmt.Errorf("admin not found"))
+	if err := uc.adminRepo.SoftDelete(ctx, adminID); err != nil {
+		return domain.NewError(domain.ErrInternalFailure, fmt.Errorf("failed to delete admin: %w", err))
 	}
 
-	if admin.AdminID == entity.AdminRoleSuper {
-		return nil, domain.NewError(domain.ErrForbidden, fmt.Errorf("cannot delete super admin"))
-	}
-
-	err = uc.adminRepo.SoftDelete(ctx, adminID)
-	if err != nil {
-		return nil, domain.NewError(domain.ErrInternalFailure, fmt.Errorf("failed to delete admin: %w", err))
-	}
-
-	return &DeleteAdminResponse{
-		Message: "Admin deleted successfully",
-	}, nil
+	return nil
 }
