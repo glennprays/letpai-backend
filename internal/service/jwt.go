@@ -11,6 +11,7 @@ import (
 type JWTClaims struct {
 	UserID         string `json:"user_id"`
 	WhatsAppNumber string `json:"whatsapp_number"`
+	Role           string `json:"role,omitempty"` // For admin role
 	jwt.RegisteredClaims
 }
 
@@ -30,10 +31,16 @@ func NewJWTService(secretKey string, expiryHours int) *JWTService {
 
 // GenerateToken generates a JWT token for a user
 func (s *JWTService) GenerateToken(userID, whatsappNumber string) (string, error) {
+	return s.GenerateTokenWithRole(userID, whatsappNumber, "")
+}
+
+// GenerateTokenWithRole generates a JWT token with role
+func (s *JWTService) GenerateTokenWithRole(userID, whatsappNumber, role string) (string, error) {
 	now := time.Now()
 	claims := JWTClaims{
 		UserID:         userID,
 		WhatsAppNumber: whatsappNumber,
+		Role:           role,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(now.Add(s.expiryDuration)),
 			IssuedAt:  jwt.NewNumericDate(now),
@@ -52,7 +59,7 @@ func (s *JWTService) GenerateToken(userID, whatsappNumber string) (string, error
 	return tokenString, nil
 }
 
-// ValidateToken validates a JWT token and returns the claims
+// ValidateToken validates a JWT token and returns claims
 func (s *JWTService) ValidateToken(tokenString string) (*JWTClaims, error) {
 	token, err := jwt.ParseWithClaims(
 		tokenString,
@@ -87,6 +94,15 @@ func (s *JWTService) ExtractUserID(tokenString string) (string, error) {
 	return claims.UserID, nil
 }
 
+// ExtractRole extracts role from token string
+func (s *JWTService) ExtractRole(tokenString string) (string, error) {
+	claims, err := s.ValidateToken(tokenString)
+	if err != nil {
+		return "", err
+	}
+	return claims.Role, nil
+}
+
 // RefreshToken generates a new token with extended expiry
 func (s *JWTService) RefreshToken(tokenString string) (string, error) {
 	claims, err := s.ValidateToken(tokenString)
@@ -94,5 +110,5 @@ func (s *JWTService) RefreshToken(tokenString string) (string, error) {
 		return "", err
 	}
 
-	return s.GenerateToken(claims.UserID, claims.WhatsAppNumber)
+	return s.GenerateTokenWithRole(claims.UserID, claims.WhatsAppNumber, claims.Role)
 }

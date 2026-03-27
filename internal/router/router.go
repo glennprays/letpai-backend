@@ -176,15 +176,16 @@ func (r *Router) setupAdminRoutes(group fiber.Router) {
 	protectedAdmin.Get("/profile", r.AdminHandler.GetProfile)
 	protectedAdmin.Put("/profile/setup-password", r.AdminHandler.SetupPassword)
 
-	// Super admin only routes (TODO: add authorization middleware)
+	// Super admin only routes
 	protectedAdmin.Get("/status", r.AdminHandler.GetStatus)
 	protectedAdmin.Post("/qr-code", r.AdminHandler.GetQRCode)
 	protectedAdmin.Post("/logout", r.AdminHandler.Logout)
 	protectedAdmin.Put("/config", r.AdminHandler.UpdateConfig)
 
 	// Admin management routes (super admin only)
-	protectedAdmin.Get("/admins", r.AdminHandler.ListAdmins)
-	protectedAdmin.Post("/admins", r.AdminHandler.CreateAdmin)
-	protectedAdmin.Put("/admins/:id", r.AdminHandler.UpdateAdmin)
-	protectedAdmin.Delete("/admins/:id", r.AdminHandler.DeleteAdmin)
+	superAdmin := protectedAdmin.Use(middleware.RequireSuperAdminRole(r.jwtService))
+	superAdmin.Get("/admins", r.AdminHandler.ListAdmins)
+	superAdmin.Post("/admins", r.AdminHandler.CreateAdmin)
+	superAdmin.Put("/admins/:id", r.AdminHandler.UpdateAdmin)
+	superAdmin.Delete("/admins/:id", r.AdminHandler.DeleteAdmin)
 }

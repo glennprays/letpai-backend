@@ -161,8 +161,8 @@ func (uc *VerifyOTPUseCase) Execute(ctx context.Context, req *VerifyOTPRequest) 
 		return nil, domain.NewError(domain.ErrInternalFailure, fmt.Errorf("failed to update last login: %w", err))
 	}
 
-	// Generate JWT token
-	token, err := uc.jwtService.GenerateToken(admin.AdminID.String(), admin.Role)
+	// Generate JWT token with role
+	token, err := uc.jwtService.GenerateTokenWithRole(admin.AdminID.String(), admin.WhatsAppNumber, admin.Role)
 	if err != nil {
 		return nil, domain.NewError(domain.ErrInternalFailure, fmt.Errorf("failed to generate token: %w", err))
 	}
