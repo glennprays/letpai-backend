@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/glennprays/letpai-backend/domain/entity"
+	"github.com/google/uuid"
 )
 
 // ContactFilterOptions represents filter options for listing contacts
@@ -33,6 +34,12 @@ type ContactRepository interface {
 
 	// FindAll finds contacts for a user with filters and pagination
 	FindAll(ctx context.Context, userID string, opts *ContactFilterOptions) (*ContactListResult, error)
+
+	// BulkCreate creates multiple contacts in a batch
+	BulkCreate(ctx context.Context, contacts []*entity.Contact) error
+
+	// BulkCreateWithGroupID creates multiple contacts and assigns them to a group
+	BulkCreateWithGroupID(ctx context.Context, contacts []*entity.Contact, groupID uuid.UUID) error
 
 	// Update updates a contact
 	Update(ctx context.Context, contact *entity.Contact) error

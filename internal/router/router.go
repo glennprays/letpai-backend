@@ -122,6 +122,7 @@ func (r *Router) setupContactRoutes(group fiber.Router) {
 	contacts.Put("/:id", r.ContactHandler.Update)
 	contacts.Delete("/:id", r.ContactHandler.Delete)
 	contacts.Post("/bulk", r.ContactHandler.BulkOperations)
+	contacts.Post("/import", r.ContactHandler.ImportContacts)
 }
 
 func (r *Router) setupSessionRoutes(group fiber.Router) {

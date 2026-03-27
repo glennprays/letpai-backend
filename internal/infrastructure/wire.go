@@ -58,6 +58,43 @@ var UseCaseSet = wire.NewSet(
 	auth.NewLoginUserUseCase,
 	auth.NewLogoutUserUseCase,
 	auth.NewUpdateProfileUseCase,
+	// Contact use cases
+	contact.NewCreateContactUseCase,
+	contact.NewGetContactsUseCase,
+	contact.NewGetContactByIDUseCase,
+	contact.NewUpdateContactUseCase,
+	contact.NewDeleteContactUseCase,
+	contact.NewBulkOperationsUseCase,
+	contact.NewImportContactsUseCase,
+	// Session use cases
+	session.NewCreateSessionUseCase,
+	session.NewGetSessionsUseCase,
+	session.NewGetSessionDetailUseCase,
+	session.NewUpdateSessionUseCase,
+	session.NewCancelSessionUseCase,
+	// Participant use cases
+	participant.NewAddParticipantsUseCase,
+	participant.NewRemoveParticipantUseCase,
+	participant.NewUpdateParticipantUseCase,
+	participant.NewAddFromGroupUseCase,
+	// Billing use cases
+	billing.NewAddBillItemUseCase,
+	billing.NewUpdateBillItemUseCase,
+	billing.NewDeleteBillItemUseCase,
+	billing.NewCalculateSplitsUseCase,
+	// Payment use cases
+	payment.NewSubmitPaymentUseCase,
+	payment.NewApprovePaymentUseCase,
+	payment.NewRejectPaymentUseCase,
+	payment.NewBulkApproveUseCase,
+	payment.NewBulkRejectUseCase,
+	payment.NewGetPaymentPageUseCase,
+	// Notification use cases
+	notification.NewSendNotificationsUseCase,
+	notification.NewSendReminderUseCase,
+	notification.NewBulkReminderUseCase,
+	// Dashboard use cases
+	dashboard.NewGetDashboardUseCase,
 )
 
 var HandlerSet = wire.NewSet(
