@@ -16,6 +16,7 @@ type ContactHandler struct {
 	updateContact  *contact.UpdateContactUseCase
 	deleteContact  *contact.DeleteContactUseCase
 	bulkOperations *contact.BulkOperationsUseCase
+	importContacts *contact.ImportContactsUseCase
 }
 
 // NewContactHandler creates a new contact handler
@@ -26,6 +27,7 @@ func NewContactHandler(
 	updateContact *contact.UpdateContactUseCase,
 	deleteContact *contact.DeleteContactUseCase,
 	bulkOperations *contact.BulkOperationsUseCase,
+	importContacts *contact.ImportContactsUseCase,
 ) *ContactHandler {
 	return &ContactHandler{
 		createContact:  createContact,
@@ -34,6 +36,7 @@ func NewContactHandler(
 		updateContact:  updateContact,
 		deleteContact:  deleteContact,
 		bulkOperations: bulkOperations,
+		importContacts: importContacts,
 	}
 }
 
@@ -196,6 +199,28 @@ func (h *ContactHandler) BulkOperations(c *fiber.Ctx) error {
 	}
 
 	result, err := h.bulkOperations.Execute(c.Context(), userID, ucReq)
+	if err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+
+	return c.JSON(fiber.Map{
+		"success": true,
+		"data":    result,
+	})
+}
+
+// ImportContacts imports contacts from JSON
+func (h *ContactHandler) ImportContacts(c *fiber.Ctx) error {
+	userID := middleware.GetUserID(c)
+
+	var req contact.ImportContactsRequest
+	if err := c.BodyParser(&req); err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+
+	result, err := h.importContacts.Execute(c.Context(), userID, &req)
 	if err != nil {
 		apiErr := httperror.FromError(err)
 		return c.Status(apiErr.Status).JSON(apiErr.Response())
