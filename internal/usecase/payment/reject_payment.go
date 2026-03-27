@@ -3,18 +3,23 @@ package payment
 import (
 	"context"
 	"errors"
+	"fmt"
+	"time"
 
 	"github.com/glennprays/letpai-backend/domain"
+	"github.com/glennprays/letpai-backend/domain/entity"
 	"github.com/glennprays/letpai-backend/domain/ports"
 	"github.com/glennprays/letpai-backend/domain/valueobject"
+	"github.com/glennprays/letpai-backend/internal/service"
+	"github.com/google/uuid"
 )
 
-// RejectPaymentRequest represents the request to reject payment
+// RejectPaymentRequest represents a request to reject payment
 type RejectPaymentRequest struct {
 	RejectionReason string `json:"rejection_reason" validate:"required,min=5,max=500"`
 }
 
-// RejectPaymentResponse represents the response after rejecting payment
+// RejectPaymentResponse represents response after rejecting payment
 type RejectPaymentResponse struct {
 	PaymentStatus   string `json:"payment_status"`
 	RejectionCount  int    `json:"rejection_count"`
@@ -24,18 +29,27 @@ type RejectPaymentResponse struct {
 
 // RejectPaymentUseCase handles rejecting payment proof
 type RejectPaymentUseCase struct {
-	participantRepo ports.ParticipantRepository
-	sessionRepo     ports.SessionRepository
+	participantRepo     ports.ParticipantRepository
+	sessionRepo         ports.SessionRepository
+	contactRepo         ports.ContactRepository
+	whatsappSvc         *service.WhatsAppService
+	notificationLogRepo ports.NotificationLogRepository
 }
 
 // NewRejectPaymentUseCase creates a new reject payment use case
 func NewRejectPaymentUseCase(
 	participantRepo ports.ParticipantRepository,
 	sessionRepo ports.SessionRepository,
+	contactRepo ports.ContactRepository,
+	whatsappSvc *service.WhatsAppService,
+	notificationLogRepo ports.NotificationLogRepository,
 ) *RejectPaymentUseCase {
 	return &RejectPaymentUseCase{
-		participantRepo: participantRepo,
-		sessionRepo:     sessionRepo,
+		participantRepo:     participantRepo,
+		sessionRepo:         sessionRepo,
+		contactRepo:         contactRepo,
+		whatsappSvc:         whatsappSvc,
+		notificationLogRepo: notificationLogRepo,
 	}
 }
 
@@ -74,6 +88,61 @@ func (uc *RejectPaymentUseCase) Execute(ctx context.Context, userID, participant
 	// Update participant
 	if err := uc.participantRepo.Update(ctx, participant); err != nil {
 		return nil, err
+	}
+
+	// Send rejection notification via WhatsApp
+	whatsappNumber := ""
+	participantName := participant.CustomName
+	if participant.ContactID != nil {
+		contact, err := uc.contactRepo.FindByID(ctx, participant.ContactID.String(), userID)
+		if err != nil {
+			// Contact not found, use custom data
+			whatsappNumber = participant.CustomWhatsApp
+			participantName = participant.CustomName
+		} else {
+			whatsappNumber = contact.WhatsAppNumber
+			participantName = contact.Name
+		}
+	} else {
+		whatsappNumber = participant.CustomWhatsApp
+		participantName = participant.CustomName
+	}
+
+	if whatsappNumber != "" {
+		message := fmt.Sprintf("*Letpai - Payment Rejected*\n\n"+
+			"Hi %s!\n\n"+
+			"Unfortunately, your payment proof for the bill split session was rejected.\n\n"+
+			"Reason: %s\n\n"+
+			"Please upload a clearer proof and resubmit.\n\n"+
+			"Thank you for using Letpai!",
+			participantName, req.RejectionReason)
+
+		messageID, err := uc.whatsappSvc.SendNotification(ctx, whatsappNumber, message)
+		if err != nil {
+			// Log failure but don't block the rejection
+			errMsg := err.Error()
+			log := &entity.NotificationLog{
+				LogID:            uuid.New(),
+				ParticipantID:    participant.ParticipantID,
+				NotificationType: valueobject.NotificationTypeRejection,
+				MessageContent:   message,
+				SentAt:           time.Now(),
+				Status:           entity.NotificationStatusFailed,
+				ErrorMessage:     &errMsg,
+			}
+			uc.notificationLogRepo.Create(ctx, log)
+		} else {
+			log := &entity.NotificationLog{
+				LogID:             uuid.New(),
+				ParticipantID:     participant.ParticipantID,
+				NotificationType:  valueobject.NotificationTypeRejection,
+				WhatsAppMessageID: &messageID,
+				MessageContent:    message,
+				SentAt:            time.Now(),
+				Status:            entity.NotificationStatusQueued,
+			}
+			uc.notificationLogRepo.Create(ctx, log)
+		}
 	}
 
 	return &RejectPaymentResponse{

@@ -2,18 +2,23 @@ package payment
 
 import (
 	"context"
+	"fmt"
+	"time"
 
+	"github.com/glennprays/letpai-backend/domain/entity"
 	"github.com/glennprays/letpai-backend/domain/ports"
 	"github.com/glennprays/letpai-backend/domain/valueobject"
+	"github.com/glennprays/letpai-backend/internal/service"
+	"github.com/google/uuid"
 )
 
-// BulkRejectRequest represents the request to bulk reject payments
+// BulkRejectRequest represents a request to bulk reject payments
 type BulkRejectRequest struct {
 	ProofIDs        []string `json:"proof_ids" validate:"required,min=1"`
 	RejectionReason string   `json:"rejection_reason" validate:"required,min=5,max=500"`
 }
 
-// BulkRejectResponse represents the response after bulk rejecting payments
+// BulkRejectResponse represents response after bulk rejecting payments
 type BulkRejectResponse struct {
 	RejectedCount int    `json:"rejected_count"`
 	SkippedCount  int    `json:"skipped_count"`
@@ -22,18 +27,27 @@ type BulkRejectResponse struct {
 
 // BulkRejectUseCase handles bulk rejecting payment proofs
 type BulkRejectUseCase struct {
-	participantRepo ports.ParticipantRepository
-	sessionRepo     ports.SessionRepository
+	participantRepo     ports.ParticipantRepository
+	sessionRepo         ports.SessionRepository
+	contactRepo         ports.ContactRepository
+	whatsappSvc         *service.WhatsAppService
+	notificationLogRepo ports.NotificationLogRepository
 }
 
 // NewBulkRejectUseCase creates a new bulk reject use case
 func NewBulkRejectUseCase(
 	participantRepo ports.ParticipantRepository,
 	sessionRepo ports.SessionRepository,
+	contactRepo ports.ContactRepository,
+	whatsappSvc *service.WhatsAppService,
+	notificationLogRepo ports.NotificationLogRepository,
 ) *BulkRejectUseCase {
 	return &BulkRejectUseCase{
-		participantRepo: participantRepo,
-		sessionRepo:     sessionRepo,
+		participantRepo:     participantRepo,
+		sessionRepo:         sessionRepo,
+		contactRepo:         contactRepo,
+		whatsappSvc:         whatsappSvc,
+		notificationLogRepo: notificationLogRepo,
 	}
 }
 
@@ -84,12 +98,67 @@ func (uc *BulkRejectUseCase) Execute(ctx context.Context, userID string, req *Bu
 			continue
 		}
 
+		// Send rejection notification via WhatsApp
+		whatsappNumber := ""
+		participantName := participant.CustomName
+		if participant.ContactID != nil {
+			contact, err := uc.contactRepo.FindByID(ctx, participant.ContactID.String(), userID)
+			if err != nil {
+				// Contact not found, use custom data
+				whatsappNumber = participant.CustomWhatsApp
+				participantName = participant.CustomName
+			} else {
+				whatsappNumber = contact.WhatsAppNumber
+				participantName = contact.Name
+			}
+		} else {
+			whatsappNumber = participant.CustomWhatsApp
+			participantName = participant.CustomName
+		}
+
+		if whatsappNumber != "" {
+			message := fmt.Sprintf("*Letpai - Payment Rejected*\n\n"+
+				"Hi %s!\n\n"+
+				"Unfortunately, your payment proof for the bill split session was rejected.\n\n"+
+				"Reason: %s\n\n"+
+				"Please upload a clearer proof and resubmit.\n\n"+
+				"Thank you for using Letpai!",
+				participantName, req.RejectionReason)
+
+			messageID, err := uc.whatsappSvc.SendNotification(ctx, whatsappNumber, message)
+			if err != nil {
+				// Log failure but don't block the rejection
+				errMsg := err.Error()
+				log := &entity.NotificationLog{
+					LogID:            uuid.New(),
+					ParticipantID:    participant.ParticipantID,
+					NotificationType: valueobject.NotificationTypeRejection,
+					MessageContent:   message,
+					SentAt:           time.Now(),
+					Status:           entity.NotificationStatusFailed,
+					ErrorMessage:     &errMsg,
+				}
+				uc.notificationLogRepo.Create(ctx, log)
+			} else {
+				log := &entity.NotificationLog{
+					LogID:             uuid.New(),
+					ParticipantID:     participant.ParticipantID,
+					NotificationType:  valueobject.NotificationTypeRejection,
+					WhatsAppMessageID: &messageID,
+					MessageContent:    message,
+					SentAt:            time.Now(),
+					Status:            entity.NotificationStatusQueued,
+				}
+				uc.notificationLogRepo.Create(ctx, log)
+			}
+		}
+
 		rejectedCount++
 	}
 
 	message := ""
 	if rejectedCount > 0 {
-		message = "Payments rejected successfully"
+		message = fmt.Sprintf("%d payment(s) rejected successfully", rejectedCount)
 	} else {
 		message = "No payments were rejected"
 	}

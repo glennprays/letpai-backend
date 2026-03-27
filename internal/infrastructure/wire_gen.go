@@ -87,12 +87,12 @@ func InitializeApp() (*App, error) {
 	}
 	submitPaymentUseCase := payment.NewSubmitPaymentUseCase(participantRepository, sessionRepository, imageService)
 	approvePaymentUseCase := payment.NewApprovePaymentUseCase(participantRepository, sessionRepository)
-	rejectPaymentUseCase := payment.NewRejectPaymentUseCase(participantRepository, sessionRepository)
+	notificationLogRepository := repository.NewPostgresNotificationLogRepository(db)
+	rejectPaymentUseCase := payment.NewRejectPaymentUseCase(participantRepository, sessionRepository, contactRepository, whatsAppService, notificationLogRepository)
 	bulkApproveUseCase := payment.NewBulkApproveUseCase(participantRepository, sessionRepository)
-	bulkRejectUseCase := payment.NewBulkRejectUseCase(participantRepository, sessionRepository)
+	bulkRejectUseCase := payment.NewBulkRejectUseCase(participantRepository, sessionRepository, contactRepository, whatsAppService, notificationLogRepository)
 	getPaymentPageUseCase := payment.NewGetPaymentPageUseCase(participantRepository, sessionRepository, billItemRepository, contactRepository)
 	paymentHandler := handler.NewPaymentHandler(submitPaymentUseCase, approvePaymentUseCase, rejectPaymentUseCase, bulkApproveUseCase, bulkRejectUseCase, getPaymentPageUseCase)
-	notificationLogRepository := repository.NewPostgresNotificationLogRepository(db)
 	sendNotificationsUseCase := notification.NewSendNotificationsUseCase(sessionRepository, participantRepository, contactRepository, billItemRepository, whatsAppService, notificationLogRepository)
 	client, err := NewRedisConnection(configConfig)
 	if err != nil {
