@@ -1,6 +1,8 @@
 //go:build wireinject
 // +build wireinject
 
+//go:generate go run github.com/google/wire/cmd/wire
+
 package infrastructure
 
 import (
@@ -15,6 +17,7 @@ import (
 	"github.com/glennprays/letpai-backend/internal/usecase/auth"
 	"github.com/glennprays/letpai-backend/internal/usecase/billing"
 	"github.com/glennprays/letpai-backend/internal/usecase/contact"
+	"github.com/glennprays/letpai-backend/internal/usecase/contactgroup"
 	"github.com/glennprays/letpai-backend/internal/usecase/dashboard"
 	"github.com/glennprays/letpai-backend/internal/usecase/notification"
 	"github.com/glennprays/letpai-backend/internal/usecase/participant"
@@ -65,6 +68,11 @@ var UseCaseSet = wire.NewSet(
 	contact.NewDeleteContactUseCase,
 	contact.NewBulkOperationsUseCase,
 	contact.NewImportContactsUseCase,
+	// Contact group use cases
+	contactgroup.NewCreateGroupUseCase,
+	contactgroup.NewGetGroupsUseCase,
+	contactgroup.NewUpdateGroupUseCase,
+	contactgroup.NewDeleteGroupUseCase,
 	// Session use cases
 	session.NewCreateSessionUseCase,
 	session.NewGetSessionsUseCase,
