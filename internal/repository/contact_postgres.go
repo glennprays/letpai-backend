@@ -4,11 +4,13 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/glennprays/letpai-backend/domain"
 	"github.com/glennprays/letpai-backend/domain/entity"
 	"github.com/glennprays/letpai-backend/domain/ports"
+	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 )
 
@@ -44,6 +46,89 @@ func (r *PostgresContactRepository) Create(ctx context.Context, contact *entity.
 		contact.UpdatedAt,
 	)
 
+	if err != nil {
+		return domain.NewError(domain.ErrInternalFailure, err)
+	}
+
+	return nil
+}
+
+// BulkCreate creates multiple contacts in a batch
+func (r *PostgresContactRepository) BulkCreate(ctx context.Context, contacts []*entity.Contact) error {
+	if len(contacts) == 0 {
+		return nil
+	}
+
+	query := `
+		INSERT INTO contacts (contact_id, user_id, name, whatsapp_number, group_id, is_favorite, avatar_url, notes, created_at, updated_at)
+		VALUES `
+
+	placeholders := make([]string, len(contacts))
+	args := make([]interface{}, 0, len(contacts)*10)
+
+	for i, contact := range contacts {
+		baseIdx := i * 10
+		placeholders[i] = fmt.Sprintf("($%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d)",
+			baseIdx+1, baseIdx+2, baseIdx+3, baseIdx+4, baseIdx+5, baseIdx+6, baseIdx+7, baseIdx+8, baseIdx+9, baseIdx+10)
+		args = append(args,
+			contact.ContactID,
+			contact.UserID,
+			contact.Name,
+			contact.WhatsAppNumber,
+			contact.GroupID,
+			contact.IsFavorite,
+			contact.AvatarURL,
+			contact.Notes,
+			contact.CreatedAt,
+			contact.UpdatedAt,
+		)
+	}
+
+	query += strings.Join(placeholders, ", ")
+
+	_, err := r.db.ExecContext(ctx, query, args...)
+	if err != nil {
+		return domain.NewError(domain.ErrInternalFailure, err)
+	}
+
+	return nil
+}
+
+// BulkCreateWithGroupID creates multiple contacts and assigns them to a group
+func (r *PostgresContactRepository) BulkCreateWithGroupID(ctx context.Context, contacts []*entity.Contact, groupID uuid.UUID) error {
+	if len(contacts) == 0 {
+		return nil
+	}
+
+	query := `
+		INSERT INTO contacts (contact_id, user_id, name, whatsapp_number, group_id, is_favorite, avatar_url, notes, created_at, updated_at)
+		VALUES `
+
+	placeholders := make([]string, len(contacts))
+	args := make([]interface{}, 0, len(contacts)*10)
+
+	for i, contact := range contacts {
+		baseIdx := i * 10
+		contact.GroupID = &groupID
+		placeholders[i] = fmt.Sprintf("($%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d)",
+			baseIdx+1, baseIdx+2, baseIdx+3, baseIdx+4, baseIdx+5, baseIdx+6, baseIdx+7, baseIdx+8, baseIdx+9, baseIdx+10)
+		args = append(args,
+			contact.ContactID,
+			contact.UserID,
+			contact.Name,
+			contact.WhatsAppNumber,
+			contact.GroupID,
+			contact.IsFavorite,
+			contact.AvatarURL,
+			contact.Notes,
+			contact.CreatedAt,
+			contact.UpdatedAt,
+		)
+	}
+
+	query += strings.Join(placeholders, ", ")
+
+	_, err := r.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return domain.NewError(domain.ErrInternalFailure, err)
 	}
