@@ -127,6 +127,7 @@ var HandlerSet = wire.NewSet(
 	handler.NewHealthHandler,
 	handler.NewAuthHandler,
 	handler.NewAdminHandler,
+	handler.NewWhatsAppWebhookHandler,
 	handler.NewContactGroupHandler,
 	handler.NewContactHandler,
 	handler.NewSessionHandler,

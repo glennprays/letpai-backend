@@ -9,19 +9,20 @@ import (
 )
 
 type Router struct {
-	logger              *log.Logger
-	HealthHandler       *handler.HealthHandler
-	AuthHandler         *handler.AuthHandler
-	AdminHandler        *handler.AdminHandler
-	ContactGroupHandler *handler.ContactGroupHandler
-	ContactHandler      *handler.ContactHandler
-	SessionHandler      *handler.SessionHandler
-	PaymentHandler      *handler.PaymentHandler
-	NotificationHandler *handler.NotificationHandler
-	WebhookHandler      *handler.WebhookHandler
-	DashboardHandler    *handler.DashboardHandler
-	jwtService          *service.JWTService
-	rateLimitService    *service.RateLimitService
+	logger                 *log.Logger
+	HealthHandler          *handler.HealthHandler
+	AuthHandler            *handler.AuthHandler
+	AdminHandler           *handler.AdminHandler
+	WhatsAppWebhookHandler *handler.WhatsAppWebhookHandler
+	ContactGroupHandler    *handler.ContactGroupHandler
+	ContactHandler         *handler.ContactHandler
+	SessionHandler         *handler.SessionHandler
+	PaymentHandler         *handler.PaymentHandler
+	NotificationHandler    *handler.NotificationHandler
+	WebhookHandler         *handler.WebhookHandler
+	DashboardHandler       *handler.DashboardHandler
+	jwtService             *service.JWTService
+	rateLimitService       *service.RateLimitService
 }
 
 func NewRouter(
@@ -29,6 +30,7 @@ func NewRouter(
 	healthHandler *handler.HealthHandler,
 	authHandler *handler.AuthHandler,
 	adminHandler *handler.AdminHandler,
+	whatsappWebhookHandler *handler.WhatsAppWebhookHandler,
 	contactGroupHandler *handler.ContactGroupHandler,
 	contactHandler *handler.ContactHandler,
 	sessionHandler *handler.SessionHandler,
@@ -41,19 +43,20 @@ func NewRouter(
 ) *Router {
 	routerLogger := logger.With(log.String("component", "router"))
 	return &Router{
-		logger:              routerLogger,
-		HealthHandler:       healthHandler,
-		AuthHandler:         authHandler,
-		AdminHandler:        adminHandler,
-		ContactGroupHandler: contactGroupHandler,
-		ContactHandler:      contactHandler,
-		SessionHandler:      sessionHandler,
-		PaymentHandler:      paymentHandler,
-		NotificationHandler: notificationHandler,
-		WebhookHandler:      webhookHandler,
-		DashboardHandler:    dashboardHandler,
-		jwtService:          jwtService,
-		rateLimitService:    rateLimitService,
+		logger:                 routerLogger,
+		HealthHandler:          healthHandler,
+		AuthHandler:            authHandler,
+		AdminHandler:           adminHandler,
+		WhatsAppWebhookHandler: whatsappWebhookHandler,
+		ContactGroupHandler:    contactGroupHandler,
+		ContactHandler:         contactHandler,
+		SessionHandler:         sessionHandler,
+		PaymentHandler:         paymentHandler,
+		NotificationHandler:    notificationHandler,
+		WebhookHandler:         webhookHandler,
+		DashboardHandler:       dashboardHandler,
+		jwtService:             jwtService,
+		rateLimitService:       rateLimitService,
 	}
 }
 
@@ -91,6 +94,7 @@ func (r *Router) setupHealthRoutes(group fiber.Router) {
 func (r *Router) setupWebhookRoutes(group fiber.Router) {
 	webhooks := group.Group("/webhooks")
 	webhooks.Post("/whatsapp-status", r.WebhookHandler.HandleWhatsAppStatus)
+	webhooks.Post("/whatsapp-gateway", r.WhatsAppWebhookHandler.HandleStatusUpdate)
 }
 
 func (r *Router) setupAuthRoutes(group fiber.Router) {

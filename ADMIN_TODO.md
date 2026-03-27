@@ -55,10 +55,10 @@ Admin module is partially implemented with:
   - [x] `UpdateQRCode()` - Update QR code
   - [x] `Delete()` - Remove config
 
-### Phase 5: Admin Operations Verification
-- [ ] Create verification flow for sensitive operations:
-  - [ ] OTP verification before critical operations
-  - [ ] Add `admin_ops_verifications` table usage
+### Phase 5: Admin Operations Verification (Partial - Repository Done, Use Cases Pending)
+- [x] Create verification flow for sensitive operations:
+  - [x] Add `admin_otp_verifications` table usage
+  - [ ] OTP verification before critical operations (use cases pending)
   - [ ] Implement verification use cases
 
 ### Phase 6: WhatsApp Service Integration
