@@ -3,6 +3,7 @@ package contact
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/glennprays/letpai-backend/domain"
 	"github.com/glennprays/letpai-backend/domain/entity"
@@ -82,8 +83,8 @@ func (uc *ImportContactsUseCase) Execute(ctx context.Context, userID string, req
 			UserID:         uuid.MustParse(userID),
 			Name:           contactReq.Name,
 			WhatsAppNumber: contactReq.WhatsAppNumber,
-			CreatedAt:      entity.Contact{}.CreatedAt,
-			UpdatedAt:      entity.Contact{}.UpdatedAt,
+			CreatedAt:      time.Now(),
+			UpdatedAt:      time.Now(),
 		}
 
 		// Assign to group if provided
