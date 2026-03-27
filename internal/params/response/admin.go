@@ -1,30 +1,32 @@
 package admin
 
-type ListAdminsResponse struct {
-	Admins  []*AdminAdminResponse
-	Message string `json:"message"`
+type GetStatusResponse struct {
+	IsConnected       bool   `json:"is_connected"`
+	GatewayTokenValid bool   `json:"gateway_token_valid"`
+	PhoneNumber       string `json:"phone_number"`
+	LastConnectedAt   string `json:"last_connected_at,omitempty"`
+	QRCodeBase64      string `json:"qr_code,omitempty"`
+	QRCodeExpiresAt   string `json:"qr_code_expires_at,omitempty"`
+	Message           string `json:"message,omitempty"`
 }
 
-type AdminAdminResponse struct {
+type LoginResponse struct {
 	AdminID        string `json:"admin_id"`
 	WhatsAppNumber string `json:"whatsapp_number"`
 	FullName       string `json:"full_name"`
 	Role           string `json:"role"`
-	IsActive       bool   `json:"is_active"`
-	CreatedAt      string `json:"created_at"`
-	UpdatedAt      string `json:"updated_at"`
+	Token          string `json:"token"`
 }
 
-type AdminRequest struct {
-	FullName string `json:"full_name" validate:"omitempty,max=100"`
+type QRCodeResponse struct {
+	QRCodeBase64 string `json:"qr_code"`
+	ExpiresAt    string `json:"qr_code_expires_at"`
 }
 
-type UpdateAdminResponse struct {
+type LogoutResponse struct {
 	Message string `json:"message"`
 }
 
-type DeleteAdminRequest struct{}
-
-type DeleteAdminResponse struct {
-	Message string `json:"message"`
+type ConfigResponse struct {
+	PhoneNumber string `json:"phone_number"`
 }
