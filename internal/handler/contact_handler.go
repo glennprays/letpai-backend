@@ -38,18 +38,6 @@ func NewContactHandler(
 }
 
 // Create creates a new contact
-// @Summary Create contact
-// @Description Create a new contact
-// @Tags Contacts
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param request body request.CreateContactRequest true "Contact details"
-// @Success 201 {object} response.ContactResponse
-// @Failure 400 {object} httperror.APIError
-// @Failure 401 {object} httperror.APIError
-// @Failure 409 {object} httperror.APIError
-// @Router /contacts [post]
 func (h *ContactHandler) Create(c *fiber.Ctx) error {
 	userID := middleware.GetUserID(c)
 
@@ -80,21 +68,6 @@ func (h *ContactHandler) Create(c *fiber.Ctx) error {
 }
 
 // GetContacts retrieves contacts with pagination and filters
-// @Summary Get contacts
-// @Description Get contacts with pagination and filters
-// @Tags Contacts
-// @Produce json
-// @Security BearerAuth
-// @Param group_id query string false "Filter by group ID"
-// @Param is_favorite query boolean false "Filter by favorite status"
-// @Param search query string false "Search in name and WhatsApp number"
-// @Param sort_by query string false "Sort by field (name, created_at, group_name, whatsapp_number)"
-// @Param sort_order query string false "Sort order (asc, desc)"
-// @Param page query int false "Page number" default(1)
-// @Param limit query int false "Items per page" default(20)
-// @Success 200 {object} response.ContactListResponse
-// @Failure 401 {object} httperror.APIError
-// @Router /contacts [get]
 func (h *ContactHandler) GetContacts(c *fiber.Ctx) error {
 	userID := middleware.GetUserID(c)
 
@@ -141,16 +114,6 @@ func (h *ContactHandler) GetContacts(c *fiber.Ctx) error {
 }
 
 // GetByID retrieves a contact by ID
-// @Summary Get contact by ID
-// @Description Get a contact by ID
-// @Tags Contacts
-// @Produce json
-// @Security BearerAuth
-// @Param id path string true "Contact ID"
-// @Success 200 {object} response.ContactResponse
-// @Failure 401 {object} httperror.APIError
-// @Failure 404 {object} httperror.APIError
-// @Router /contacts/{id} [get]
 func (h *ContactHandler) GetByID(c *fiber.Ctx) error {
 	userID := middleware.GetUserID(c)
 	contactID := c.Params("id")
@@ -168,19 +131,6 @@ func (h *ContactHandler) GetByID(c *fiber.Ctx) error {
 }
 
 // Update updates a contact
-// @Summary Update contact
-// @Description Update a contact
-// @Tags Contacts
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param id path string true "Contact ID"
-// @Param request body request.UpdateContactRequest true "Contact details"
-// @Success 200 {object} response.ContactResponse
-// @Failure 400 {object} httperror.APIError
-// @Failure 401 {object} httperror.APIError
-// @Failure 404 {object} httperror.APIError
-// @Router /contacts/{id} [put]
 func (h *ContactHandler) Update(c *fiber.Ctx) error {
 	userID := middleware.GetUserID(c)
 	contactID := c.Params("id")
@@ -213,16 +163,6 @@ func (h *ContactHandler) Update(c *fiber.Ctx) error {
 }
 
 // Delete deletes a contact
-// @Summary Delete contact
-// @Description Delete a contact
-// @Tags Contacts
-// @Produce json
-// @Security BearerAuth
-// @Param id path string true "Contact ID"
-// @Success 200 {object} map[string]interface{}
-// @Failure 401 {object} httperror.APIError
-// @Failure 404 {object} httperror.APIError
-// @Router /contacts/{id} [delete]
 func (h *ContactHandler) Delete(c *fiber.Ctx) error {
 	userID := middleware.GetUserID(c)
 	contactID := c.Params("id")
@@ -240,17 +180,6 @@ func (h *ContactHandler) Delete(c *fiber.Ctx) error {
 }
 
 // BulkOperations performs bulk operations on contacts
-// @Summary Bulk operations on contacts
-// @Description Perform bulk operations on contacts (add_to_group, delete)
-// @Tags Contacts
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param request body request.BulkContactsRequest true "Bulk operation details"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} httperror.APIError
-// @Failure 401 {object} httperror.APIError
-// @Router /contacts/bulk [post]
 func (h *ContactHandler) BulkOperations(c *fiber.Ctx) error {
 	userID := middleware.GetUserID(c)
 

@@ -52,3 +52,10 @@ type AddBillItemRequest struct {
 	Amount      float64 `json:"amount" validate:"required,gt=0"`
 	Category    *string `json:"category,omitempty"`
 }
+
+// UpdateBillItemRequest represents a request to update a bill item
+type UpdateBillItemRequest struct {
+	Description string  `json:"description" validate:"omitempty,min=1,max=500"`
+	Amount      float64 `json:"amount" validate:"omitempty,gt=0"`
+	Category    string  `json:"category,omitempty"`
+}

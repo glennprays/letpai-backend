@@ -588,10 +588,66 @@ paths:
           description: Splits calculated successfully
           content:
             application/json:
-              schema:
-                $ref: '#/components/schemas/CalculateSplitsResponse'
+                 schema:
+                 $ref: '#/components/schemas/CalculateSplitsResponse'
 
-  /sessions/{id}/send-notifications:
+   /sessions/{id}/bills/{bill_item_id}:
+     put:
+       summary: Update bill item
+       description: Update a bill item and recalculate session total
+       tags:
+         - Sessions
+       security:
+         - BearerAuth: []
+       parameters:
+         - $ref: '#/components/parameters/SessionID'
+         - $ref: '#/components/parameters/BillItemID'
+       requestBody:
+         required: true
+         content:
+           application/json:
+             schema:
+               $ref: '#/components/schemas/UpdateBillItemRequest'
+       responses:
+         '200':
+           description: Bill item updated successfully
+           content:
+             application/json:
+               schema:
+                 $ref: '#/components/schemas/UpdateBillItemResponse'
+         '400':
+           description: Bad request
+           content:
+             application/json:
+               schema:
+                 $ref: '#/components/schemas/Error'
+
+   /sessions/{id}/bills/{bill_item_id}:
+     delete:
+       summary: Delete bill item
+       description: Delete a bill item and recalculate session total
+       tags:
+         - Sessions
+       security:
+         - BearerAuth: []
+       parameters:
+         - $ref: '#/components/parameters/SessionID'
+         - $ref: '#/components/parameters/BillItemID'
+       responses:
+         '200':
+           description: Bill item deleted successfully
+           content:
+             application/json:
+               schema:
+                 $ref: '#/components/schemas/DeleteBillItemResponse'
+         '400':
+           description: Bad request
+           content:
+             application/json:
+               schema:
+                 $ref: '#/components/schemas/Error'
+
+   /sessions/{id}/send-notifications:
     post:
       summary: Send notifications
       description: Send WhatsApp notifications to all participants
@@ -1370,9 +1426,56 @@ components:
           type: boolean
           example: true
         data:
-          $ref: '#/components/schemas/BillItem'
+         $ref: '#/components/schemas/BillItem'
 
-    CalculateSplitsResponse:
+     UpdateBillItemRequest:
+       type: object
+       properties:
+         description:
+           type: string
+           nullable: true
+           example: "Updated description"
+         amount:
+           type: integer
+           example: 600000
+         category:
+           type: string
+           nullable: true
+           example: "food"
+
+     UpdateBillItemResponse:
+       type: object
+       properties:
+         bill_item_id:
+           type: string
+           format: uuid
+           example: "550e8400-e29b-41d4-a716-446655440000"
+         description:
+           type: string
+           example: "Updated description"
+         amount:
+           type: integer
+           example: 600000
+         category:
+           type: string
+           nullable: true
+           example: "food"
+         updated_at:
+           type: string
+           format: date-time
+           example: "2026-03-18T12:00:00Z"
+
+     DeleteBillItemResponse:
+       type: object
+       properties:
+         message:
+           type: string
+           example: "Bill item deleted successfully"
+         new_total:
+           type: integer
+           example: 400000
+
+     CalculateSplitsResponse:
       type: object
       properties:
         success:
@@ -1780,10 +1883,20 @@ components:
       description: Payment Proof ID
       schema:
         type: string
-        format: uuid
-      example: "550e8400-e29b-41d4-a716-446655440000"
+         format: uuid
+       example: "550e8400-e29b-41d4-a716-446655440000"
 
-tags:
+     BillItemID:
+       name: bill_item_id
+       in: path
+       required: true
+       description: Bill Item ID
+       schema:
+         type: string
+         format: uuid
+       example: "550e8400-e29b-41d4-a716-446655440000"
+
+     tags:
   - name: Health
     description: Health check operations
   - name: Authentication

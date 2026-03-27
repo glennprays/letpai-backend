@@ -24,16 +24,6 @@ func NewWebhookHandler(cfg *config.Config, notificationLogRepo ports.Notificatio
 }
 
 // HandleWhatsAppStatus handles incoming webhook requests from WhatsApp Gateway
-// @Summary WhatsApp status webhook
-// @Description Receive status updates from WhatsApp Gateway
-// @Tags Webhooks
-// @Accept json
-// @Produce json
-// @Param body body WhatsAppStatusWebhook true "Webhook payload"
-// @Success 200 {object} map[string]interface{}
-// @Failure 401 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Router /webhooks/whatsapp-status [post]
 func (h *WebhookHandler) HandleWhatsAppStatus(c *fiber.Ctx) error {
 	// Read request body as []byte
 	body := c.Body()

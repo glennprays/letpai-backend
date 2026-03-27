@@ -33,18 +33,6 @@ func NewContactGroupHandler(
 }
 
 // Create creates a new contact group
-// @Summary Create contact group
-// @Description Create a new contact group
-// @Tags Contact Groups
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param request body request.CreateContactGroupRequest true "Group details"
-// @Success 201 {object} response.ContactGroupResponse
-// @Failure 400 {object} httperror.APIError
-// @Failure 401 {object} httperror.APIError
-// @Failure 409 {object} httperror.APIError
-// @Router /contact-groups [post]
 func (h *ContactGroupHandler) Create(c *fiber.Ctx) error {
 	userID := middleware.GetUserID(c)
 
@@ -78,14 +66,6 @@ func (h *ContactGroupHandler) Create(c *fiber.Ctx) error {
 }
 
 // GetGroups retrieves all contact groups
-// @Summary Get contact groups
-// @Description Get all contact groups for the authenticated user
-// @Tags Contact Groups
-// @Produce json
-// @Security BearerAuth
-// @Success 200 {object} map[string]interface{}
-// @Failure 401 {object} httperror.APIError
-// @Router /contact-groups [get]
 func (h *ContactGroupHandler) GetGroups(c *fiber.Ctx) error {
 	userID := middleware.GetUserID(c)
 
@@ -114,19 +94,6 @@ func (h *ContactGroupHandler) GetGroups(c *fiber.Ctx) error {
 }
 
 // Update updates a contact group
-// @Summary Update contact group
-// @Description Update a contact group
-// @Tags Contact Groups
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param id path string true "Group ID"
-// @Param request body request.UpdateContactGroupRequest true "Group details"
-// @Success 200 {object} response.ContactGroupResponse
-// @Failure 400 {object} httperror.APIError
-// @Failure 401 {object} httperror.APIError
-// @Failure 404 {object} httperror.APIError
-// @Router /contact-groups/{id} [put]
 func (h *ContactGroupHandler) Update(c *fiber.Ctx) error {
 	userID := middleware.GetUserID(c)
 	groupID := c.Params("id")
@@ -161,16 +128,6 @@ func (h *ContactGroupHandler) Update(c *fiber.Ctx) error {
 }
 
 // Delete deletes a contact group
-// @Summary Delete contact group
-// @Description Delete a contact group
-// @Tags Contact Groups
-// @Produce json
-// @Security BearerAuth
-// @Param id path string true "Group ID"
-// @Success 200 {object} map[string]interface{}
-// @Failure 401 {object} httperror.APIError
-// @Failure 404 {object} httperror.APIError
-// @Router /contact-groups/{id} [delete]
 func (h *ContactGroupHandler) Delete(c *fiber.Ctx) error {
 	userID := middleware.GetUserID(c)
 	groupID := c.Params("id")

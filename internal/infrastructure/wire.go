@@ -80,6 +80,8 @@ var UseCaseSet = wire.NewSet(
 	participant.NewUpdateParticipantUseCase,
 	// Billing use cases
 	billing.NewAddBillItemUseCase,
+	billing.NewUpdateBillItemUseCase,
+	billing.NewDeleteBillItemUseCase,
 	billing.NewCalculateSplitsUseCase,
 	// Payment use cases
 	payment.NewSubmitPaymentUseCase,

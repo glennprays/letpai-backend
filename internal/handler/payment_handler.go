@@ -37,16 +37,6 @@ func NewPaymentHandler(
 }
 
 // SubmitPayment handles payment proof submission (public endpoint, no auth required)
-// @Summary Submit payment proof
-// @Description Submit payment proof (public link, no auth required)
-// @Tags Payments
-// @Accept json
-// @Produce json
-// @Param participant_id path string true "Participant ID"
-// @Param request body payment.SubmitPaymentRequest true "Payment proof details"
-// @Success 201 {object} payment.SubmitPaymentResponse
-// @Failure 400 {object} httperror.APIError
-// @Router /payments/{participant_id}/submit [post]
 func (h *PaymentHandler) SubmitPayment(c *fiber.Ctx) error {
 	participantID := c.Params("participant_id")
 	if participantID == "" {
@@ -75,17 +65,6 @@ func (h *PaymentHandler) SubmitPayment(c *fiber.Ctx) error {
 }
 
 // ApprovePayment handles payment approval (host only)
-// @Summary Approve payment
-// @Description Approve payment (host only)
-// @Tags Payments
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param proof_id path string true "Proof ID"
-// @Param request body payment.ApprovePaymentRequest true "Approval details"
-// @Success 200 {object} payment.ApprovePaymentResponse
-// @Failure 400 {object} httperror.APIError
-// @Router /payments/{proof_id}/approve [post]
 func (h *PaymentHandler) ApprovePayment(c *fiber.Ctx) error {
 	userID := middleware.GetUserID(c)
 	participantID := c.Params("proof_id")
@@ -115,17 +94,6 @@ func (h *PaymentHandler) ApprovePayment(c *fiber.Ctx) error {
 }
 
 // RejectPayment handles payment rejection (host only)
-// @Summary Reject payment
-// @Description Reject payment (host only)
-// @Tags Payments
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param proof_id path string true "Proof ID"
-// @Param request body payment.RejectPaymentRequest true "Rejection details"
-// @Success 200 {object} payment.RejectPaymentResponse
-// @Failure 400 {object} httperror.APIError
-// @Router /payments/{proof_id}/reject [post]
 func (h *PaymentHandler) RejectPayment(c *fiber.Ctx) error {
 	userID := middleware.GetUserID(c)
 	participantID := c.Params("proof_id")
@@ -155,16 +123,6 @@ func (h *PaymentHandler) RejectPayment(c *fiber.Ctx) error {
 }
 
 // BulkApprove handles bulk payment approval
-// @Summary Bulk approve payments
-// @Description Bulk approve payments
-// @Tags Payments
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param request body payment.BulkApproveRequest true "Bulk approval details"
-// @Success 200 {object} payment.BulkApproveResponse
-// @Failure 400 {object} httperror.APIError
-// @Router /payments/bulk-approve [post]
 func (h *PaymentHandler) BulkApprove(c *fiber.Ctx) error {
 	userID := middleware.GetUserID(c)
 
@@ -189,16 +147,6 @@ func (h *PaymentHandler) BulkApprove(c *fiber.Ctx) error {
 }
 
 // BulkReject handles bulk payment rejection
-// @Summary Bulk reject payments
-// @Description Bulk reject payments
-// @Tags Payments
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param request body payment.BulkRejectRequest true "Bulk rejection details"
-// @Success 200 {object} payment.BulkRejectResponse
-// @Failure 400 {object} httperror.APIError
-// @Router /payments/bulk-reject [post]
 func (h *PaymentHandler) BulkReject(c *fiber.Ctx) error {
 	userID := middleware.GetUserID(c)
 
@@ -223,15 +171,6 @@ func (h *PaymentHandler) BulkReject(c *fiber.Ctx) error {
 }
 
 // GetPaymentPage handles getting payment page data (public endpoint, no auth required)
-// @Summary Get payment page
-// @Description Get payment page data (public, no auth required)
-// @Tags Payments
-// @Accept json
-// @Produce json
-// @Param participant_id path string true "Participant ID"
-// @Success 200 {object} payment.PaymentPageResponse
-// @Failure 400 {object} httperror.APIError
-// @Router /payments/{participant_id}/public [get]
 func (h *PaymentHandler) GetPaymentPage(c *fiber.Ctx) error {
 	participantID := c.Params("participant_id")
 	if participantID == "" {

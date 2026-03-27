@@ -28,16 +28,6 @@ func NewNotificationHandler(
 }
 
 // SendNotifications sends WhatsApp notifications to all session participants
-// @Summary Send notifications
-// @Description Send WhatsApp notifications to all participants
-// @Tags Notifications
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param id path string true "Session ID"
-// @Success 200 {object} notification.SendNotificationsResponse
-// @Failure 400 {object} httperror.APIError
-// @Router /sessions/{id}/send-notifications [post]
 func (h *NotificationHandler) SendNotifications(c *fiber.Ctx) error {
 	userID := middleware.GetUserID(c)
 	sessionID := c.Params("id")
@@ -61,17 +51,6 @@ func (h *NotificationHandler) SendNotifications(c *fiber.Ctx) error {
 }
 
 // SendReminder sends reminder to specific participant
-// @Summary Send reminder
-// @Description Send reminder to specific participant
-// @Tags Notifications
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param participant_id path string true "Participant ID"
-// @Success 200 {object} notification.SendReminderResponse
-// @Failure 400 {object} httperror.APIError
-// @Failure 429 {object} httperror.APIError
-// @Router /participants/{participant_id}/reminder [post]
 func (h *NotificationHandler) SendReminder(c *fiber.Ctx) error {
 	userID := middleware.GetUserID(c)
 	participantID := c.Params("participant_id")
@@ -102,16 +81,6 @@ func (h *NotificationHandler) SendReminder(c *fiber.Ctx) error {
 }
 
 // BulkReminder sends reminders to all unpaid participants
-// @Summary Send bulk reminders
-// @Description Send reminder to all unpaid participants
-// @Tags Notifications
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param id path string true "Session ID"
-// @Success 200 {object} notification.BulkReminderResponse
-// @Failure 400 {object} httperror.APIError
-// @Router /sessions/{id}/bulk-reminder [post]
 func (h *NotificationHandler) BulkReminder(c *fiber.Ctx) error {
 	userID := middleware.GetUserID(c)
 	sessionID := c.Params("id")

@@ -129,6 +129,8 @@ func (r *Router) setupSessionRoutes(group fiber.Router) {
 	sessions.Delete("/:id/participants/:participant_id", r.SessionHandler.RemoveParticipant)
 	sessions.Put("/:id/participants/:participant_id", r.SessionHandler.UpdateParticipant)
 	sessions.Post("/:id/bills", r.SessionHandler.AddBillItem)
+	sessions.Put("/:id/bills/:bill_item_id", r.SessionHandler.UpdateBillItem)
+	sessions.Delete("/:id/bills/:bill_item_id", r.SessionHandler.DeleteBillItem)
 	sessions.Put("/:id/calculate-splits", r.SessionHandler.CalculateSplits)
 }
 
