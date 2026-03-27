@@ -81,12 +81,12 @@ func (s *WhatsAppService) GetQRCode(ctx context.Context) (string, time.Time, err
 
 	qrExpires := time.Now().Add(time.Duration(resp.ExpiresIn) * time.Second)
 
-	err = s.configRepo.UpdateQRCode(ctx, "", resp.QRCode, qrExpires)
+	err = s.configRepo.UpdateQRCode(ctx, "", resp.QrCode, qrExpires)
 	if err != nil {
 		return "", time.Time{}, domain.NewError(domain.ErrInternalFailure, fmt.Errorf("failed to update QR code: %w", err))
 	}
 
-	return resp.QRCode, qrExpires, nil
+	return resp.QrCode, qrExpires, nil
 }
 
 func (s *WhatsAppService) GetLoginStatus(ctx context.Context) (bool, string, error) {
@@ -124,7 +124,7 @@ func (s *WhatsAppService) Logout(ctx context.Context) error {
 		return nil
 	}
 
-	_, err = s.configRepo.UpdateConnectionStatus(ctx, config.PhoneNumber, entity.ConnectionStatusDisconnected)
+	err = s.configRepo.UpdateConnectionStatus(ctx, config.PhoneNumber, entity.ConnectionStatusDisconnected)
 	if err != nil {
 		return domain.NewError(domain.ErrInternalFailure, fmt.Errorf("failed to update status on logout: %w", err))
 	}

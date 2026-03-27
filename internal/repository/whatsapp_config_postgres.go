@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/glennprays/letpai-backend/domain"
 	"github.com/glennprays/letpai-backend/domain/entity"
@@ -108,7 +109,7 @@ func (r *PostgresWhatsAppConfigRepository) UpdateQRCode(ctx context.Context, pho
 		WHERE phone_number = $3 AND deleted_at IS NULL
 	`
 
-	_, err := r.db.ExecContext(ctx, query, qrCodeBase64, expiresAt, phoneNumber)
+	_, err := r.db.ExecContext(ctx, query, qrCodeBase64, expiresAt, phone_number)
 	if err != nil {
 		return domain.NewError(domain.ErrInternalFailure, fmt.Errorf("failed to update qr code: %w", err))
 	}

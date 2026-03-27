@@ -10,6 +10,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/glennprays/letpai-backend/config"
+	"github.com/glennprays/letpai-backend/domain/ports"
 	"github.com/glennprays/letpai-backend/internal/handler"
 	"github.com/glennprays/letpai-backend/internal/repository"
 	"github.com/glennprays/letpai-backend/internal/router"
@@ -42,6 +43,8 @@ var RepositorySet = wire.NewSet(
 	repository.NewPostgresParticipantRepository,
 	repository.NewPostgresBillItemRepository,
 	repository.NewPostgresNotificationLogRepository,
+	repository.NewPostgresWhatsAppConfigRepository,
+	repository.NewPostgresAdminRepository,
 )
 
 var ServiceSet = wire.NewSet(
@@ -108,6 +111,7 @@ var UseCaseSet = wire.NewSet(
 var HandlerSet = wire.NewSet(
 	handler.NewHealthHandler,
 	handler.NewAuthHandler,
+	handler.NewAdminHandler,
 	handler.NewContactGroupHandler,
 	handler.NewContactHandler,
 	handler.NewSessionHandler,
@@ -143,10 +147,11 @@ func NewPasswordService() *service.PasswordService {
 }
 
 // NewWhatsAppService creates a new WhatsApp service with config values
-func NewWhatsAppService(cfg *config.Config) *service.WhatsAppService {
+func NewWhatsAppService(cfg *config.Config, configRepo ports.WhatsAppConfigRepository) *service.WhatsAppService {
 	return service.NewWhatsAppService(
 		cfg.WhatsAppGatewayURL,
 		cfg.WhatsAppAPIKey,
+		configRepo,
 	)
 }
 
@@ -174,4 +179,17 @@ func NewRateLimitService(redisClient *redis.Client) *service.RateLimitService {
 // NewImageServiceProvider creates a new image service provider that handles initialization errors
 func NewImageServiceProvider(cfg *config.Config) (*service.ImageService, error) {
 	return NewImageService(cfg)
+}
+
+// InitializeApp creates the application and injects all dependencies
+func InitializeApp() (*App, error) {
+	wire.Build(
+		CoreSet,
+		RepositorySet,
+		ServiceSet,
+		UseCaseSet,
+		ApiSet,
+		wire.Struct(new(App), "*"),
+	)
+	return &App{}, nil
 }
