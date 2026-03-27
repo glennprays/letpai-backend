@@ -873,6 +873,25 @@ paths:
               schema:
                 $ref: '#/components/schemas/PaymentPageResponse'
 
+   /payments/{participant_id}/public:
+    get:
+      summary: Get payment page
+      description: Get payment page data (public, no auth required)
+      operationId: getPaymentPage
+      tags:
+        - Payments
+      parameters:
+        - $ref: '#/components/parameters/ParticipantID'
+      responses:
+        '200':
+          description: Payment page data retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentPageResponse'
+
+   /payments/bulk-approve:
+
   /webhooks/whatsapp-status:
     post:
       summary: WhatsApp status webhook

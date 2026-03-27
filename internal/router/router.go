@@ -154,6 +154,11 @@ func (r *Router) setupNotificationRoutes(group fiber.Router) {
 	group.Post("/participants/:participant_id/reminder", middleware.ReminderRateLimiter(r.rateLimitService), r.NotificationHandler.SendReminder)
 }
 
+func (r *Router) setupPaymentRoutes(group fiber.Router) {
+	payments := group.Group("/payments")
+	payments.Get("/:participant_id/public", r.PaymentHandler.GetPaymentPage)
+}
+
 func (r *Router) setupDashboardRoutes(group fiber.Router) {
 	group.Get("/dashboard", r.DashboardHandler.GetDashboard)
 }

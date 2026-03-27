@@ -190,3 +190,17 @@ func (h *PaymentHandler) GetPaymentPage(c *fiber.Ctx) error {
 		"data":    result,
 	})
 }
+
+// GetPaymentProof returns payment proof details for a participant (public endpoint)
+func (h *PaymentHandler) GetPaymentProof(c *fiber.Ctx) error {
+	participantID := c.Params("participant_id")
+
+	result, err := h.getPaymentProof.Execute(c.Context(), participantID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	return c.JSON(result)
+}
