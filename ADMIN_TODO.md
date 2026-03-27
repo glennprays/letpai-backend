@@ -68,7 +68,7 @@ Admin module is partially implemented with:
   - [x] Add connection status monitoring (GetLoginStatus)
   - [x] Handle webhooks from WhatsApp gateway (WhatsAppWebhookHandler)
 
-### Phase 7: Testing (DONE)
+### Phase 7: Testing (DONE - Unit tests complete)
 - [x] Write unit tests for admin use cases:
   - [x] TestGetProfileUseCase_Execute_Success
   - [x] TestGetProfileUseCase_Execute_NotFound
@@ -82,13 +82,19 @@ Admin module is partially implemented with:
 - [x] Update `docs/swagger.yaml` with admin endpoints
 - [x] Add admin authentication documentation
 - [x] Add admin API examples
-- [ ] Update README with admin setup instructions (TODO)
+- [x] Update README with admin setup instructions:
+  - Admin features section added
+  - Admin authentication explained
+  - Admin API endpoints documented
+  - Admin roles documented
+  - Setup instructions included
+  - Security notes added
 
 ### Phase 9: Security & Hardening (TODO)
 
 ## Current Status
 - **Branch**: dev
-- **Last Commit**: `ceb97fc` - "feat: add admin tests and swagger documentation"
+- **Last Commit**: `49fbc54` - "docs: add admin module documentation to README"
 - **Build Status**: ✅ Passing
 - **Pushed**: ✅ origin/dev
 
@@ -99,13 +105,20 @@ Admin module is partially implemented with:
 - ✅ Phase 4: Repository Implementation
 - ✅ Phase 5: Admin Operations Verification (Repository done)
 - ✅ Phase 6: WhatsApp Service Integration
-- ✅ Phase 7: Testing (Partial - Unit tests done)
-- ✅ Phase 8: Documentation (Swagger updated)
+- ✅ Phase 7: Testing (Unit tests done, integration/role-based tests TODO)
+- ✅ Phase 8: Documentation (Swagger and README done)
 
-## Remaining Work (See ADMIN_TODO.md)
-- **Phase 7**: Complete integration tests, role-based access control, WhatsApp integration tests
-- **Phase 8**: Update README with admin setup instructions
-- **Phase 9**: Security & Hardening - Rate limiting, audit logging, session management
+## Remaining Work
+- **Phase 7**: Complete integration tests for admin endpoints
+- **Phase 7**: Test role-based access control
+- **Phase 7**: Test WhatsApp integration
+
+- **Phase 9**: Security & Hardening (TODO):
+  - Add rate limiting for admin endpoints
+  - Add audit logging for admin operations
+  - Add session management for admins
+  - Add password policies
+  - Add 2FA support
 
 ## Next Steps for Next Session
 Continue with:
