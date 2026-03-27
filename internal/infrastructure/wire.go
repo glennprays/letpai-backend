@@ -46,6 +46,7 @@ var RepositorySet = wire.NewSet(
 	repository.NewPostgresNotificationLogRepository,
 	repository.NewPostgresWhatsAppConfigRepository,
 	repository.NewPostgresAdminRepository,
+	repository.NewPostgresAdminOTPVerificationRepository,
 )
 
 var ServiceSet = wire.NewSet(

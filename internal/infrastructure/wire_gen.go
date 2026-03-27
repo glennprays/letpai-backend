@@ -145,7 +145,7 @@ var CoreSet = wire.NewSet(config.Load, logger.ProviderLogger, NewPostgresConnect
 	NewRedisConnection,
 )
 
-var RepositorySet = wire.NewSet(repository.NewPostgresUserRepository, repository.NewPostgresOTPRepository, repository.NewPostgresContactGroupRepository, repository.NewPostgresContactRepository, repository.NewPostgresSessionRepository, repository.NewPostgresParticipantRepository, repository.NewPostgresBillItemRepository, repository.NewPostgresNotificationLogRepository, repository.NewPostgresWhatsAppConfigRepository, repository.NewPostgresAdminRepository)
+var RepositorySet = wire.NewSet(repository.NewPostgresUserRepository, repository.NewPostgresOTPRepository, repository.NewPostgresContactGroupRepository, repository.NewPostgresContactRepository, repository.NewPostgresSessionRepository, repository.NewPostgresParticipantRepository, repository.NewPostgresBillItemRepository, repository.NewPostgresNotificationLogRepository, repository.NewPostgresWhatsAppConfigRepository, repository.NewPostgresAdminRepository, repository.NewPostgresAdminOTPVerificationRepository)
 
 var ServiceSet = wire.NewSet(
 	NewJWTService,
