@@ -228,6 +228,103 @@ func (h *UserHandler) Create(c *fiber.Ctx) error {
 
 ### `infrastructure/` - Frameworks & DI
 
+**Purpose**: Contains dependency injection setup (Wire), database connections and external service configurations.
+
+---
+
+### `httperror/` - HTTP Error Handling
+
+**Purpose**: Converts domain errors to appropriate HTTP responses.
+
+---
+
+## Admin Module
+
+The Letpai backend includes an admin module for managing system administrators.
+
+### Admin Features
+
+**Authentication**:
+- WhatsApp-based OTP authentication
+- Optional password authentication
+- Role-based access control (admin, super_admin)
+- Session management with JWT tokens
+
+**Admin Management** (Super Admin Only):
+- List all admins
+- Create new admin accounts
+- Update admin profiles
+- Soft delete admin accounts
+
+**WhatsApp Integration**:
+- WhatsApp gateway configuration
+- QR code generation for pairing
+- Connection status monitoring
+- Webhook support for status updates
+
+### Admin API Endpoints
+
+**Authentication:**
+- `POST /api/v1/admin/auth/initiate` - Initiate login flow
+- `POST /api/v1/admin/auth/login` - Login with OTP/password
+- `POST /api/v1/admin/auth/verify-otp` - Verify OTP code
+- `POST /api/v1/admin/logout` - Logout admin
+
+**Admin Profile:**
+- `GET /api/v1/admin/profile` - Get admin profile
+- `PUT /api/v1/admin/profile/setup-password` - Set initial password
+
+**Admin Management (Super Admin Only):**
+- `GET /api/v1/admin/admins` - List all admins
+- `POST /api/v1/admin/admins` - Create new admin
+- `PUT /api/v1/admin/admins/:id` - Update admin
+- `DELETE /api/v1/admin/admins/:id` - Delete admin
+
+**WhatsApp Configuration:**
+- `GET /api/v1/admin/status` - Get gateway status
+- `POST /api/v1/admin/qr-code` - Generate QR code
+- `PUT /api/v1/admin/config` - Update config
+
+### Admin Roles
+
+**Super Admin**: Full access to all admin features
+- Can create and manage other admin accounts
+- Can update any admin's profile
+- Can soft delete admins
+
+**Admin**: Can only manage their own profile and password
+- Cannot access admin management features
+
+### Setup Instructions
+
+1. **Seed Initial Admin**:
+   - Super admin account is seeded via migration (`migrations/000013_seed_super_admin.up.sql`)
+   - Default credentials (check migration file for details)
+
+2. **Configure WhatsApp Gateway**:
+   - Update admin config via `PUT /api/v1/admin/config`
+   - Generate QR code via `POST /api/v1/admin/qr-code`
+   - Pair gateway device by scanning QR code
+
+3. **Create Additional Admins**:
+   - Super admin can create new admin accounts via `POST /api/v1/admin/admins`
+   - New admins require initial password setup
+
+### Security Notes
+
+- Admin endpoints are protected by JWT authentication
+- Admin management endpoints additionally require super_admin role
+- All admin operations are logged to `admin_ops_verifications` table
+- WhatsApp integration uses webhook secret for security
+
+### `router/` - Route Configuration
+
+**Purpose**: Defines API routes and groups, connects handlers to endpoints.
+
+---
+
+### `infrastructure/` - Frameworks & DI
+
 **Purpose**: Contains dependency injection setup (Wire), database connections, and external service configurations.
 
 ---
