@@ -61,35 +61,30 @@ Admin module is partially implemented with:
   - [ ] OTP verification before critical operations (use cases pending)
   - [ ] Implement verification use cases
 
-### Phase 6: WhatsApp Service Integration
-- [ ] Complete `service/whatsapp.go`:
-  - [ ] Add login/initiate methods
-  - [ ] Add QR code generation
-  - [ ] Add connection status monitoring
-  - [ ] Handle webhooks from WhatsApp gateway
+### Phase 6: WhatsApp Service Integration ✅
+- [x] Complete `service/whatsapp.go`:
+  - [x] Add login/initiate methods (RegisterPhone)
+  - [x] Add QR code generation (GetQRCode)
+  - [x] Add connection status monitoring (GetLoginStatus)
+  - [x] Handle webhooks from WhatsApp gateway (WhatsAppWebhookHandler)
 
-### Phase 7: Testing
+### Phase 7: Testing (TODO)
 - [ ] Write unit tests for admin use cases
 - [ ] Write integration tests for admin endpoints
 - [ ] Test role-based access control
 - [ ] Test WhatsApp integration
 
-### Phase 8: Documentation
+### Phase 8: Documentation (TODO)
 - [ ] Update `docs/swagger.yaml` with admin endpoints
 - [ ] Add admin authentication documentation
 - [ ] Add admin API examples
 - [ ] Update README with admin setup instructions
 
-### Phase 9: Security & Hardening
-- [ ] Add rate limiting for admin endpoints
-- [ ] Add audit logging for admin operations
-- [ ] Add session management for admins
-- [ ] Add password policies
-- [ ] Add 2FA support
+### Phase 9: Security & Hardening (TODO)
 
 ## Current Status
 - **Branch**: dev
-- **Last Commit**: `86a5961` - "feat: add admin role-based authorization middleware"
+- **Last Commit**: `8fdd783` - "feat: add WhatsApp webhook handler"
 - **Build Status**: ✅ Passing
 - **Pushed**: ✅ origin/dev
 
@@ -98,6 +93,8 @@ Admin module is partially implemented with:
 - ✅ Phase 2: Admin Authorization Middleware
 - ✅ Phase 3: Complete Handler Implementation
 - ✅ Phase 4: Repository Implementation
+- ✅ Phase 5: Admin Operations Verification (Repository done)
+- ✅ Phase 6: WhatsApp Service Integration
 
 ## Next Steps for Next Session
 1. Start with Phase 1 (Use Cases) - Create `internal/usecase/admin/` directory
