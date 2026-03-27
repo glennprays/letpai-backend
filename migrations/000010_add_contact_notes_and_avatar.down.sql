@@ -1,0 +1,2 @@
+ALTER TABLE contacts DROP COLUMN IF EXISTS notes;
+ALTER TABLE contacts DROP COLUMN IF EXISTS avatar_url;

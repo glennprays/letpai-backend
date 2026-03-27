@@ -15,6 +15,8 @@ type ContactItem struct {
 	GroupName      *string `json:"group_name,omitempty"`
 	GroupColor     *string `json:"group_color,omitempty"`
 	IsFavorite     bool    `json:"is_favorite"`
+	AvatarURL      *string `json:"avatar_url,omitempty"`
+	Notes          *string `json:"notes,omitempty"`
 	CreatedAt      string  `json:"created_at"`
 }
 
@@ -84,6 +86,8 @@ func (uc *GetContactsUseCase) Execute(ctx context.Context, userID string, req *G
 			GroupName:      c.GroupName,
 			GroupColor:     c.GroupColor,
 			IsFavorite:     c.IsFavorite,
+			AvatarURL:      c.AvatarURL,
+			Notes:          c.Notes,
 			CreatedAt:      c.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		})
 	}

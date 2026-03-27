@@ -5,19 +5,22 @@ import (
 	"errors"
 
 	"github.com/glennprays/letpai-backend/domain"
+	"github.com/glennprays/letpai-backend/domain/entity"
 	"github.com/glennprays/letpai-backend/domain/ports"
 	"github.com/google/uuid"
 )
 
-// UpdateContactRequest represents the request to update a contact
+// UpdateContactRequest represents request to update a contact
 type UpdateContactRequest struct {
 	Name           *string `json:"name" validate:"omitempty,min=1,max=100"`
 	WhatsAppNumber *string `json:"whatsapp_number" validate:"omitempty"`
 	GroupID        *string `json:"group_id,omitempty"`
 	IsFavorite     *bool   `json:"is_favorite,omitempty"`
+	AvatarURL      *string `json:"avatar_url,omitempty"`
+	Notes          *string `json:"notes,omitempty"`
 }
 
-// UpdateContactResponse represents the response after updating a contact
+// UpdateContactResponse represents response after updating a contact
 type UpdateContactResponse struct {
 	ContactID      string  `json:"contact_id"`
 	Name           string  `json:"name"`
@@ -26,6 +29,8 @@ type UpdateContactResponse struct {
 	GroupName      *string `json:"group_name,omitempty"`
 	GroupColor     *string `json:"group_color,omitempty"`
 	IsFavorite     bool    `json:"is_favorite"`
+	AvatarURL      *string `json:"avatar_url,omitempty"`
+	Notes          *string `json:"notes,omitempty"`
 	UpdatedAt      string  `json:"updated_at"`
 }
 
@@ -97,6 +102,16 @@ func (uc *UpdateContactUseCase) Execute(ctx context.Context, userID, contactID s
 		contact.SetFavorite(*req.IsFavorite)
 	}
 
+	// Update avatar URL if provided
+	if req.AvatarURL != nil {
+		contact.SetAvatarURL(req.AvatarURL)
+	}
+
+	// Update notes if provided
+	if req.Notes != nil {
+		contact.SetNotes(req.Notes)
+	}
+
 	if err := uc.contactRepo.Update(ctx, contact); err != nil {
 		return nil, err
 	}
@@ -115,6 +130,8 @@ func (uc *UpdateContactUseCase) Execute(ctx context.Context, userID, contactID s
 		GroupName:      contact.GroupName,
 		GroupColor:     contact.GroupColor,
 		IsFavorite:     contact.IsFavorite,
+		AvatarURL:      contact.AvatarURL,
+		Notes:          contact.Notes,
 		UpdatedAt:      contact.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	}, nil
 }

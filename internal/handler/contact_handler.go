@@ -63,6 +63,8 @@ func (h *ContactHandler) Create(c *fiber.Ctx) error {
 		Name:           req.Name,
 		WhatsAppNumber: req.WhatsAppNumber,
 		GroupID:        req.GroupID,
+		AvatarURL:      req.AvatarURL,
+		Notes:          req.Notes,
 	}
 
 	result, err := h.createContact.Execute(c.Context(), userID, ucReq)
@@ -194,6 +196,8 @@ func (h *ContactHandler) Update(c *fiber.Ctx) error {
 		WhatsAppNumber: req.WhatsAppNumber,
 		GroupID:        req.GroupID,
 		IsFavorite:     req.IsFavorite,
+		AvatarURL:      req.AvatarURL,
+		Notes:          req.Notes,
 	}
 
 	result, err := h.updateContact.Execute(c.Context(), userID, contactID, ucReq)

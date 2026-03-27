@@ -10,14 +10,16 @@ import (
 	"github.com/google/uuid"
 )
 
-// CreateContactRequest represents the request to create a contact
+// CreateContactRequest represents request to create a contact
 type CreateContactRequest struct {
 	Name           string  `json:"name" validate:"required,min=1,max=100"`
 	WhatsAppNumber string  `json:"whatsapp_number" validate:"required"`
 	GroupID        *string `json:"group_id,omitempty"`
+	AvatarURL      *string `json:"avatar_url,omitempty"`
+	Notes          *string `json:"notes,omitempty"`
 }
 
-// CreateContactResponse represents the response after creating a contact
+// CreateContactResponse represents response after creating a contact
 type CreateContactResponse struct {
 	ContactID      string  `json:"contact_id"`
 	Name           string  `json:"name"`
@@ -26,6 +28,8 @@ type CreateContactResponse struct {
 	GroupName      *string `json:"group_name,omitempty"`
 	GroupColor     *string `json:"group_color,omitempty"`
 	IsFavorite     bool    `json:"is_favorite"`
+	AvatarURL      *string `json:"avatar_url,omitempty"`
+	Notes          *string `json:"notes,omitempty"`
 }
 
 // CreateContactUseCase handles creating a new contact
@@ -81,6 +85,8 @@ func (uc *CreateContactUseCase) Execute(ctx context.Context, userID string, req 
 	// Create contact
 	contact := entity.NewContact(userUUID, req.Name, req.WhatsAppNumber)
 	contact.AssignToGroup(groupID)
+	contact.SetAvatarURL(req.AvatarURL)
+	contact.SetNotes(req.Notes)
 
 	if err := uc.contactRepo.Create(ctx, contact); err != nil {
 		return nil, err
@@ -92,5 +98,7 @@ func (uc *CreateContactUseCase) Execute(ctx context.Context, userID string, req 
 		WhatsAppNumber: contact.WhatsAppNumber,
 		GroupID:        req.GroupID,
 		IsFavorite:     contact.IsFavorite,
+		AvatarURL:      req.AvatarURL,
+		Notes:          req.Notes,
 	}, nil
 }

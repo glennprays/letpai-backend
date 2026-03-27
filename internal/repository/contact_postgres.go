@@ -25,8 +25,8 @@ func NewPostgresContactRepository(db *sqlx.DB) ports.ContactRepository {
 // Create creates a new contact
 func (r *PostgresContactRepository) Create(ctx context.Context, contact *entity.Contact) error {
 	query := `
-		INSERT INTO contacts (contact_id, user_id, name, whatsapp_number, group_id, is_favorite, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		INSERT INTO contacts (contact_id, user_id, name, whatsapp_number, group_id, is_favorite, avatar_url, notes, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 	`
 
 	_, err := r.db.ExecContext(
@@ -38,6 +38,8 @@ func (r *PostgresContactRepository) Create(ctx context.Context, contact *entity.
 		contact.WhatsAppNumber,
 		contact.GroupID,
 		contact.IsFavorite,
+		contact.AvatarURL,
+		contact.Notes,
 		contact.CreatedAt,
 		contact.UpdatedAt,
 	)
@@ -53,7 +55,7 @@ func (r *PostgresContactRepository) Create(ctx context.Context, contact *entity.
 func (r *PostgresContactRepository) FindByID(ctx context.Context, contactID string, userID string) (*entity.Contact, error) {
 	query := `
 		SELECT c.contact_id, c.user_id, c.name, c.whatsapp_number, c.group_id, c.is_favorite,
-		       c.created_at, c.updated_at, c.deleted_at,
+		       c.avatar_url, c.notes, c.created_at, c.updated_at, c.deleted_at,
 		       g.name as group_name, g.color as group_color
 		FROM contacts c
 		LEFT JOIN contact_groups g ON c.group_id = g.group_id AND g.deleted_at IS NULL
@@ -76,6 +78,8 @@ func (r *PostgresContactRepository) FindByID(ctx context.Context, contactID stri
 		&contact.WhatsAppNumber,
 		&contact.GroupID,
 		&contact.IsFavorite,
+		&contact.AvatarURL,
+		&contact.Notes,
 		&contact.CreatedAt,
 		&contact.UpdatedAt,
 		&contact.DeletedAt,
@@ -170,7 +174,7 @@ func (r *PostgresContactRepository) FindAll(ctx context.Context, userID string, 
 	// Data query
 	dataQuery := `
 		SELECT c.contact_id, c.user_id, c.name, c.whatsapp_number, c.group_id, c.is_favorite,
-		       c.created_at, c.updated_at, c.deleted_at,
+		       c.avatar_url, c.notes, c.created_at, c.updated_at, c.deleted_at,
 		       g.name as group_name, g.color as group_color
 		FROM contacts c
 		LEFT JOIN contact_groups g ON c.group_id = g.group_id AND g.deleted_at IS NULL
@@ -201,6 +205,8 @@ func (r *PostgresContactRepository) FindAll(ctx context.Context, userID string, 
 			&contact.WhatsAppNumber,
 			&contact.GroupID,
 			&contact.IsFavorite,
+			&contact.AvatarURL,
+			&contact.Notes,
 			&contact.CreatedAt,
 			&contact.UpdatedAt,
 			&contact.DeletedAt,
@@ -234,8 +240,8 @@ func (r *PostgresContactRepository) FindAll(ctx context.Context, userID string, 
 func (r *PostgresContactRepository) Update(ctx context.Context, contact *entity.Contact) error {
 	query := `
 		UPDATE contacts
-		SET name = $2, whatsapp_number = $3, group_id = $4, is_favorite = $5, updated_at = $6
-		WHERE contact_id = $1 AND user_id = $7 AND deleted_at IS NULL
+		SET name = $2, whatsapp_number = $3, group_id = $4, is_favorite = $5, avatar_url = $6, notes = $7, updated_at = $8
+		WHERE contact_id = $1 AND user_id = $9 AND deleted_at IS NULL
 	`
 
 	result, err := r.db.ExecContext(
@@ -246,6 +252,8 @@ func (r *PostgresContactRepository) Update(ctx context.Context, contact *entity.
 		contact.WhatsAppNumber,
 		contact.GroupID,
 		contact.IsFavorite,
+		contact.AvatarURL,
+		contact.Notes,
 		contact.UpdatedAt,
 		contact.UserID,
 	)

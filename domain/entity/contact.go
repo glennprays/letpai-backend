@@ -14,6 +14,8 @@ type Contact struct {
 	WhatsAppNumber string     `json:"whatsapp_number" db:"whatsapp_number"`
 	GroupID        *uuid.UUID `json:"group_id,omitempty" db:"group_id"`
 	IsFavorite     bool       `json:"is_favorite" db:"is_favorite"`
+	AvatarURL      *string    `json:"avatar_url,omitempty" db:"avatar_url"`
+	Notes          *string    `json:"notes,omitempty" db:"notes"`
 	CreatedAt      time.Time  `json:"created_at" db:"created_at"`
 	UpdatedAt      time.Time  `json:"updated_at" db:"updated_at"`
 	DeletedAt      *time.Time `json:"deleted_at,omitempty" db:"deleted_at"`
@@ -63,6 +65,18 @@ func (c *Contact) ToggleFavorite() {
 // SetFavorite sets the favorite status
 func (c *Contact) SetFavorite(isFavorite bool) {
 	c.IsFavorite = isFavorite
+	c.UpdatedAt = time.Now()
+}
+
+// SetAvatarURL sets the avatar URL
+func (c *Contact) SetAvatarURL(avatarURL *string) {
+	c.AvatarURL = avatarURL
+	c.UpdatedAt = time.Now()
+}
+
+// SetNotes sets the notes
+func (c *Contact) SetNotes(notes *string) {
+	c.Notes = notes
 	c.UpdatedAt = time.Now()
 }
 
