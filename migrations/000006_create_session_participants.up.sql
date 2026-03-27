@@ -2,18 +2,19 @@ CREATE TABLE session_participants (
     participant_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     session_id UUID REFERENCES sessions(session_id) ON DELETE CASCADE,
     contact_id UUID REFERENCES contacts(contact_id) ON DELETE SET NULL,
-    name VARCHAR(100) NOT NULL,
-    whatsapp_number VARCHAR(20) NOT NULL,
+    custom_name VARCHAR(100) NOT NULL,
+    custom_whatsapp VARCHAR(20) NOT NULL,
     share_amount BIGINT NOT NULL DEFAULT 0,
     payment_status VARCHAR(20) DEFAULT 'pending' CHECK (payment_status IN ('pending', 'submitted', 'paid', 'rejected')),
+    payment_proof_url TEXT,
     rejection_count INTEGER DEFAULT 0,
     rejection_reason TEXT,
     last_notification_at TIMESTAMP,
     notification_count INTEGER DEFAULT 0,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
-    UNIQUE (session_id, whatsapp_number)
+    UNIQUE (session_id, custom_whatsapp)
 );
 
 CREATE INDEX idx_participants_session ON session_participants(session_id);
