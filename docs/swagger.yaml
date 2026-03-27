@@ -132,6 +132,35 @@ paths:
               schema:
                 $ref: '#/components/schemas/SuccessResponse'
 
+  /auth/profile:
+    patch:
+      summary: Update user profile
+      description: Update authenticated user's profile (full name, avatar URL)
+      operationId: updateProfile
+      tags:
+        - Authentication
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProfileRequest'
+      responses:
+        '200':
+          description: Profile updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfileResponse'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /contacts:
     get:
       summary: Get all contacts
@@ -148,11 +177,30 @@ paths:
           schema:
             type: string
             format: uuid
+        - name: is_favorite
+          in: query
+          description: Filter by favorite status
+          schema:
+            type: boolean
         - name: search
           in: query
           description: Search by name
           schema:
             type: string
+        - name: sort_by
+          in: query
+          description: Sort by field
+          schema:
+            type: string
+            enum: [name, created_at, whatsapp_number]
+            default: created_at
+        - name: sort_order
+          in: query
+          description: Sort order
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
         - name: page
           in: query
           schema:
@@ -222,6 +270,35 @@ paths:
               schema:
                 $ref: '#/components/schemas/BulkContactResponse'
 
+  /contacts/import:
+    post:
+      summary: Import contacts
+      description: Import contacts from JSON with deduplication
+      operationId: importContacts
+      tags:
+        - Contacts
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImportContactsRequest'
+      responses:
+        '200':
+          description: Contacts imported successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportContactsResponse'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /contacts/{id}:
     get:
       summary: Get contact by ID
@@ -258,7 +335,7 @@ paths:
       parameters:
         - $ref: '#/components/parameters/ContactID'
       requestBody:
-        required: true
+        required: false
         content:
           application/json:
             schema:
@@ -329,6 +406,30 @@ paths:
                 $ref: '#/components/schemas/ContactGroupResponse'
 
   /contact-groups/{id}:
+    get:
+      summary: Get contact group by ID
+      description: Get single contact group details
+      operationId: getContactGroup
+      tags:
+        - Contact Groups
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GroupID'
+      responses:
+        '200':
+          description: Contact group retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContactGroupResponse'
+        '404':
+          description: Contact group not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
     put:
       summary: Update contact group
       description: Update contact group details
@@ -340,7 +441,7 @@ paths:
       parameters:
         - $ref: '#/components/parameters/GroupID'
       requestBody:
-        required: true
+        required: false
         content:
           application/json:
             schema:
@@ -387,6 +488,25 @@ paths:
           schema:
             type: string
             enum: [active, completed, cancelled]
+        - name: search
+          in: query
+          description: Search by session name
+          schema:
+            type: string
+        - name: sort_by
+          in: query
+          description: Sort by field
+          schema:
+            type: string
+            enum: [created_at, session_date, title, total_amount]
+            default: created_at
+        - name: sort_order
+          in: query
+          description: Sort order
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
         - name: page
           in: query
           schema:
@@ -397,10 +517,6 @@ paths:
           schema:
             type: integer
             default: 20
-        - name: search
-          in: query
-          schema:
-            type: string
       responses:
         '200':
           description: Sessions retrieved successfully
@@ -461,7 +577,7 @@ paths:
       parameters:
         - $ref: '#/components/parameters/SessionID'
       requestBody:
-        required: true
+        required: false
         content:
           application/json:
             schema:
@@ -520,7 +636,7 @@ paths:
   /sessions/{id}/participants/{participant_id}:
     put:
       summary: Update participant
-      description: Update or remove participant from session
+      description: Update participant (set as paid, mark rejected)
       operationId: updateParticipant
       tags:
         - Sessions
@@ -534,18 +650,14 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                action:
-                  type: string
-                  enum: [remove]
+              $ref: '#/components/schemas/UpdateParticipantRequest'
       responses:
         '200':
           description: Participant updated successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SuccessResponse'
+                $ref: '#/components/schemas/UpdateParticipantResponse'
 
   /sessions/{id}/bills:
     post:
@@ -572,29 +684,11 @@ paths:
               schema:
                 $ref: '#/components/schemas/BillItemResponse'
 
-  /sessions/{id}/calculate-splits:
-    put:
-      summary: Calculate equal splits
-      description: Calculate equal split for all participants
-      operationId: calculateSplits
-      tags:
-        - Sessions
-      security:
-        - BearerAuth: []
-      parameters:
-        - $ref: '#/components/parameters/SessionID'
-      responses:
-        '200':
-          description: Splits calculated successfully
-          content:
-            application/json:
-                 schema:
-                 $ref: '#/components/schemas/CalculateSplitsResponse'
-
   /sessions/{id}/bills/{bill_item_id}:
     put:
       summary: Update bill item
       description: Update a bill item and recalculate session total
+      operationId: updateBillItem
       tags:
         - Sessions
       security:
@@ -603,7 +697,7 @@ paths:
         - $ref: '#/components/parameters/SessionID'
         - $ref: '#/components/parameters/BillItemID'
       requestBody:
-        required: true
+        required: false
         content:
           application/json:
             schema:
@@ -621,9 +715,11 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+
     delete:
       summary: Delete bill item
       description: Delete a bill item and recalculate session total
+      operationId: deleteBillItem
       tags:
         - Sessions
       security:
@@ -645,21 +741,24 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /dashboard:
-    get:
-      summary: Get dashboard
-      description: Get dashboard statistics for the authenticated user
+  /sessions/{id}/calculate-splits:
+    put:
+      summary: Calculate equal splits
+      description: Calculate equal split for all participants
+      operationId: calculateSplits
       tags:
         - Sessions
       security:
         - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SessionID'
       responses:
         '200':
-          description: Dashboard data retrieved successfully
+          description: Splits calculated successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DashboardResponse'
+                $ref: '#/components/schemas/CalculateSplitsResponse'
 
   /sessions/{id}/send-notifications:
     post:
@@ -699,6 +798,22 @@ paths:
               schema:
                 $ref: '#/components/schemas/BulkReminderResponse'
 
+  /dashboard:
+    get:
+      summary: Get dashboard
+      description: Get dashboard statistics for authenticated user
+      tags:
+        - Sessions
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Dashboard data retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardResponse'
+
   /participants/{participant_id}/reminder:
     post:
       summary: Send reminder
@@ -732,7 +847,7 @@ paths:
   /payments/{participant_id}/submit:
     post:
       summary: Submit payment proof
-      description: Submit payment proof (public link, no auth required). Payment submissions are rejected if the session has expired (session_date has passed).
+      description: Submit payment proof (public link, no auth required). Payment submissions are rejected if session has expired (session_date has passed).
       operationId: submitPayment
       tags:
         - Payments
@@ -758,6 +873,29 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+  /payments/{participant_id}/public:
+    get:
+      summary: Get payment page
+      description: Get payment page data (public, no auth required)
+      operationId: getPaymentPage
+      tags:
+        - Payments
+      parameters:
+        - $ref: '#/components/parameters/ParticipantID'
+      responses:
+        '200':
+          description: Payment page data retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentPageResponse'
+        '404':
+          description: Participant not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /payments/{proof_id}/approve:
     post:
       summary: Approve payment
@@ -769,12 +907,6 @@ paths:
         - BearerAuth: []
       parameters:
         - $ref: '#/components/parameters/ProofID'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ApprovePaymentRequest'
       responses:
         '200':
           description: Payment approved successfully
@@ -786,7 +918,7 @@ paths:
   /payments/{proof_id}/reject:
     post:
       summary: Reject payment
-      description: Reject payment (host only). A WhatsApp notification will be sent to the participant with the rejection reason.
+      description: Reject payment (host only). A WhatsApp notification will be sent to participant with rejection reason.
       operationId: rejectPayment
       tags:
         - Payments
@@ -854,43 +986,26 @@ paths:
               schema:
                 $ref: '#/components/schemas/BulkRejectResponse'
 
-  /payments/{participant_id}/public:
-    get:
-      summary: Get payment page
-      description: Get payment page data (public, no auth required)
-      operationId: getPaymentPage
+  /webhooks/whatsapp-status:
+    post:
+      summary: WhatsApp status webhook
+      description: Receive status updates from WhatsApp Gateway
+      operationId: whatsappStatusWebhook
       tags:
-        - Payments
-      parameters:
-        - $ref: '#/components/parameters/ParticipantID'
-      responses:
-        '200':
-          description: Payment page data retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PaymentPageResponse'
-
-/webhooks/whatsapp-status:
-  post:
-    summary: WhatsApp status webhook
-    description: Receive status updates from WhatsApp Gateway
-    operationId: whatsappStatusWebhook
-    tags:
-      - Webhooks
-    requestBody:
-      required: true
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/WhatsAppStatusWebhook'
-    responses:
-      '200':
-        description: Webhook received successfully
+        - Webhooks
+      requestBody:
+        required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/SuccessResponse'
+              $ref: '#/components/schemas/WhatsAppStatusWebhook'
+      responses:
+        '200':
+          description: Webhook received successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
 
 components:
   securitySchemes:
@@ -973,6 +1088,41 @@ components:
         user:
           $ref: '#/components/schemas/User'
 
+    UpdateProfileRequest:
+      type: object
+      properties:
+        full_name:
+          type: string
+          maxLength: 100
+          nullable: true
+        avatar_url:
+          type: string
+          format: uri
+          nullable: true
+
+    UserProfileResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        user_id:
+          type: string
+          format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        full_name:
+          type: string
+          example: "John Doe"
+        avatar_url:
+          type: string
+          format: uri
+          nullable: true
+          example: "https://cdn.example.com/avatar.jpg"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2026-03-18T10:00:00Z"
+
     User:
       type: object
       properties:
@@ -1011,9 +1161,6 @@ components:
             message:
               type: string
               example: "Invalid credentials"
-            details:
-              type: object
-              additionalProperties: true
 
     Contact:
       type: object
@@ -1033,6 +1180,9 @@ components:
           format: uuid
           nullable: true
         group_name:
+          type: string
+          nullable: true
+        group_color:
           type: string
           nullable: true
         is_favorite:
@@ -1058,6 +1208,7 @@ components:
       properties:
         name:
           type: string
+          maxLength: 100
           example: "Jane Doe"
         whatsapp_number:
           type: string
@@ -1079,6 +1230,7 @@ components:
       properties:
         name:
           type: string
+          maxLength: 100
         whatsapp_number:
           type: string
         group_id:
@@ -1087,6 +1239,62 @@ components:
           nullable: true
         is_favorite:
           type: boolean
+        avatar_url:
+          type: string
+          format: uri
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+
+    ImportContactsRequest:
+      type: object
+      required:
+        - contacts
+      properties:
+        contacts:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/ImportContact'
+        group_id:
+          type: string
+          format: uuid
+          nullable: true
+
+    ImportContact:
+      type: object
+      required:
+        - name
+        - whatsapp_number
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        whatsapp_number:
+          type: string
+
+    ImportContactsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        imported_count:
+          type: integer
+          example: 5
+        skipped_count:
+          type: integer
+          example: 2
+        skipped_duplicates:
+          type: array
+          items:
+            type: string
+          example:
+            - "+6281234567890"
+            - "+6289876543210"
+        message:
+          type: string
 
     ContactResponse:
       type: object
@@ -1127,7 +1335,7 @@ components:
       properties:
         action:
           type: string
-          enum: [add_to_group, delete, export]
+          enum: [add_to_group, delete]
         contact_ids:
           type: array
           items:
@@ -1182,6 +1390,7 @@ components:
       properties:
         group_name:
           type: string
+          maxLength: 100
           example: "Work"
         color:
           type: string
@@ -1196,6 +1405,7 @@ components:
       properties:
         group_name:
           type: string
+          maxLength: 100
         color:
           type: string
           pattern: '^#[0-9A-Fa-f]{6}$'
@@ -1234,7 +1444,8 @@ components:
           nullable: true
           example: "Makan bareng temen kantor"
         total_amount:
-          type: integer
+          type: number
+          format: float
           example: 500000
         currency:
           type: string
@@ -1262,6 +1473,7 @@ components:
       properties:
         session_name:
           type: string
+          maxLength: 200
           example: "Liburan Bali"
         session_description:
           type: string
@@ -1276,9 +1488,15 @@ components:
       properties:
         session_name:
           type: string
+          maxLength: 200
         session_description:
           type: string
           nullable: true
+        session_date:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2026-03-20T10:00:00Z"
 
     SessionResponse:
       type: object
@@ -1313,7 +1531,8 @@ components:
           type: string
           example: "+6281234567890"
         share_amount:
-          type: integer
+          type: number
+          format: float
           example: 125000
         payment_status:
           type: string
@@ -1339,6 +1558,7 @@ components:
       properties:
         participants:
           type: array
+          minItems: 1
           items:
             type: object
             properties:
@@ -1353,6 +1573,27 @@ components:
                 type: string
                 example: "+6281234567890"
 
+    UpdateParticipantRequest:
+      type: object
+      required:
+        - payment_status
+      properties:
+        payment_status:
+          type: string
+          enum: [paid, rejected]
+        rejection_reason:
+          type: string
+          nullable: true
+
+    UpdateParticipantResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          $ref: '#/components/schemas/SessionParticipant'
+
     Participant:
       type: object
       properties:
@@ -1364,7 +1605,8 @@ components:
           type: string
           example: "John Doe"
         share_amount:
-          type: integer
+          type: number
+          format: float
           default: 0
           example: 0
         payment_status:
@@ -1402,8 +1644,13 @@ components:
           nullable: true
           example: "Nasi goreng + es teh"
         amount:
-          type: integer
-          example: 500000
+          type: number
+          format: float
+          example: 50000
+        category:
+          type: string
+          nullable: true
+          example: "food"
         currency:
           type: string
           default: "IDR"
@@ -1421,13 +1668,19 @@ components:
       properties:
         name:
           type: string
+          maxLength: 200
           example: "Makan Siang"
         description:
           type: string
           nullable: true
         amount:
-          type: integer
-          example: 500000
+          type: number
+          format: float
+          example: 50000
+        category:
+          type: string
+          nullable: true
+          example: "food"
         currency:
           type: string
           default: "IDR"
@@ -1448,14 +1701,12 @@ components:
         description:
           type: string
           nullable: true
-          example: "Updated description"
         amount:
-          type: integer
-          example: 600000
+          type: number
+          format: float
         category:
           type: string
           nullable: true
-          example: "food"
 
     UpdateBillItemResponse:
       type: object
@@ -1468,8 +1719,9 @@ components:
           type: string
           example: "Updated description"
         amount:
-          type: integer
-          example: 600000
+          type: number
+          format: float
+          example: 60000
         category:
           type: string
           nullable: true
@@ -1482,16 +1734,23 @@ components:
     DeleteBillItemResponse:
       type: object
       properties:
+        success:
+          type: boolean
+          example: true
         message:
           type: string
           example: "Bill item deleted successfully"
         new_total:
-          type: integer
+          type: number
+          format: float
           example: 400000
 
     DashboardResponse:
       type: object
       properties:
+        success:
+          type: boolean
+          example: true
         active_sessions:
           type: integer
           example: 5
@@ -1502,7 +1761,8 @@ components:
           type: integer
           example: 3
         total_pending:
-          type: integer
+          type: number
+          format: float
           example: 1500000
 
     CalculateSplitsResponse:
@@ -1518,13 +1778,15 @@ components:
           type: object
           properties:
             total_amount:
-              type: integer
+              type: number
+              format: float
               example: 500000
             participant_count:
               type: integer
               example: 4
             share_per_person:
-              type: integer
+              type: number
+              format: float
               example: 125000
             participants:
               type: array
@@ -1535,7 +1797,8 @@ components:
                     type: string
                     format: uuid
                   share_amount:
-                    type: integer
+                    type: number
+                    format: float
                     example: 125000
 
     SessionDetailResponse:
@@ -1556,9 +1819,14 @@ components:
               type: string
               nullable: true
             total_amount:
-              type: integer
+              type: number
+              format: float
             currency:
               type: string
+            session_date:
+              type: string
+              format: date-time
+              nullable: true
             status:
               type: string
               enum: [active, completed, cancelled]
@@ -1695,13 +1963,55 @@ components:
               format: date-time
               example: "2026-03-18T15:00:00Z"
 
+    PaymentPageResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            session_name:
+              type: string
+              example: "Makan Siang"
+            participant_name:
+              type: string
+              example: "John Doe"
+            share_amount:
+              type: number
+              format: float
+              example: 125000
+            currency:
+              type: string
+              example: "IDR"
+            bill_items:
+              type: array
+              items:
+                $ref: '#/components/schemas/BillItem'
+            payment_status:
+              type: string
+              enum: [pending, submitted, paid, rejected]
+              example: "pending"
+            payment_proof_url:
+              type: string
+              format: uri
+              nullable: true
+            rejection_reason:
+              type: string
+              nullable: true
+            link_expires_at:
+              type: string
+              format: date-time
+              example: "2026-03-25T14:00:00Z"
+
     ApprovePaymentRequest:
       type: object
       properties:
-        rejection_reason:
+        message:
           type: string
           nullable: true
-          default: null
+          example: "Payment approved"
 
     PaymentApproveResponse:
       type: object
@@ -1762,6 +2072,7 @@ components:
       properties:
         proof_ids:
           type: array
+          minItems: 1
           items:
             type: string
             format: uuid
@@ -1793,6 +2104,7 @@ components:
       properties:
         proof_ids:
           type: array
+          minItems: 1
           items:
             type: string
             format: uuid
@@ -1808,40 +2120,6 @@ components:
           example: true
         message:
           type: string
-
-    PaymentPageResponse:
-      type: object
-      properties:
-        success:
-          type: boolean
-          example: true
-        data:
-          type: object
-          properties:
-            session_name:
-              type: string
-              example: "Makan Siang"
-            participant_name:
-              type: string
-              example: "John Doe"
-            share_amount:
-              type: integer
-              example: 125000
-            currency:
-              type: string
-              example: "IDR"
-            bill_items:
-              type: array
-              items:
-                $ref: '#/components/schemas/BillItem'
-            payment_status:
-              type: string
-              enum: [pending, submitted, paid, rejected]
-              example: "pending"
-            link_expires_at:
-              type: string
-              format: date-time
-              example: "2026-03-25T14:00:00Z"
 
     WhatsAppStatusWebhook:
       type: object
@@ -1926,20 +2204,20 @@ components:
         format: uuid
       example: "550e8400-e29b-41d4-a716-446655440000"
 
-tags:
-  - name: Health
-    description: Health check operations
-  - name: Authentication
-    description: Authentication operations
-  - name: Contacts
-    description: Contact management operations
-  - name: Contact Groups
-    description: Contact group management operations
-  - name: Sessions
-    description: Session management operations
-  - name: Notifications
-    description: Notification operations
-  - name: Payments
-    description: Payment operations
-  - name: Webhooks
-    description: Webhook operations
+  tags:
+    - name: Health
+      description: Health check operations
+    - name: Authentication
+      description: Authentication operations
+    - name: Contacts
+      description: Contact management operations
+    - name: Contact Groups
+      description: Contact group management operations
+    - name: Sessions
+      description: Session management operations
+    - name: Notifications
+      description: Notification operations
+    - name: Payments
+      description: Payment operations
+    - name: Webhooks
+      description: Webhook operations
