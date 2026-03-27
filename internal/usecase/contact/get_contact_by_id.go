@@ -15,6 +15,8 @@ type GetContactByIDResponse struct {
 	GroupName      *string `json:"group_name,omitempty"`
 	GroupColor     *string `json:"group_color,omitempty"`
 	IsFavorite     bool    `json:"is_favorite"`
+	AvatarURL      *string `json:"avatar_url,omitempty"`
+	Notes          *string `json:"notes,omitempty"`
 	CreatedAt      string  `json:"created_at"`
 	UpdatedAt      string  `json:"updated_at"`
 }
@@ -54,6 +56,8 @@ func (uc *GetContactByIDUseCase) Execute(ctx context.Context, userID, contactID 
 		GroupName:      contact.GroupName,
 		GroupColor:     contact.GroupColor,
 		IsFavorite:     contact.IsFavorite,
+		AvatarURL:      contact.AvatarURL,
+		Notes:          contact.Notes,
 		CreatedAt:      contact.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		UpdatedAt:      contact.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	}, nil

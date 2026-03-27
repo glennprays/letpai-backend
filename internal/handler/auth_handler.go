@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/glennprays/letpai-backend/internal/httperror"
+	"github.com/glennprays/letpai-backend/internal/middleware"
 	"github.com/glennprays/letpai-backend/internal/params/request"
 	"github.com/glennprays/letpai-backend/internal/params/response"
 	"github.com/glennprays/letpai-backend/internal/usecase/auth"
@@ -12,10 +13,11 @@ import (
 
 // AuthHandler handles authentication requests
 type AuthHandler struct {
-	registerUser *auth.RegisterUserUseCase
-	verifyOTP    *auth.VerifyOTPUseCase
-	loginUser    *auth.LoginUserUseCase
-	logoutUser   *auth.LogoutUserUseCase
+	registerUser  *auth.RegisterUserUseCase
+	verifyOTP     *auth.VerifyOTPUseCase
+	loginUser     *auth.LoginUserUseCase
+	logoutUser    *auth.LogoutUserUseCase
+	updateProfile *auth.UpdateProfileUseCase
 }
 
 // NewAuthHandler creates a new auth handler
@@ -24,25 +26,18 @@ func NewAuthHandler(
 	verifyOTP *auth.VerifyOTPUseCase,
 	loginUser *auth.LoginUserUseCase,
 	logoutUser *auth.LogoutUserUseCase,
+	updateProfile *auth.UpdateProfileUseCase,
 ) *AuthHandler {
 	return &AuthHandler{
-		registerUser: registerUser,
-		verifyOTP:    verifyOTP,
-		loginUser:    loginUser,
-		logoutUser:   logoutUser,
+		registerUser:  registerUser,
+		verifyOTP:     verifyOTP,
+		loginUser:     loginUser,
+		logoutUser:    logoutUser,
+		updateProfile: updateProfile,
 	}
 }
 
 // Register handles user registration
-// @Summary Register new user
-// @Description Register new user with OTP verification
-// @Tags Authentication
-// @Accept json
-// @Produce json
-// @Param request body request.RegisterRequest true "Registration details"
-// @Success 201 {object} response.RegisterResponse
-// @Failure 400 {object} httperror.APIError
-// @Router /auth/register [post]
 func (h *AuthHandler) Register(c *fiber.Ctx) error {
 	var req request.RegisterRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -75,15 +70,6 @@ func (h *AuthHandler) Register(c *fiber.Ctx) error {
 }
 
 // VerifyOTP handles OTP verification
-// @Summary Verify OTP
-// @Description Verify OTP and complete registration
-// @Tags Authentication
-// @Accept json
-// @Produce json
-// @Param request body request.VerifyOTPRequest true "OTP verification details"
-// @Success 200 {object} response.VerifyOTPResponse
-// @Failure 400 {object} httperror.APIError
-// @Router /auth/verify-otp [post]
 func (h *AuthHandler) VerifyOTP(c *fiber.Ctx) error {
 	var req request.VerifyOTPRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -117,15 +103,6 @@ func (h *AuthHandler) VerifyOTP(c *fiber.Ctx) error {
 }
 
 // Login handles user login
-// @Summary Login
-// @Description Login with WhatsApp number and password
-// @Tags Authentication
-// @Accept json
-// @Produce json
-// @Param request body request.LoginRequest true "Login details"
-// @Success 200 {object} response.LoginResponse
-// @Failure 401 {object} httperror.APIError
-// @Router /auth/login [post]
 func (h *AuthHandler) Login(c *fiber.Ctx) error {
 	var req request.LoginRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -158,14 +135,6 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 }
 
 // Logout handles user logout
-// @Summary Logout
-// @Description Logout and invalidate token
-// @Tags Authentication
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Success 200 {object} response.LogoutResponse
-// @Router /auth/logout [post]
 func (h *AuthHandler) Logout(c *fiber.Ctx) error {
 	// Execute use case
 	result, err := h.logoutUser.Execute(c.Context(), &auth.LogoutRequest{})
@@ -178,4 +147,23 @@ func (h *AuthHandler) Logout(c *fiber.Ctx) error {
 		Success: true,
 		Message: result.Message,
 	})
+}
+
+// UpdateProfile handles user profile update
+func (h *AuthHandler) UpdateProfile(c *fiber.Ctx) error {
+	userID := middleware.GetUserID(c)
+
+	var req auth.UpdateProfileRequest
+	if err := c.BodyParser(&req); err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+
+	result, err := h.updateProfile.Execute(c.Context(), userID, &req)
+	if err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+
+	return c.JSON(result)
 }

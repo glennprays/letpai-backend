@@ -392,6 +392,34 @@ func (r *PostgresNotificationLogRepository) Delete(ctx context.Context, logID st
 	return nil
 }
 
+// FindByWhatsAppMessageID finds a notification log by WhatsApp message ID
+func (r *PostgresNotificationLogRepository) FindByWhatsAppMessageID(ctx context.Context, whatsappMessageID string) (*entity.NotificationLog, error) {
+	query := `
+		SELECT log_id, participant_id, notification_type, whatsapp_message_id, message_content, sent_at, status, error_message
+		FROM notification_logs
+		WHERE whatsapp_message_id = $1
+	`
+
+	row := r.db.QueryRowxContext(ctx, query, whatsappMessageID)
+	if row.Err() != nil {
+		if errors.Is(row.Err(), sql.ErrNoRows) {
+			return nil, domain.NewError(domain.ErrNotFound, nil)
+		}
+		return nil, domain.NewError(domain.ErrInternalFailure, row.Err())
+	}
+
+	var log entity.NotificationLog
+	err := row.StructScan(&log)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, domain.NewError(domain.ErrNotFound, nil)
+		}
+		return nil, domain.NewError(domain.ErrInternalFailure, err)
+	}
+
+	return &log, nil
+}
+
 // DeleteByParticipantID deletes all notification logs for a participant
 func (r *PostgresNotificationLogRepository) DeleteByParticipantID(ctx context.Context, participantID string) error {
 	query := `

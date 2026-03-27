@@ -21,6 +21,8 @@ type SessionHandler struct {
 	removeParticipant *participant.RemoveParticipantUseCase
 	updateParticipant *participant.UpdateParticipantUseCase
 	addBillItem       *billing.AddBillItemUseCase
+	updateBillItem    *billing.UpdateBillItemUseCase
+	deleteBillItem    *billing.DeleteBillItemUseCase
 	calculateSplits   *billing.CalculateSplitsUseCase
 }
 
@@ -35,6 +37,8 @@ func NewSessionHandler(
 	removeParticipant *participant.RemoveParticipantUseCase,
 	updateParticipant *participant.UpdateParticipantUseCase,
 	addBillItem *billing.AddBillItemUseCase,
+	updateBillItem *billing.UpdateBillItemUseCase,
+	deleteBillItem *billing.DeleteBillItemUseCase,
 	calculateSplits *billing.CalculateSplitsUseCase,
 ) *SessionHandler {
 	return &SessionHandler{
@@ -47,22 +51,13 @@ func NewSessionHandler(
 		removeParticipant: removeParticipant,
 		updateParticipant: updateParticipant,
 		addBillItem:       addBillItem,
+		updateBillItem:    updateBillItem,
+		deleteBillItem:    deleteBillItem,
 		calculateSplits:   calculateSplits,
 	}
 }
 
 // Create creates a new session
-// @Summary Create session
-// @Description Create a new bill splitting session
-// @Tags Sessions
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param request body request.CreateSessionRequest true "Session details"
-// @Success 201 {object} response.SessionResponse
-// @Failure 400 {object} httperror.APIError
-// @Failure 401 {object} httperror.APIError
-// @Router /sessions [post]
 func (h *SessionHandler) Create(c *fiber.Ctx) error {
 	userID := middleware.GetUserID(c)
 
@@ -92,20 +87,6 @@ func (h *SessionHandler) Create(c *fiber.Ctx) error {
 }
 
 // GetSessions retrieves sessions with pagination and filters
-// @Summary Get sessions
-// @Description Get sessions with pagination and filters
-// @Tags Sessions
-// @Produce json
-// @Security BearerAuth
-// @Param status query string false "Filter by status (active, completed, cancelled)"
-// @Param search query string false "Search in title and description"
-// @Param sort_by query string false "Sort by field (created_at, session_date, title, total_amount)"
-// @Param sort_order query string false "Sort order (asc, desc)"
-// @Param page query int false "Page number" default(1)
-// @Param limit query int false "Items per page" default(20)
-// @Success 200 {object} response.SessionListResponse
-// @Failure 401 {object} httperror.APIError
-// @Router /sessions [get]
 func (h *SessionHandler) GetSessions(c *fiber.Ctx) error {
 	userID := middleware.GetUserID(c)
 
@@ -151,16 +132,6 @@ func (h *SessionHandler) GetSessions(c *fiber.Ctx) error {
 }
 
 // GetByID retrieves a session by ID with full details
-// @Summary Get session by ID
-// @Description Get a session by ID with participants and bills
-// @Tags Sessions
-// @Produce json
-// @Security BearerAuth
-// @Param id path string true "Session ID"
-// @Success 200 {object} response.SessionDetailResponse
-// @Failure 401 {object} httperror.APIError
-// @Failure 404 {object} httperror.APIError
-// @Router /sessions/{id} [get]
 func (h *SessionHandler) GetByID(c *fiber.Ctx) error {
 	userID := middleware.GetUserID(c)
 	sessionID := c.Params("id")
@@ -178,19 +149,6 @@ func (h *SessionHandler) GetByID(c *fiber.Ctx) error {
 }
 
 // Update updates a session
-// @Summary Update session
-// @Description Update a session
-// @Tags Sessions
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param id path string true "Session ID"
-// @Param request body request.UpdateSessionRequest true "Session details"
-// @Success 200 {object} response.SessionResponse
-// @Failure 400 {object} httperror.APIError
-// @Failure 401 {object} httperror.APIError
-// @Failure 404 {object} httperror.APIError
-// @Router /sessions/{id} [put]
 func (h *SessionHandler) Update(c *fiber.Ctx) error {
 	userID := middleware.GetUserID(c)
 	sessionID := c.Params("id")
@@ -221,17 +179,6 @@ func (h *SessionHandler) Update(c *fiber.Ctx) error {
 }
 
 // Delete cancels a session
-// @Summary Cancel session
-// @Description Cancel a session
-// @Tags Sessions
-// @Produce json
-// @Security BearerAuth
-// @Param id path string true "Session ID"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} httperror.APIError
-// @Failure 401 {object} httperror.APIError
-// @Failure 404 {object} httperror.APIError
-// @Router /sessions/{id} [delete]
 func (h *SessionHandler) Delete(c *fiber.Ctx) error {
 	userID := middleware.GetUserID(c)
 	sessionID := c.Params("id")
@@ -249,19 +196,6 @@ func (h *SessionHandler) Delete(c *fiber.Ctx) error {
 }
 
 // AddParticipants adds participants to a session
-// @Summary Add participants
-// @Description Add participants to a session
-// @Tags Sessions
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param id path string true "Session ID"
-// @Param request body request.AddParticipantsRequest true "Participants"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} httperror.APIError
-// @Failure 401 {object} httperror.APIError
-// @Failure 404 {object} httperror.APIError
-// @Router /sessions/{id}/participants [post]
 func (h *SessionHandler) AddParticipants(c *fiber.Ctx) error {
 	userID := middleware.GetUserID(c)
 	sessionID := c.Params("id")
@@ -299,18 +233,6 @@ func (h *SessionHandler) AddParticipants(c *fiber.Ctx) error {
 }
 
 // RemoveParticipant removes a participant from a session
-// @Summary Remove participant
-// @Description Remove a participant from a session
-// @Tags Sessions
-// @Produce json
-// @Security BearerAuth
-// @Param id path string true "Session ID"
-// @Param participant_id path string true "Participant ID"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} httperror.APIError
-// @Failure 401 {object} httperror.APIError
-// @Failure 404 {object} httperror.APIError
-// @Router /sessions/{id}/participants/{participant_id} [delete]
 func (h *SessionHandler) RemoveParticipant(c *fiber.Ctx) error {
 	userID := middleware.GetUserID(c)
 	sessionID := c.Params("id")
@@ -329,20 +251,6 @@ func (h *SessionHandler) RemoveParticipant(c *fiber.Ctx) error {
 }
 
 // UpdateParticipant updates a participant
-// @Summary Update participant
-// @Description Update a custom participant
-// @Tags Sessions
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param id path string true "Session ID"
-// @Param participant_id path string true "Participant ID"
-// @Param request body request.UpdateParticipantRequest true "Participant details"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} httperror.APIError
-// @Failure 401 {object} httperror.APIError
-// @Failure 404 {object} httperror.APIError
-// @Router /sessions/{id}/participants/{participant_id} [put]
 func (h *SessionHandler) UpdateParticipant(c *fiber.Ctx) error {
 	userID := middleware.GetUserID(c)
 	sessionID := c.Params("id")
@@ -372,19 +280,6 @@ func (h *SessionHandler) UpdateParticipant(c *fiber.Ctx) error {
 }
 
 // AddBillItem adds a bill item to a session
-// @Summary Add bill item
-// @Description Add a bill item to a session
-// @Tags Sessions
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param id path string true "Session ID"
-// @Param request body request.AddBillItemRequest true "Bill item details"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} httperror.APIError
-// @Failure 401 {object} httperror.APIError
-// @Failure 404 {object} httperror.APIError
-// @Router /sessions/{id}/bills [post]
 func (h *SessionHandler) AddBillItem(c *fiber.Ctx) error {
 	userID := middleware.GetUserID(c)
 	sessionID := c.Params("id")
@@ -414,22 +309,58 @@ func (h *SessionHandler) AddBillItem(c *fiber.Ctx) error {
 }
 
 // CalculateSplits calculates equal splits for all participants
-// @Summary Calculate splits
-// @Description Calculate equal splits for all participants
-// @Tags Sessions
-// @Produce json
-// @Security BearerAuth
-// @Param id path string true "Session ID"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} httperror.APIError
-// @Failure 401 {object} httperror.APIError
-// @Failure 404 {object} httperror.APIError
-// @Router /sessions/{id}/calculate-splits [put]
 func (h *SessionHandler) CalculateSplits(c *fiber.Ctx) error {
 	userID := middleware.GetUserID(c)
 	sessionID := c.Params("id")
 
 	result, err := h.calculateSplits.Execute(c.Context(), userID, sessionID)
+	if err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+
+	return c.JSON(fiber.Map{
+		"success": true,
+		"data":    result,
+	})
+}
+
+// UpdateBillItem updates a bill item
+func (h *SessionHandler) UpdateBillItem(c *fiber.Ctx) error {
+	userID := middleware.GetUserID(c)
+	sessionID := c.Params("id")
+	billItemID := c.Params("bill_item_id")
+
+	var req request.UpdateBillItemRequest
+	if err := c.BodyParser(&req); err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+
+	billingReq := &billing.UpdateBillItemRequest{
+		Description: req.Description,
+		Amount:      req.Amount,
+		Category:    req.Category,
+	}
+	result, err := h.updateBillItem.Execute(c.Context(), userID, sessionID, billItemID, billingReq)
+	if err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+
+	return c.JSON(fiber.Map{
+		"success": true,
+		"data":    result,
+	})
+}
+
+// DeleteBillItem deletes a bill item
+func (h *SessionHandler) DeleteBillItem(c *fiber.Ctx) error {
+	userID := middleware.GetUserID(c)
+	sessionID := c.Params("id")
+	billItemID := c.Params("bill_item_id")
+
+	result, err := h.deleteBillItem.Execute(c.Context(), userID, sessionID, billItemID)
 	if err != nil {
 		apiErr := httperror.FromError(err)
 		return c.Status(apiErr.Status).JSON(apiErr.Response())

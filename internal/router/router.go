@@ -12,12 +12,14 @@ type Router struct {
 	logger              *log.Logger
 	HealthHandler       *handler.HealthHandler
 	AuthHandler         *handler.AuthHandler
+	AdminHandler        *handler.AdminHandler
 	ContactGroupHandler *handler.ContactGroupHandler
 	ContactHandler      *handler.ContactHandler
 	SessionHandler      *handler.SessionHandler
 	PaymentHandler      *handler.PaymentHandler
 	NotificationHandler *handler.NotificationHandler
 	WebhookHandler      *handler.WebhookHandler
+	DashboardHandler    *handler.DashboardHandler
 	jwtService          *service.JWTService
 	rateLimitService    *service.RateLimitService
 }
@@ -26,12 +28,14 @@ func NewRouter(
 	logger *log.Logger,
 	healthHandler *handler.HealthHandler,
 	authHandler *handler.AuthHandler,
+	adminHandler *handler.AdminHandler,
 	contactGroupHandler *handler.ContactGroupHandler,
 	contactHandler *handler.ContactHandler,
 	sessionHandler *handler.SessionHandler,
 	paymentHandler *handler.PaymentHandler,
 	notificationHandler *handler.NotificationHandler,
 	webhookHandler *handler.WebhookHandler,
+	dashboardHandler *handler.DashboardHandler,
 	jwtService *service.JWTService,
 	rateLimitService *service.RateLimitService,
 ) *Router {
@@ -40,12 +44,14 @@ func NewRouter(
 		logger:              routerLogger,
 		HealthHandler:       healthHandler,
 		AuthHandler:         authHandler,
+		AdminHandler:        adminHandler,
 		ContactGroupHandler: contactGroupHandler,
 		ContactHandler:      contactHandler,
 		SessionHandler:      sessionHandler,
 		PaymentHandler:      paymentHandler,
 		NotificationHandler: notificationHandler,
 		WebhookHandler:      webhookHandler,
+		DashboardHandler:    dashboardHandler,
 		jwtService:          jwtService,
 		rateLimitService:    rateLimitService,
 	}
@@ -65,6 +71,7 @@ func (r *Router) Setup(app *fiber.App) {
 	r.setupHealthRoutes(v1)
 	r.setupWebhookRoutes(v1)
 	r.setupAuthRoutes(v1)
+	r.setupAdminRoutes(v1)
 	r.setupPublicPaymentRoutes(v1)
 
 	// Protected routes (require auth)
@@ -74,6 +81,7 @@ func (r *Router) Setup(app *fiber.App) {
 	r.setupSessionRoutes(protected)
 	r.setupProtectedPaymentRoutes(protected)
 	r.setupNotificationRoutes(protected)
+	r.setupDashboardRoutes(protected)
 }
 
 func (r *Router) setupHealthRoutes(group fiber.Router) {
@@ -91,6 +99,7 @@ func (r *Router) setupAuthRoutes(group fiber.Router) {
 	auth.Post("/verify-otp", middleware.VerifyOTPRateLimiter(r.rateLimitService), r.AuthHandler.VerifyOTP)
 	auth.Post("/login", middleware.LoginRateLimiter(r.rateLimitService), r.AuthHandler.Login)
 	auth.Post("/logout", r.AuthHandler.Logout)
+	auth.Post("/profile", r.AuthHandler.UpdateProfile)
 }
 
 func (r *Router) setupPublicPaymentRoutes(group fiber.Router) {
@@ -116,6 +125,7 @@ func (r *Router) setupContactRoutes(group fiber.Router) {
 	contacts.Put("/:id", r.ContactHandler.Update)
 	contacts.Delete("/:id", r.ContactHandler.Delete)
 	contacts.Post("/bulk", r.ContactHandler.BulkOperations)
+	contacts.Post("/import", r.ContactHandler.ImportContacts)
 }
 
 func (r *Router) setupSessionRoutes(group fiber.Router) {
@@ -129,6 +139,8 @@ func (r *Router) setupSessionRoutes(group fiber.Router) {
 	sessions.Delete("/:id/participants/:participant_id", r.SessionHandler.RemoveParticipant)
 	sessions.Put("/:id/participants/:participant_id", r.SessionHandler.UpdateParticipant)
 	sessions.Post("/:id/bills", r.SessionHandler.AddBillItem)
+	sessions.Put("/:id/bills/:bill_item_id", r.SessionHandler.UpdateBillItem)
+	sessions.Delete("/:id/bills/:bill_item_id", r.SessionHandler.DeleteBillItem)
 	sessions.Put("/:id/calculate-splits", r.SessionHandler.CalculateSplits)
 }
 
@@ -146,4 +158,33 @@ func (r *Router) setupNotificationRoutes(group fiber.Router) {
 	group.Post("/sessions/:id/send-notifications", r.NotificationHandler.SendNotifications)
 	group.Post("/sessions/:id/bulk-reminder", r.NotificationHandler.BulkReminder)
 	group.Post("/participants/:participant_id/reminder", middleware.ReminderRateLimiter(r.rateLimitService), r.NotificationHandler.SendReminder)
+}
+
+func (r *Router) setupDashboardRoutes(group fiber.Router) {
+	group.Get("/dashboard", r.DashboardHandler.GetDashboard)
+}
+
+func (r *Router) setupAdminRoutes(group fiber.Router) {
+	// Admin authentication routes
+	admin := group.Group("/admin")
+	admin.Post("/auth/initiate", r.AdminHandler.InitiateLogin)
+	admin.Post("/auth/login", r.AdminHandler.Login)
+	admin.Post("/auth/verify-otp", r.AdminHandler.VerifyOTP)
+
+	// Protected admin routes
+	protectedAdmin := admin.Use(middleware.Authenticate(r.jwtService))
+	protectedAdmin.Get("/profile", r.AdminHandler.GetProfile)
+	protectedAdmin.Put("/profile/setup-password", r.AdminHandler.SetupPassword)
+
+	// Super admin only routes (TODO: add authorization middleware)
+	protectedAdmin.Get("/status", r.AdminHandler.GetStatus)
+	protectedAdmin.Post("/qr-code", r.AdminHandler.GetQRCode)
+	protectedAdmin.Post("/logout", r.AdminHandler.Logout)
+	protectedAdmin.Put("/config", r.AdminHandler.UpdateConfig)
+
+	// Admin management routes (super admin only)
+	protectedAdmin.Get("/admins", r.AdminHandler.ListAdmins)
+	protectedAdmin.Post("/admins", r.AdminHandler.CreateAdmin)
+	protectedAdmin.Put("/admins/:id", r.AdminHandler.UpdateAdmin)
+	protectedAdmin.Delete("/admins/:id", r.AdminHandler.DeleteAdmin)
 }

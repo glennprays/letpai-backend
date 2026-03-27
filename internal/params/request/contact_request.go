@@ -5,6 +5,8 @@ type CreateContactRequest struct {
 	Name           string  `json:"name" validate:"required,min=1,max=100"`
 	WhatsAppNumber string  `json:"whatsapp_number" validate:"required"`
 	GroupID        *string `json:"group_id,omitempty"`
+	AvatarURL      *string `json:"avatar_url,omitempty"`
+	Notes          *string `json:"notes,omitempty"`
 }
 
 // UpdateContactRequest represents the request to update a contact
@@ -13,6 +15,8 @@ type UpdateContactRequest struct {
 	WhatsAppNumber *string `json:"whatsapp_number" validate:"omitempty"`
 	GroupID        *string `json:"group_id,omitempty"`
 	IsFavorite     *bool   `json:"is_favorite,omitempty"`
+	AvatarURL      *string `json:"avatar_url,omitempty"`
+	Notes          *string `json:"notes,omitempty"`
 }
 
 // BulkContactsRequest represents the request for bulk contact operations

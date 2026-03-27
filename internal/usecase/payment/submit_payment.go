@@ -3,6 +3,7 @@ package payment
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/glennprays/letpai-backend/domain"
 	"github.com/glennprays/letpai-backend/domain/ports"
@@ -53,8 +54,19 @@ func (uc *SubmitPaymentUseCase) Execute(ctx context.Context, participantID strin
 	}
 
 	// Check if payment is still pending
-	if participant.HasPendingPayment() {
+	if !participant.HasPendingPayment() {
 		return nil, domain.NewError(domain.ErrBadRequest, errors.New("payment has already been submitted"))
+	}
+
+	// Get session to check expiry
+	session, err := uc.sessionRepo.FindByID(ctx, participant.SessionID.String(), "")
+	if err != nil {
+		return nil, err
+	}
+
+	// Check if session has expired
+	if session.SessionDate != nil && session.SessionDate.Before(time.Now()) {
+		return nil, domain.NewError(domain.ErrBadRequest, errors.New("this session has expired and no longer accepts payments"))
 	}
 
 	// Validate and upload image

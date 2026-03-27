@@ -1,6 +1,8 @@
 //go:build wireinject
 // +build wireinject
 
+//go:generate go run github.com/google/wire/cmd/wire
+
 package infrastructure
 
 import (
@@ -8,6 +10,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/glennprays/letpai-backend/config"
+	"github.com/glennprays/letpai-backend/domain/ports"
 	"github.com/glennprays/letpai-backend/internal/handler"
 	"github.com/glennprays/letpai-backend/internal/repository"
 	"github.com/glennprays/letpai-backend/internal/router"
@@ -16,6 +19,7 @@ import (
 	"github.com/glennprays/letpai-backend/internal/usecase/billing"
 	"github.com/glennprays/letpai-backend/internal/usecase/contact"
 	"github.com/glennprays/letpai-backend/internal/usecase/contactgroup"
+	"github.com/glennprays/letpai-backend/internal/usecase/dashboard"
 	"github.com/glennprays/letpai-backend/internal/usecase/notification"
 	"github.com/glennprays/letpai-backend/internal/usecase/participant"
 	"github.com/glennprays/letpai-backend/internal/usecase/payment"
@@ -39,6 +43,8 @@ var RepositorySet = wire.NewSet(
 	repository.NewPostgresParticipantRepository,
 	repository.NewPostgresBillItemRepository,
 	repository.NewPostgresNotificationLogRepository,
+	repository.NewPostgresWhatsAppConfigRepository,
+	repository.NewPostgresAdminRepository,
 )
 
 var ServiceSet = wire.NewSet(
@@ -56,11 +62,7 @@ var UseCaseSet = wire.NewSet(
 	auth.NewVerifyOTPUseCase,
 	auth.NewLoginUserUseCase,
 	auth.NewLogoutUserUseCase,
-	// Contact group use cases
-	contactgroup.NewCreateGroupUseCase,
-	contactgroup.NewGetGroupsUseCase,
-	contactgroup.NewUpdateGroupUseCase,
-	contactgroup.NewDeleteGroupUseCase,
+	auth.NewUpdateProfileUseCase,
 	// Contact use cases
 	contact.NewCreateContactUseCase,
 	contact.NewGetContactsUseCase,
@@ -68,6 +70,12 @@ var UseCaseSet = wire.NewSet(
 	contact.NewUpdateContactUseCase,
 	contact.NewDeleteContactUseCase,
 	contact.NewBulkOperationsUseCase,
+	contact.NewImportContactsUseCase,
+	// Contact group use cases
+	contactgroup.NewCreateGroupUseCase,
+	contactgroup.NewGetGroupsUseCase,
+	contactgroup.NewUpdateGroupUseCase,
+	contactgroup.NewDeleteGroupUseCase,
 	// Session use cases
 	session.NewCreateSessionUseCase,
 	session.NewGetSessionsUseCase,
@@ -78,8 +86,11 @@ var UseCaseSet = wire.NewSet(
 	participant.NewAddParticipantsUseCase,
 	participant.NewRemoveParticipantUseCase,
 	participant.NewUpdateParticipantUseCase,
+	participant.NewImportFromGroupUseCase,
 	// Billing use cases
 	billing.NewAddBillItemUseCase,
+	billing.NewUpdateBillItemUseCase,
+	billing.NewDeleteBillItemUseCase,
 	billing.NewCalculateSplitsUseCase,
 	// Payment use cases
 	payment.NewSubmitPaymentUseCase,
@@ -88,21 +99,26 @@ var UseCaseSet = wire.NewSet(
 	payment.NewBulkApproveUseCase,
 	payment.NewBulkRejectUseCase,
 	payment.NewGetPaymentPageUseCase,
+	payment.NewGetPaymentProofUseCase,
 	// Notification use cases
 	notification.NewSendNotificationsUseCase,
 	notification.NewSendReminderUseCase,
 	notification.NewBulkReminderUseCase,
+	// Dashboard use cases
+	dashboard.NewGetDashboardUseCase,
 )
 
 var HandlerSet = wire.NewSet(
 	handler.NewHealthHandler,
 	handler.NewAuthHandler,
+	handler.NewAdminHandler,
 	handler.NewContactGroupHandler,
 	handler.NewContactHandler,
 	handler.NewSessionHandler,
 	handler.NewPaymentHandler,
 	handler.NewNotificationHandler,
 	handler.NewWebhookHandler,
+	handler.NewDashboardHandler,
 )
 
 var ApiSet = wire.NewSet(
@@ -131,10 +147,11 @@ func NewPasswordService() *service.PasswordService {
 }
 
 // NewWhatsAppService creates a new WhatsApp service with config values
-func NewWhatsAppService(cfg *config.Config) *service.WhatsAppService {
+func NewWhatsAppService(cfg *config.Config, configRepo ports.WhatsAppConfigRepository) *service.WhatsAppService {
 	return service.NewWhatsAppService(
 		cfg.WhatsAppGatewayURL,
 		cfg.WhatsAppAPIKey,
+		configRepo,
 	)
 }
 
@@ -151,7 +168,6 @@ func NewImageService(cfg *config.Config) (*service.ImageService, error) {
 		WebPQuality: cfg.WebPQuality,
 		MaxFileSize: int64(cfg.MaxImageSizeMB) * 1024 * 1024, // Convert MB to bytes
 	}
-
 	return service.NewImageService(imageCfg)
 }
 
@@ -165,6 +181,7 @@ func NewImageServiceProvider(cfg *config.Config) (*service.ImageService, error) 
 	return NewImageService(cfg)
 }
 
+// InitializeApp creates the application and injects all dependencies
 func InitializeApp() (*App, error) {
 	wire.Build(
 		CoreSet,
@@ -174,5 +191,5 @@ func InitializeApp() (*App, error) {
 		ApiSet,
 		wire.Struct(new(App), "*"),
 	)
-	return nil, nil
+	return &App{}, nil
 }

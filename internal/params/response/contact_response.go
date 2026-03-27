@@ -17,6 +17,8 @@ type ContactResponse struct {
 	GroupName      *string `json:"group_name,omitempty"`
 	GroupColor     *string `json:"group_color,omitempty"`
 	IsFavorite     bool    `json:"is_favorite"`
+	AvatarURL      *string `json:"avatar_url,omitempty"`
+	Notes          *string `json:"notes,omitempty"`
 	CreatedAt      string  `json:"created_at"`
 }
 
