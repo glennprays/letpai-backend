@@ -9,12 +9,13 @@ import (
 
 // PaymentHandler handles payment requests
 type PaymentHandler struct {
-	submitPayment  *payment.SubmitPaymentUseCase
-	approvePayment *payment.ApprovePaymentUseCase
-	rejectPayment  *payment.RejectPaymentUseCase
-	bulkApprove    *payment.BulkApproveUseCase
-	bulkReject     *payment.BulkRejectUseCase
-	getPaymentPage *payment.GetPaymentPageUseCase
+	submitPayment   *payment.SubmitPaymentUseCase
+	approvePayment  *payment.ApprovePaymentUseCase
+	rejectPayment   *payment.RejectPaymentUseCase
+	bulkApprove     *payment.BulkApproveUseCase
+	bulkReject      *payment.BulkRejectUseCase
+	getPaymentPage  *payment.GetPaymentPageUseCase
+	getPaymentProof *payment.GetPaymentProofUseCase
 }
 
 // NewPaymentHandler creates a new payment handler
@@ -25,14 +26,16 @@ func NewPaymentHandler(
 	bulkApprove *payment.BulkApproveUseCase,
 	bulkReject *payment.BulkRejectUseCase,
 	getPaymentPage *payment.GetPaymentPageUseCase,
+	getPaymentProof *payment.GetPaymentProofUseCase,
 ) *PaymentHandler {
 	return &PaymentHandler{
-		submitPayment:  submitPayment,
-		approvePayment: approvePayment,
-		rejectPayment:  rejectPayment,
-		bulkApprove:    bulkApprove,
-		bulkReject:     bulkReject,
-		getPaymentPage: getPaymentPage,
+		submitPayment:   submitPayment,
+		approvePayment:  approvePayment,
+		rejectPayment:   rejectPayment,
+		bulkApprove:     bulkApprove,
+		bulkReject:      bulkReject,
+		getPaymentPage:  getPaymentPage,
+		getPaymentProof: getPaymentProof,
 	}
 }
 
