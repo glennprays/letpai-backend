@@ -89,6 +89,7 @@ var UseCaseSet = wire.NewSet(
 	payment.NewBulkApproveUseCase,
 	payment.NewBulkRejectUseCase,
 	payment.NewGetPaymentPageUseCase,
+	payment.NewGetPaymentProofUseCase,
 	// Notification use cases
 	notification.NewSendNotificationsUseCase,
 	notification.NewSendReminderUseCase,
@@ -166,75 +167,4 @@ func NewRateLimitService(redisClient *redis.Client) *service.RateLimitService {
 // NewImageServiceProvider creates a new image service provider that handles initialization errors
 func NewImageServiceProvider(cfg *config.Config) (*service.ImageService, error) {
 	return NewImageService(cfg)
-}
-
-func InitializeApp() (*App, error) {
-	wire.Build(
-		CoreSet,
-		RepositorySet,
-		ServiceSet,
-		UseCaseSet,
-		ApiSet,
-		wire.Struct(new(App), "*"),
-	)
-	return nil, nil
-}
-
-// NewOTPService creates a new OTP service with config values
-func NewOTPService(cfg *config.Config) *service.OTPService {
-	return service.NewOTPService(
-		cfg.OTPExpiryMinutes,
-	)
-}
-
-// NewPasswordService creates a new password service
-func NewPasswordService() *service.PasswordService {
-	return service.NewPasswordService(12) // bcrypt cost
-}
-
-// NewWhatsAppService creates a new WhatsApp service with config values
-func NewWhatsAppService(cfg *config.Config) *service.WhatsAppService {
-	return service.NewWhatsAppService(
-		cfg.WhatsAppGatewayURL,
-		cfg.WhatsAppAPIKey,
-	)
-}
-
-// NewImageService creates a new image service with AWS S3 configuration
-func NewImageService(cfg *config.Config) (*service.ImageService, error) {
-	imageCfg := &service.ImageConfig{
-		AWSEndpoint: cfg.AWSEndpoint,
-		AWSRegion:   cfg.AWSRegion,
-		AWSAccessID: cfg.AWSAccessID,
-		AWSSecret:   cfg.AWSSecret,
-		BucketName:  cfg.S3BucketName,
-		CDNURL:      cfg.CDNURL,
-		EnableWebP:  cfg.EnableWebP,
-		WebPQuality: cfg.WebPQuality,
-		MaxFileSize: int64(cfg.MaxImageSizeMB) * 1024 * 1024, // Convert MB to bytes
-	}
-
-	return service.NewImageService(imageCfg)
-}
-
-// NewRateLimitService creates a new rate limit service with Redis client
-func NewRateLimitService(redisClient *redis.Client) *service.RateLimitService {
-	return service.NewRateLimitService(redisClient)
-}
-
-// NewImageServiceProvider creates a new image service provider that handles initialization errors
-func NewImageServiceProvider(cfg *config.Config) (*service.ImageService, error) {
-	return NewImageService(cfg)
-}
-
-func InitializeApp() (*App, error) {
-	wire.Build(
-		CoreSet,
-		RepositorySet,
-		ServiceSet,
-		UseCaseSet,
-		ApiSet,
-		wire.Struct(new(App), "*"),
-	)
-	return nil, nil
 }
