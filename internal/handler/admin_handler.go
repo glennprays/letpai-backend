@@ -1,142 +1,200 @@
 package handler
 
 import (
+	"github.com/glennprays/letpai-backend/internal/httperror"
 	"github.com/glennprays/letpai-backend/internal/middleware"
-	adminreq "github.com/glennprays/letpai-backend/internal/params/request/admin"
-	adminresp "github.com/glennprays/letpai-backend/internal/params/response/admin"
+	adminuc "github.com/glennprays/letpai-backend/internal/usecase/admin"
 	"github.com/gofiber/fiber/v2"
 )
 
 // AdminHandler handles admin requests
 type AdminHandler struct {
-	// Placeholder for usecases - will be added when usecases are implemented
+	initiateLoginUseCase *adminuc.InitiateLoginUseCase
+	verifyOTPUseCase     *adminuc.VerifyOTPUseCase
+	getProfileUseCase    *adminuc.GetProfileUseCase
+	setupPasswordUseCase *adminuc.SetupPasswordUseCase
+	listAdminsUseCase    *adminuc.ListAdminsUseCase
+	createAdminUseCase   *adminuc.CreateAdminUseCase
+	updateAdminUseCase   *adminuc.UpdateAdminUseCase
+	deleteAdminUseCase   *adminuc.DeleteAdminUseCase
+	getStatusUseCase     *adminuc.GetStatusUseCase
+	getQRCodeUseCase     *adminuc.GetQRCodeUseCase
+	logoutUseCase        *adminuc.LogoutUseCase
+	updateConfigUseCase  *adminuc.UpdateConfigUseCase
 }
 
 // NewAdminHandler creates a new admin handler
-func NewAdminHandler() *AdminHandler {
-	return &AdminHandler{}
+func NewAdminHandler(
+	initiateLoginUseCase *adminuc.InitiateLoginUseCase,
+	verifyOTPUseCase *adminuc.VerifyOTPUseCase,
+	getProfileUseCase *adminuc.GetProfileUseCase,
+	setupPasswordUseCase *adminuc.SetupPasswordUseCase,
+	listAdminsUseCase *adminuc.ListAdminsUseCase,
+	createAdminUseCase *adminuc.CreateAdminUseCase,
+	updateAdminUseCase *adminuc.UpdateAdminUseCase,
+	deleteAdminUseCase *adminuc.DeleteAdminUseCase,
+	getStatusUseCase *adminuc.GetStatusUseCase,
+	getQRCodeUseCase *adminuc.GetQRCodeUseCase,
+	logoutUseCase *adminuc.LogoutUseCase,
+	updateConfigUseCase *adminuc.UpdateConfigUseCase,
+) *AdminHandler {
+	return &AdminHandler{
+		initiateLoginUseCase: initiateLoginUseCase,
+		verifyOTPUseCase:     verifyOTPUseCase,
+		getProfileUseCase:    getProfileUseCase,
+		setupPasswordUseCase: setupPasswordUseCase,
+		listAdminsUseCase:    listAdminsUseCase,
+		createAdminUseCase:   createAdminUseCase,
+		updateAdminUseCase:   updateAdminUseCase,
+		deleteAdminUseCase:   deleteAdminUseCase,
+		getStatusUseCase:     getStatusUseCase,
+		getQRCodeUseCase:     getQRCodeUseCase,
+		logoutUseCase:        logoutUseCase,
+		updateConfigUseCase:  updateConfigUseCase,
+	}
 }
 
 // InitiateLogin initiates admin login flow
 func (h *AdminHandler) InitiateLogin(c *fiber.Ctx) error {
-	// Placeholder implementation
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"success":    true,
-		"session_id": "placeholder-session-id",
-	})
-}
-
-// Login handles admin login with OTP or password
-func (h *AdminHandler) Login(c *fiber.Ctx) error {
-	var req adminreq.LoginRequest
+	var req adminuc.InitiateLoginRequest
 	if err := c.BodyParser(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"success": false,
-			"error":   "invalid request body",
-		})
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
 	}
 
-	// Placeholder implementation
-	return c.Status(fiber.StatusOK).JSON(adminresp.LoginResponse{
-		AdminID:        "placeholder-admin-id",
-		WhatsAppNumber: req.WhatsAppNumber,
-		FullName:       "Placeholder Admin",
-		Role:           "admin",
-		Token:          "placeholder-token",
+	result, err := h.initiateLoginUseCase.Execute(c.Context(), &req)
+	if err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+
+	return c.Status(fiber.StatusOK).JSON(result)
+}
+
+// Login handles admin login with OTP
+func (h *AdminHandler) Login(c *fiber.Ctx) error {
+	var req adminuc.LoginRequest
+	if err := c.BodyParser(&req); err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+
+	// TODO: Implement password-based login
+	// For now, this is essentially a no-op as login is done via OTP
+	return c.Status(fiber.StatusNotImplemented).JSON(fiber.Map{
+		"success": false,
+		"error":   "Password login not implemented yet. Please use OTP login.",
 	})
 }
 
 // VerifyOTP handles OTP verification
 func (h *AdminHandler) VerifyOTP(c *fiber.Ctx) error {
-	var req adminreq.VerifyOTPRequest
+	var req adminuc.VerifyOTPRequest
 	if err := c.BodyParser(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"success": false,
-			"error":   "invalid request body",
-		})
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
 	}
 
-	// Placeholder implementation
-	return c.Status(fiber.StatusOK).JSON(adminreq.VerifyOTPResponse{
-		Token:     "placeholder-token",
-		ExpiresAt: "2024-12-31T23:59:59Z",
-	})
+	result, err := h.verifyOTPUseCase.Execute(c.Context(), &req)
+	if err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+
+	return c.Status(fiber.StatusOK).JSON(result)
 }
 
 // GetProfile retrieves admin profile
 func (h *AdminHandler) GetProfile(c *fiber.Ctx) error {
 	userID := middleware.GetUserID(c)
 
-	// Placeholder implementation
-	return c.Status(fiber.StatusOK).JSON(adminreq.GetProfileResponse{
-		AdminID:        userID,
-		WhatsAppNumber: "+1234567890123",
-		FullName:       "Placeholder Admin",
-		Role:           "admin",
-		IsVerified:     true,
-		CreatedAt:      "2024-01-01T00:00:00Z",
-		UpdatedAt:      "2024-01-01T00:00:00Z",
-	})
+	result, err := h.getProfileUseCase.Execute(c.Context(), userID)
+	if err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+
+	return c.Status(fiber.StatusOK).JSON(result)
 }
 
 // SetupPassword sets initial password for admin
 func (h *AdminHandler) SetupPassword(c *fiber.Ctx) error {
-	// Placeholder implementation
-	return c.Status(fiber.StatusOK).JSON(adminreq.SetupPasswordResponse{
-		Message: "Password set successfully",
+	userID := middleware.GetUserID(c)
+
+	var req adminuc.SetupPasswordRequest
+	if err := c.BodyParser(&req); err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+
+	err := h.setupPasswordUseCase.Execute(c.Context(), userID, &req)
+	if err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"success": true,
 	})
 }
 
 // ListAdmins lists all admins (super admin only)
 func (h *AdminHandler) ListAdmins(c *fiber.Ctx) error {
-	// Placeholder implementation
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"success": true,
-		"admins":  []adminreq.GetProfileResponse{},
-	})
+	result, err := h.listAdminsUseCase.Execute(c.Context())
+	if err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+
+	return c.Status(fiber.StatusOK).JSON(result)
 }
 
 // CreateAdmin creates a new admin (super admin only)
 func (h *AdminHandler) CreateAdmin(c *fiber.Ctx) error {
-	var req adminreq.CreateAdminRequest
+	var req adminuc.CreateAdminRequest
 	if err := c.BodyParser(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"success": false,
-			"error":   "invalid request body",
-		})
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
 	}
 
-	// Placeholder implementation
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
-		"success":  true,
-		"admin_id": "placeholder-admin-id",
-	})
+	result, err := h.createAdminUseCase.Execute(c.Context(), &req)
+	if err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+
+	return c.Status(fiber.StatusCreated).JSON(result)
 }
 
 // UpdateAdmin updates admin details
 func (h *AdminHandler) UpdateAdmin(c *fiber.Ctx) error {
 	adminID := c.Params("id")
 
-	var req adminreq.UpdateAdminRequest
+	var req adminuc.UpdateAdminRequest
 	if err := c.BodyParser(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"success": false,
-			"error":   "invalid request body",
-		})
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
 	}
 
-	// Placeholder implementation
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"success":  true,
-		"admin_id": adminID,
-	})
+	result, err := h.updateAdminUseCase.Execute(c.Context(), adminID, &req)
+	if err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+
+	return c.Status(fiber.StatusOK).JSON(result)
 }
 
 // DeleteAdmin deletes an admin (super admin only)
 func (h *AdminHandler) DeleteAdmin(c *fiber.Ctx) error {
 	adminID := c.Params("id")
 
-	// Placeholder implementation
+	err := h.deleteAdminUseCase.Execute(c.Context(), adminID)
+	if err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
 		"success":  true,
 		"admin_id": adminID,
@@ -145,37 +203,62 @@ func (h *AdminHandler) DeleteAdmin(c *fiber.Ctx) error {
 
 // GetStatus retrieves WhatsApp gateway status
 func (h *AdminHandler) GetStatus(c *fiber.Ctx) error {
-	// Placeholder implementation
-	return c.Status(fiber.StatusOK).JSON(adminresp.GetStatusResponse{
-		IsConnected:       false,
-		GatewayTokenValid: false,
-		PhoneNumber:       "",
-		Message:           "WhatsApp not connected",
-	})
+	result, err := h.getStatusUseCase.Execute(c.Context())
+	if err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+
+	return c.Status(fiber.StatusOK).JSON(result)
 }
 
 // GetQRCode generates QR code for WhatsApp pairing
 func (h *AdminHandler) GetQRCode(c *fiber.Ctx) error {
-	// Placeholder implementation
-	return c.Status(fiber.StatusOK).JSON(adminresp.QRCodeResponse{
-		QRCodeBase64: "placeholder-base64-string",
-		ExpiresAt:    "2024-12-31T23:59:59Z",
-	})
+	var req adminuc.GetQRCodeRequest
+	if err := c.BodyParser(&req); err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+
+	result, err := h.getQRCodeUseCase.Execute(c.Context(), &req)
+	if err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+
+	return c.Status(fiber.StatusOK).JSON(result)
 }
 
 // Logout handles admin logout
 func (h *AdminHandler) Logout(c *fiber.Ctx) error {
-	// Placeholder implementation
-	return c.Status(fiber.StatusOK).JSON(adminresp.LogoutResponse{
-		Message: "Logout successful",
+	userID := middleware.GetUserID(c)
+
+	err := h.logoutUseCase.Execute(c.Context(), userID)
+	if err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"success": true,
 	})
 }
 
 // UpdateConfig updates WhatsApp API configuration
 func (h *AdminHandler) UpdateConfig(c *fiber.Ctx) error {
-	// Placeholder implementation
+	var req adminuc.UpdateConfigRequest
+	if err := c.BodyParser(&req); err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+
+	err := h.updateConfigUseCase.Execute(c.Context(), &req)
+	if err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
 		"success": true,
-		"message": "Config updated successfully",
 	})
 }

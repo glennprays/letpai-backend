@@ -10,6 +10,7 @@ import (
 const (
 	userIDKey           = "user_id"
 	whatsappKey         = "whatsapp_number"
+	roleKey             = "user_role"
 	authorizationHeader = "Authorization"
 	bearerPrefix        = "Bearer "
 )
@@ -58,6 +59,7 @@ func Authenticate(jwtSvc *service.JWTService) fiber.Handler {
 		// Store user info in context
 		c.Locals(userIDKey, claims.UserID)
 		c.Locals(whatsappKey, claims.WhatsAppNumber)
+		c.Locals(roleKey, claims.Role)
 
 		return c.Next()
 	}
