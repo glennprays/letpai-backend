@@ -6,6 +6,10 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"image"
+	_ "image/gif"
+	_ "image/jpeg"
+	_ "image/png"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -13,12 +17,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/h2non/bimg"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
 
-// ImageService handles image upload operations with MinIO/S3 and bimg
+// ImageService handles image upload operations with MinIO/S3 and pure Go image libraries
 type ImageService struct {
 	s3Client    *minio.Client
 	bucketName  string
@@ -40,6 +43,16 @@ type ImageConfig struct {
 	WebPQuality int
 	MaxFileSize int64 // in bytes
 }
+
+// imageFormat represents the supported image formats
+type imageFormat string
+
+const (
+	formatJPEG imageFormat = "jpeg"
+	formatPNG  imageFormat = "png"
+	formatWEBP imageFormat = "webp"
+	formatGIF  imageFormat = "gif"
+)
 
 // NewImageService creates a new image service with MinIO/S3
 func NewImageService(cfg *ImageConfig) (*ImageService, error) {
@@ -127,7 +140,7 @@ func (s *ImageService) UploadFromMultipart(ctx context.Context, fileHeader *mult
 		return nil, fmt.Errorf("file size %d exceeds limit %d", fileHeader.Size, s.maxFileSize)
 	}
 
-	// Open the file
+	// Open file
 	file, err := fileHeader.Open()
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file: %w", err)
@@ -148,32 +161,28 @@ func (s *ImageService) UploadFromMultipart(ctx context.Context, fileHeader *mult
 
 // processAndUpload processes the image (convert if needed) and uploads to S3
 func (s *ImageService) processAndUpload(ctx context.Context, imageData []byte, fileFormat, fileName string) (*UploadResult, error) {
-	// Get image info using bimg.Image method
-	img := bimg.NewImage(imageData)
-	imgInfo, err := img.Size()
+	// Decode image to get dimensions
+	img, _, err := image.Decode(bytes.NewReader(imageData))
 	if err != nil {
 		return nil, fmt.Errorf("invalid image: %w", err)
 	}
 
+	// Get image dimensions
+	bounds := img.Bounds()
+	width := bounds.Dx()
+	height := bounds.Dy()
+
 	processedData := imageData
 	outputFormat := s.formatFromMime(fileFormat)
 
-	// Convert to WebP if enabled and source is not already WebP
-	if s.enableWebP && outputFormat != bimg.WEBP {
-		processedData, err = s.convertToWebP(imageData)
-		if err != nil {
-			// Fall back to original if WebP conversion fails
-			processedData = imageData
-		} else {
-			outputFormat = bimg.WEBP
-		}
-	}
+	// Note: WebP conversion disabled - keeping original format for simplicity and no C dependency
+	// If WebP conversion is needed in the future, use github.com/chai2010/webp
 
 	// Generate unique filename
 	if fileName == "" {
 		fileName = fmt.Sprintf("proof_%d%s", time.Now().Unix(), s.extensionFromFormat(outputFormat))
 	} else {
-		// Clean the filename and add extension
+		// Clean filename and add extension
 		fileName = strings.TrimSpace(fileName)
 		fileName = strings.TrimSuffix(fileName, filepath.Ext(fileName))
 		fileName = fmt.Sprintf("%s_%d%s", sanitizeFilename(fileName), time.Now().Unix(), s.extensionFromFormat(outputFormat))
@@ -193,25 +202,15 @@ func (s *ImageService) processAndUpload(ctx context.Context, imageData []byte, f
 		FileName:   fileName,
 		FileFormat: s.mimeFromFormat(outputFormat),
 		Size:       int64(len(processedData)),
-		Width:      imgInfo.Width,
-		Height:     imgInfo.Height,
+		Width:      width,
+		Height:     height,
 		UploadedAt: time.Now(),
 		PublicURL:  publicURL,
 		Etag:       etag,
 	}, nil
 }
 
-// convertToWebP converts the image to WebP format with compression
-func (s *ImageService) convertToWebP(imageData []byte) ([]byte, error) {
-	options := bimg.Options{
-		Quality: s.webPQuality,
-		Type:    bimg.WEBP,
-	}
-
-	return bimg.NewImage(imageData).Process(options)
-}
-
-// uploadToS3 uploads the image data to S3
+// uploadToS3 uploads to image data to S3
 func (s *ImageService) uploadToS3(ctx context.Context, imageData []byte, fileName, contentType string) (string, string, error) {
 	key := fmt.Sprintf("payments/%s", fileName)
 
@@ -231,7 +230,7 @@ func (s *ImageService) uploadToS3(ctx context.Context, imageData []byte, fileNam
 	return etag, url, nil
 }
 
-// getPublicURL returns the public URL for the uploaded image
+// getPublicURL returns the public URL for uploaded image
 func (s *ImageService) getPublicURL(fileName string) string {
 	if s.cdnURL != "" {
 		return fmt.Sprintf("%s/payments/%s", strings.TrimSuffix(s.cdnURL, "/"), fileName)
@@ -279,7 +278,7 @@ func (s *ImageService) extractAndValidateImage(base64Data string) ([]byte, strin
 
 	// Validate image type
 	if !s.isValidImageFormat(fileFormat) {
-		return nil, "", errors.New("invalid image format, only JPEG, PNG, WEBP, and HEIC are supported")
+		return nil, "", errors.New("invalid image format, only JPEG, PNG, WEBP, and GIF are supported")
 	}
 
 	// Validate image size
@@ -293,61 +292,61 @@ func (s *ImageService) extractAndValidateImage(base64Data string) ([]byte, strin
 // isValidImageFormat checks if the mime type is a valid image format
 func (s *ImageService) isValidImageFormat(mimeType string) bool {
 	switch mimeType {
-	case "image/jpeg", "image/jpg", "image/png", "image/webp", "image/heic", "image/heif":
+	case "image/jpeg", "image/jpg", "image/pjpeg", "image/png", "image/webp", "image/gif":
 		return true
 	default:
 		return false
 	}
 }
 
-// formatFromMime converts MIME type to bimg format
-func (s *ImageService) formatFromMime(mimeType string) bimg.ImageType {
+// formatFromMime converts MIME type to imageFormat
+func (s *ImageService) formatFromMime(mimeType string) imageFormat {
 	switch mimeType {
-	case "image/jpeg", "image/jpg":
-		return bimg.JPEG
+	case "image/jpeg", "image/jpg", "image/pjpeg":
+		return formatJPEG
 	case "image/png":
-		return bimg.PNG
+		return formatPNG
 	case "image/webp":
-		return bimg.WEBP
-	case "image/heic", "image/heif":
-		return bimg.HEIF
+		return formatWEBP
+	case "image/gif":
+		return formatGIF
 	default:
-		return bimg.JPEG
+		return formatJPEG
 	}
 }
 
-// mimeFromFormat converts bimg format to MIME type
-func (s *ImageService) mimeFromFormat(format bimg.ImageType) string {
+// mimeFromFormat converts imageFormat to MIME type
+func (s *ImageService) mimeFromFormat(format imageFormat) string {
 	switch format {
-	case bimg.JPEG:
+	case formatJPEG:
 		return "image/jpeg"
-	case bimg.PNG:
+	case formatPNG:
 		return "image/png"
-	case bimg.WEBP:
+	case formatWEBP:
 		return "image/webp"
-	case bimg.HEIF:
-		return "image/heic"
+	case formatGIF:
+		return "image/gif"
 	default:
 		return "image/jpeg"
 	}
 }
 
 // contentTypeFromFormat returns the Content-Type header value for a format
-func (s *ImageService) contentTypeFromFormat(format bimg.ImageType) string {
+func (s *ImageService) contentTypeFromFormat(format imageFormat) string {
 	return s.mimeFromFormat(format)
 }
 
 // extensionFromFormat returns the file extension for a format
-func (s *ImageService) extensionFromFormat(format bimg.ImageType) string {
+func (s *ImageService) extensionFromFormat(format imageFormat) string {
 	switch format {
-	case bimg.JPEG:
+	case formatJPEG:
 		return ".jpg"
-	case bimg.PNG:
+	case formatPNG:
 		return ".png"
-	case bimg.WEBP:
+	case formatWEBP:
 		return ".webp"
-	case bimg.HEIF:
-		return ".heic"
+	case formatGIF:
+		return ".gif"
 	default:
 		return ".jpg"
 	}
