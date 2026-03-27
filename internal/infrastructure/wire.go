@@ -15,7 +15,6 @@ import (
 	"github.com/glennprays/letpai-backend/internal/usecase/auth"
 	"github.com/glennprays/letpai-backend/internal/usecase/billing"
 	"github.com/glennprays/letpai-backend/internal/usecase/contact"
-	"github.com/glennprays/letpai-backend/internal/usecase/contactgroup"
 	"github.com/glennprays/letpai-backend/internal/usecase/dashboard"
 	"github.com/glennprays/letpai-backend/internal/usecase/notification"
 	"github.com/glennprays/letpai-backend/internal/usecase/participant"
@@ -76,7 +75,7 @@ var UseCaseSet = wire.NewSet(
 	participant.NewAddParticipantsUseCase,
 	participant.NewRemoveParticipantUseCase,
 	participant.NewUpdateParticipantUseCase,
-	participant.NewAddFromGroupUseCase,
+	participant.NewImportFromGroupUseCase,
 	// Billing use cases
 	billing.NewAddBillItemUseCase,
 	billing.NewUpdateBillItemUseCase,
