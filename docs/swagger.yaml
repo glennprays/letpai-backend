@@ -591,79 +591,77 @@ paths:
                  schema:
                  $ref: '#/components/schemas/CalculateSplitsResponse'
 
-   /sessions/{id}/bills/{bill_item_id}:
-     put:
-       summary: Update bill item
-       description: Update a bill item and recalculate session total
-       tags:
-         - Sessions
-       security:
-         - BearerAuth: []
-       parameters:
-         - $ref: '#/components/parameters/SessionID'
-         - $ref: '#/components/parameters/BillItemID'
-       requestBody:
-         required: true
-         content:
-           application/json:
-             schema:
-               $ref: '#/components/schemas/UpdateBillItemRequest'
-       responses:
-         '200':
-           description: Bill item updated successfully
-           content:
-             application/json:
-               schema:
-                 $ref: '#/components/schemas/UpdateBillItemResponse'
-         '400':
-           description: Bad request
-           content:
-             application/json:
-               schema:
-                 $ref: '#/components/schemas/Error'
+  /sessions/{id}/bills/{bill_item_id}:
+    put:
+      summary: Update bill item
+      description: Update a bill item and recalculate session total
+      tags:
+        - Sessions
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SessionID'
+        - $ref: '#/components/parameters/BillItemID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateBillItemRequest'
+      responses:
+        '200':
+          description: Bill item updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateBillItemResponse'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      summary: Delete bill item
+      description: Delete a bill item and recalculate session total
+      tags:
+        - Sessions
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SessionID'
+        - $ref: '#/components/parameters/BillItemID'
+      responses:
+        '200':
+          description: Bill item deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeleteBillItemResponse'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
-   /sessions/{id}/bills/{bill_item_id}:
-     delete:
-       summary: Delete bill item
-       description: Delete a bill item and recalculate session total
-       tags:
-         - Sessions
-       security:
-         - BearerAuth: []
-       parameters:
-         - $ref: '#/components/parameters/SessionID'
-         - $ref: '#/components/parameters/BillItemID'
-       responses:
-         '200':
-           description: Bill item deleted successfully
-           content:
-             application/json:
-               schema:
-                 $ref: '#/components/schemas/DeleteBillItemResponse'
-         '400':
-           description: Bad request
-           content:
-             application/json:
-               schema:
-                  $ref: '#/components/schemas/Error'
+  /dashboard:
+    get:
+      summary: Get dashboard
+      description: Get dashboard statistics for the authenticated user
+      tags:
+        - Sessions
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Dashboard data retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardResponse'
 
-   /dashboard:
-     get:
-       summary: Get dashboard
-       description: Get dashboard statistics for the authenticated user
-       tags:
-         - Sessions
-       security:
-         - BearerAuth: []
-       responses:
-         '200':
-           description: Dashboard data retrieved successfully
-           content:
-             application/json:
-               schema:
-                 $ref: '#/components/schemas/DashboardResponse'
-
-   /sessions/{id}/send-notifications:
+  /sessions/{id}/send-notifications:
     post:
       summary: Send notifications
       description: Send WhatsApp notifications to all participants
@@ -731,7 +729,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/RateLimitError'
 
-   /payments/{participant_id}/submit:
+  /payments/{participant_id}/submit:
     post:
       summary: Submit payment proof
       description: Submit payment proof (public link, no auth required). Payment submissions are rejected if the session has expired (session_date has passed).
@@ -785,7 +783,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/PaymentApproveResponse'
 
-   /payments/{proof_id}/reject:
+  /payments/{proof_id}/reject:
     post:
       summary: Reject payment
       description: Reject payment (host only). A WhatsApp notification will be sent to the participant with the rejection reason.
@@ -873,45 +871,26 @@ paths:
               schema:
                 $ref: '#/components/schemas/PaymentPageResponse'
 
-   /payments/{participant_id}/public:
-    get:
-      summary: Get payment page
-      description: Get payment page data (public, no auth required)
-      operationId: getPaymentPage
-      tags:
-        - Payments
-      parameters:
-        - $ref: '#/components/parameters/ParticipantID'
-      responses:
-        '200':
-          description: Payment page data retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PaymentPageResponse'
-
-   /payments/bulk-approve:
-
-  /webhooks/whatsapp-status:
-    post:
-      summary: WhatsApp status webhook
-      description: Receive status updates from WhatsApp Gateway
-      operationId: whatsappStatusWebhook
-      tags:
-        - Webhooks
-      requestBody:
-        required: true
+/webhooks/whatsapp-status:
+  post:
+    summary: WhatsApp status webhook
+    description: Receive status updates from WhatsApp Gateway
+    operationId: whatsappStatusWebhook
+    tags:
+      - Webhooks
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/WhatsAppStatusWebhook'
+    responses:
+      '200':
+        description: Webhook received successfully
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/WhatsAppStatusWebhook'
-      responses:
-        '200':
-          description: Webhook received successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SuccessResponse'
+              $ref: '#/components/schemas/SuccessResponse'
 
 components:
   securitySchemes:
@@ -1461,72 +1440,72 @@ components:
           type: boolean
           example: true
         data:
-         $ref: '#/components/schemas/BillItem'
+          $ref: '#/components/schemas/BillItem'
 
-     UpdateBillItemRequest:
-       type: object
-       properties:
-         description:
-           type: string
-           nullable: true
-           example: "Updated description"
-         amount:
-           type: integer
-           example: 600000
-         category:
-           type: string
-           nullable: true
-           example: "food"
+    UpdateBillItemRequest:
+      type: object
+      properties:
+        description:
+          type: string
+          nullable: true
+          example: "Updated description"
+        amount:
+          type: integer
+          example: 600000
+        category:
+          type: string
+          nullable: true
+          example: "food"
 
-     UpdateBillItemResponse:
-       type: object
-       properties:
-         bill_item_id:
-           type: string
-           format: uuid
-           example: "550e8400-e29b-41d4-a716-446655440000"
-         description:
-           type: string
-           example: "Updated description"
-         amount:
-           type: integer
-           example: 600000
-         category:
-           type: string
-           nullable: true
-           example: "food"
-         updated_at:
-           type: string
-           format: date-time
-           example: "2026-03-18T12:00:00Z"
+    UpdateBillItemResponse:
+      type: object
+      properties:
+        bill_item_id:
+          type: string
+          format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        description:
+          type: string
+          example: "Updated description"
+        amount:
+          type: integer
+          example: 600000
+        category:
+          type: string
+          nullable: true
+          example: "food"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2026-03-18T12:00:00Z"
 
-     DeleteBillItemResponse:
-       type: object
-       properties:
-         message:
-           type: string
-           example: "Bill item deleted successfully"
-         new_total:
-           type: integer
-           example: 400000
+    DeleteBillItemResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: "Bill item deleted successfully"
+        new_total:
+          type: integer
+          example: 400000
 
-     DashboardResponse:
-       type: object
-       properties:
-         active_sessions:
-           type: integer
-           example: 5
-         completed_sessions:
-           type: integer
-           example: 10
-         pending_payments:
-           type: integer
-           example: 3
-         total_pending:
-           type: integer
-           example: 1500000
+    DashboardResponse:
+      type: object
+      properties:
+        active_sessions:
+          type: integer
+          example: 5
+        completed_sessions:
+          type: integer
+          example: 10
+        pending_payments:
+          type: integer
+          example: 3
+        total_pending:
+          type: integer
+          example: 1500000
 
-     CalculateSplitsResponse:
+    CalculateSplitsResponse:
       type: object
       properties:
         success:
@@ -1934,20 +1913,20 @@ components:
       description: Payment Proof ID
       schema:
         type: string
-         format: uuid
-       example: "550e8400-e29b-41d4-a716-446655440000"
+        format: uuid
+      example: "550e8400-e29b-41d4-a716-446655440000"
 
-     BillItemID:
-       name: bill_item_id
-       in: path
-       required: true
-       description: Bill Item ID
-       schema:
-         type: string
-         format: uuid
-       example: "550e8400-e29b-41d4-a716-446655440000"
+    BillItemID:
+      name: bill_item_id
+      in: path
+      required: true
+      description: Bill Item ID
+      schema:
+        type: string
+        format: uuid
+      example: "550e8400-e29b-41d4-a716-446655440000"
 
-     tags:
+tags:
   - name: Health
     description: Health check operations
   - name: Authentication
