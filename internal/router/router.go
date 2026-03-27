@@ -34,8 +34,8 @@ func NewRouter(
 	notificationHandler *handler.NotificationHandler,
 	webhookHandler *handler.WebhookHandler,
 	dashboardHandler *handler.DashboardHandler,
-	jwtService *service.JWTService,
-	rateLimitService *service.RateLimitService,
+	jwtService          *service.JWTService,
+	rateLimitService    *service.RateLimitService,
 ) *Router {
 	routerLogger := logger.With(log.String("component", "router"))
 	return &Router{
@@ -48,10 +48,11 @@ func NewRouter(
 		PaymentHandler:      paymentHandler,
 		NotificationHandler: notificationHandler,
 		WebhookHandler:      webhookHandler,
-		DashboardHandler:    dashboardHandler,
+		DashboardHandler:   dashboardHandler,
 		jwtService:          jwtService,
 		rateLimitService:    rateLimitService,
 	}
+}
 }
 
 // Setup configures all application routes
@@ -95,6 +96,7 @@ func (r *Router) setupAuthRoutes(group fiber.Router) {
 	auth.Post("/verify-otp", middleware.VerifyOTPRateLimiter(r.rateLimitService), r.AuthHandler.VerifyOTP)
 	auth.Post("/login", middleware.LoginRateLimiter(r.rateLimitService), r.AuthHandler.Login)
 	auth.Post("/logout", r.AuthHandler.Logout)
+	auth.Post("/profile", r.AuthHandler.UpdateProfile)
 }
 
 func (r *Router) setupPublicPaymentRoutes(group fiber.Router) {

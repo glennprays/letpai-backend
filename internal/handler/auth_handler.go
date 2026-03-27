@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/glennprays/letpai-backend/internal/httperror"
+	"github.com/glennprays/letpai-backend/internal/middleware"
 	"github.com/glennprays/letpai-backend/internal/params/request"
 	"github.com/glennprays/letpai-backend/internal/params/response"
 	"github.com/glennprays/letpai-backend/internal/usecase/auth"
@@ -143,4 +144,40 @@ func (h *AuthHandler) Logout(c *fiber.Ctx) error {
 		Success: true,
 		Message: result.Message,
 	})
+}
+
+// UpdateProfile handles user profile update
+func (h *AuthHandler) UpdateProfile(c *fiber.Ctx) error {
+	userID := middleware.GetUserID(c)
+
+	var req auth.UpdateProfileRequest
+	if err := c.BodyParser(&req); err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+
+	result, err := h.updateProfile.Execute(c.Context(), userID, &req)
+	if err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+
+// UpdateProfile handles user profile update
+func (h *AuthHandler) UpdateProfile(c *fiber.Ctx) error {
+	userID := middleware.GetUserID(c)
+
+	var req auth.UpdateProfileRequest
+	if err := c.BodyParser(&req); err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+
+	result, err := h.updateProfile.Execute(c.Context(), userID, &req)
+	if err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+
+	return c.JSON(result)
+}
 }
