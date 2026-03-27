@@ -52,4 +52,7 @@ type NotificationLogRepository interface {
 
 	// DeleteByParticipantID deletes all notification logs for a participant
 	DeleteByParticipantID(ctx context.Context, participantID string) error
+
+	// FindByWhatsAppMessageID finds a notification log by WhatsApp message ID
+	FindByWhatsAppMessageID(ctx context.Context, whatsappMessageID string) (*entity.NotificationLog, error)
 }

@@ -92,7 +92,8 @@ func InitializeApp() (*App, error) {
 	bulkRejectUseCase := payment.NewBulkRejectUseCase(participantRepository, sessionRepository)
 	getPaymentPageUseCase := payment.NewGetPaymentPageUseCase(participantRepository, sessionRepository, billItemRepository, contactRepository)
 	paymentHandler := handler.NewPaymentHandler(submitPaymentUseCase, approvePaymentUseCase, rejectPaymentUseCase, bulkApproveUseCase, bulkRejectUseCase, getPaymentPageUseCase)
-	sendNotificationsUseCase := notification.NewSendNotificationsUseCase(sessionRepository, participantRepository, contactRepository, billItemRepository, whatsAppService)
+	notificationLogRepository := repository.NewPostgresNotificationLogRepository(db)
+	sendNotificationsUseCase := notification.NewSendNotificationsUseCase(sessionRepository, participantRepository, contactRepository, billItemRepository, whatsAppService, notificationLogRepository)
 	client, err := NewRedisConnection(configConfig)
 	if err != nil {
 		return nil, err
@@ -101,7 +102,7 @@ func InitializeApp() (*App, error) {
 	sendReminderUseCase := notification.NewSendReminderUseCase(participantRepository, sessionRepository, contactRepository, whatsAppService, rateLimitService)
 	bulkReminderUseCase := notification.NewBulkReminderUseCase(participantRepository, sessionRepository, contactRepository, whatsAppService, rateLimitService)
 	notificationHandler := handler.NewNotificationHandler(sendNotificationsUseCase, sendReminderUseCase, bulkReminderUseCase)
-	webhookHandler := handler.NewWebhookHandler(configConfig)
+	webhookHandler := handler.NewWebhookHandler(configConfig, notificationLogRepository)
 	routerRouter := router.NewRouter(logLogger, healthHandler, authHandler, contactGroupHandler, contactHandler, sessionHandler, paymentHandler, notificationHandler, webhookHandler, jwtService, rateLimitService)
 	app := &App{
 		Config: configConfig,

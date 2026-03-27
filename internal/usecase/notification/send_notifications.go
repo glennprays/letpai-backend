@@ -7,8 +7,11 @@ import (
 	"time"
 
 	"github.com/glennprays/letpai-backend/domain"
+	"github.com/glennprays/letpai-backend/domain/entity"
 	"github.com/glennprays/letpai-backend/domain/ports"
+	"github.com/glennprays/letpai-backend/domain/valueobject"
 	"github.com/glennprays/letpai-backend/internal/service"
+	"github.com/google/uuid"
 )
 
 // NotificationItem represents a sent notification
@@ -27,11 +30,12 @@ type SendNotificationsResponse struct {
 
 // SendNotificationsUseCase handles sending notifications to all session participants
 type SendNotificationsUseCase struct {
-	sessionRepo     ports.SessionRepository
-	participantRepo ports.ParticipantRepository
-	contactRepo     ports.ContactRepository
-	billItemRepo    ports.BillItemRepository
-	whatsappSvc     *service.WhatsAppService
+	sessionRepo         ports.SessionRepository
+	participantRepo     ports.ParticipantRepository
+	contactRepo         ports.ContactRepository
+	billItemRepo        ports.BillItemRepository
+	whatsappSvc         *service.WhatsAppService
+	notificationLogRepo ports.NotificationLogRepository
 }
 
 // NewSendNotificationsUseCase creates a new send notifications use case
@@ -41,13 +45,15 @@ func NewSendNotificationsUseCase(
 	contactRepo ports.ContactRepository,
 	billItemRepo ports.BillItemRepository,
 	whatsappSvc *service.WhatsAppService,
+	notificationLogRepo ports.NotificationLogRepository,
 ) *SendNotificationsUseCase {
 	return &SendNotificationsUseCase{
-		sessionRepo:     sessionRepo,
-		participantRepo: participantRepo,
-		contactRepo:     contactRepo,
-		billItemRepo:    billItemRepo,
-		whatsappSvc:     whatsappSvc,
+		sessionRepo:         sessionRepo,
+		participantRepo:     participantRepo,
+		contactRepo:         contactRepo,
+		billItemRepo:        billItemRepo,
+		whatsappSvc:         whatsappSvc,
+		notificationLogRepo: notificationLogRepo,
 	}
 }
 
@@ -105,7 +111,32 @@ func (uc *SendNotificationsUseCase) Execute(ctx context.Context, userID, session
 		// Send notification and get message ID
 		messageID, err := uc.whatsappSvc.SendNotification(ctx, whatsappNumber, message)
 		if err != nil {
-			// Log error but continue with other participants
+			// Create failed log entry
+			errMsg := err.Error()
+			log := &entity.NotificationLog{
+				LogID:            uuid.New(),
+				ParticipantID:    participant.ParticipantID,
+				NotificationType: valueobject.NotificationTypeInitial,
+				MessageContent:   message,
+				SentAt:           time.Now(),
+				Status:           entity.NotificationStatusFailed,
+				ErrorMessage:     &errMsg,
+			}
+			uc.notificationLogRepo.Create(ctx, log)
+			continue
+		}
+
+		// Create successful log entry
+		log := &entity.NotificationLog{
+			LogID:             uuid.New(),
+			ParticipantID:     participant.ParticipantID,
+			NotificationType:  valueobject.NotificationTypeInitial,
+			WhatsAppMessageID: &messageID,
+			MessageContent:    message,
+			SentAt:            time.Now(),
+			Status:            entity.NotificationStatusQueued,
+		}
+		if err := uc.notificationLogRepo.Create(ctx, log); err != nil {
 			continue
 		}
 
@@ -127,7 +158,7 @@ func (uc *SendNotificationsUseCase) Execute(ctx context.Context, userID, session
 func (uc *SendNotificationsUseCase) formatSessionNotification(sessionName, participantName string, shareAmount, totalAmount float64) string {
 	return fmt.Sprintf("*Letpai - Bill Split*\n\n"+
 		"Hi %s!\n\n"+
-		"You've been added to the bill split session: *%s*\n\n"+
+		"You've been added to a bill split session: *%s*\n\n"+
 		"Total Amount: *Rp%.0f*\n"+
 		"Your Share: *Rp%.0f*\n\n"+
 		"Please submit your payment proof at your earliest convenience.\n\n"+

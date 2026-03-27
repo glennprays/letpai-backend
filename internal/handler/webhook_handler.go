@@ -5,17 +5,21 @@ import (
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/glennprays/letpai-backend/config"
+	"github.com/glennprays/letpai-backend/domain/entity"
+	"github.com/glennprays/letpai-backend/domain/ports"
 )
 
 // WebhookHandler handles webhook requests from WhatsApp Gateway
 type WebhookHandler struct {
-	webhookSecret string
+	webhookSecret       string
+	notificationLogRepo ports.NotificationLogRepository
 }
 
 // NewWebhookHandler creates a new webhook handler
-func NewWebhookHandler(cfg *config.Config) *WebhookHandler {
+func NewWebhookHandler(cfg *config.Config, notificationLogRepo ports.NotificationLogRepository) *WebhookHandler {
 	return &WebhookHandler{
-		webhookSecret: cfg.WhatsAppWebhookSecret,
+		webhookSecret:       cfg.WhatsAppWebhookSecret,
+		notificationLogRepo: notificationLogRepo,
 	}
 }
 
@@ -48,7 +52,6 @@ func (h *WebhookHandler) HandleWhatsAppStatus(c *fiber.Ctx) error {
 	payload, err := verifier.ParseIncomingWebhook(body, signature)
 	if err != nil {
 		// Log error for debugging
-		// In production, you might want to log this differently
 		if err.Error() == "invalid signature" {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 				"success": false,
@@ -65,16 +68,44 @@ func (h *WebhookHandler) HandleWhatsAppStatus(c *fiber.Ctx) error {
 	switch string(payload.Event) {
 	case "message.queued", "message.sent", "message.failed":
 		// These are status update events (outgoing messages)
-		// TODO: Update notification log status based on event
-		// This will be implemented when we create a notification log repository
-		break
+		// Parse as outgoing webhook payload to get message ID
+		outgoingPayload, err := verifier.ParseOutgoingWebhook(body, signature)
+		if err != nil {
+			// Failed to parse as outgoing, skip
+			break
+		}
+
+		// Find notification log by WhatsApp message ID
+		log, err := h.notificationLogRepo.FindByWhatsAppMessageID(c.Context(), outgoingPayload.MessageId)
+		if err != nil {
+			// Log not found, skip
+			break
+		}
+
+		// Update status based on event
+		switch string(payload.Event) {
+		case "message.queued":
+			// Already queued, no update needed
+			break
+		case "message.sent":
+			err := h.notificationLogRepo.UpdateStatus(c.Context(), log.LogID.String(), string(entity.NotificationStatusSent))
+			if err != nil {
+				break
+			}
+		case "message.failed":
+			errMsg := "Failed to deliver via WhatsApp"
+			err := h.notificationLogRepo.UpdateStatusWithError(c.Context(), log.LogID.String(), string(entity.NotificationStatusFailed), errMsg)
+			if err != nil {
+				break
+			}
+		}
+
 	case "message.incoming":
 		// Incoming message - not currently used for Letpai
 		// But could be used for future features
 		break
 	default:
 		// Unknown event type - log but don't fail
-		// In production, you might want to log this
 	}
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
