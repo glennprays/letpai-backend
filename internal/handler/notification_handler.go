@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"strconv"
+
 	"github.com/glennprays/letpai-backend/internal/httperror"
 	"github.com/glennprays/letpai-backend/internal/middleware"
 	"github.com/glennprays/letpai-backend/internal/usecase/notification"
@@ -63,12 +65,9 @@ func (h *NotificationHandler) SendReminder(c *fiber.Ctx) error {
 	result, err := h.sendReminder.Execute(c.Context(), userID, participantID)
 	if err != nil {
 		apiErr := httperror.FromError(err)
-		// Check for rate limit error
-		if apiErr.Status == 400 && apiErr.Message == "rate limit exceeded" {
-			// Add Retry-After header
-			if result.RetryAfter > 0 {
-				c.Set("Retry-After", string(rune(result.RetryAfter)))
-			}
+		// Check for rate limit error and add Retry-After header if available
+		if apiErr.Status == 400 && apiErr.Message == "rate limit exceeded" && result != nil && result.RetryAfter > 0 {
+			c.Set("Retry-After", strconv.Itoa(int(result.RetryAfter)))
 		}
 		return c.Status(apiErr.Status).JSON(apiErr.Response())
 	}
