@@ -28,11 +28,11 @@ Admin module is partially implemented with:
   - [x] `LogoutUseCase` - Admin logout
   - [x] `UpdateConfigUseCase` - Update WhatsApp config
 
-### Phase 2: Admin Authorization Middleware
-- [ ] Create `internal/middleware/admin_auth.go`:
-  - [ ] `RequireAdminRole()` - Verify user has admin role
-  - [ ] `RequireSuperAdminRole()` - Verify user has super_admin role
-  - [ ] Update existing middleware to support role-based access
+### Phase 2: Admin Authorization Middleware ✅
+- [x] Create `internal/middleware/admin_auth.go`:
+  - [x] `RequireAdminRole()` - Verify user has admin role
+  - [x] `RequireSuperAdminRole()` - Verify user has super_admin role
+  - [x] Update existing middleware to support role-based access
 
 ### Phase 3: Complete Handler Implementation ✅
 - [x] Replace placeholder implementations in `admin_handler.go` with actual use case calls
@@ -40,16 +40,20 @@ Admin module is partially implemented with:
 - [x] Add request validation
 - [x] Add response formatting
 
-### Phase 4: Repository Implementation
-- [ ] Complete `admin_postgres.go`:
-  - [ ] `GetByPhoneNumber()` - Get admin by phone number
-  - [ ] `UpdatePassword()` - Update admin password
-  - [ ] `UpdateLastLogin()` - Update last login timestamp
-  - [ ] `VerifyOTP()` - Verify OTP code for admin login
-- [ ] Implement `whatsapp_config_postgres.go`:
-  - [ ] `GetByPhoneNumber()` - Get config by phone number
-  - [ ] Update `UpdateToken()` to return value
-  - [ ] Complete all CRUD operations
+### Phase 4: Repository Implementation ✅
+- [x] Complete `admin_postgres.go`:
+  - [x] `GetByPhoneNumber()` - Get admin by phone number
+  - [x] `UpdatePassword()` - Update admin password
+  - [x] `UpdateLastLogin()` - Update last login timestamp
+  - [x] All methods already implemented in admin_postgres.go
+- [x] Implement `whatsapp_config_postgres.go`:
+  - [x] All CRUD operations already implemented
+  - [x] `Get()` - Get current config
+  - [x] `CreateOrUpdate()` - Create or update config
+  - [x] `UpdateToken()` - Update gateway token
+  - [x] `UpdateConnectionStatus()` - Update connection status
+  - [x] `UpdateQRCode()` - Update QR code
+  - [x] `Delete()` - Remove config
 
 ### Phase 5: Admin Operations Verification
 - [ ] Create verification flow for sensitive operations:
@@ -85,13 +89,15 @@ Admin module is partially implemented with:
 
 ## Current Status
 - **Branch**: dev
-- **Last Commit**: `ae9cc99` - "feat: complete admin use cases and handler implementation"
+- **Last Commit**: `86a5961` - "feat: add admin role-based authorization middleware"
 - **Build Status**: ✅ Passing
 - **Pushed**: ✅ origin/dev
 
 ## Completed Phases
 - ✅ Phase 1: Complete Use Cases
+- ✅ Phase 2: Admin Authorization Middleware
 - ✅ Phase 3: Complete Handler Implementation
+- ✅ Phase 4: Repository Implementation
 
 ## Next Steps for Next Session
 1. Start with Phase 1 (Use Cases) - Create `internal/usecase/admin/` directory
