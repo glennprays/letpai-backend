@@ -13,10 +13,11 @@ import (
 
 // AuthHandler handles authentication requests
 type AuthHandler struct {
-	registerUser *auth.RegisterUserUseCase
-	verifyOTP    *auth.VerifyOTPUseCase
-	loginUser    *auth.LoginUserUseCase
-	logoutUser   *auth.LogoutUserUseCase
+	registerUser  *auth.RegisterUserUseCase
+	verifyOTP     *auth.VerifyOTPUseCase
+	loginUser     *auth.LoginUserUseCase
+	logoutUser    *auth.LogoutUserUseCase
+	updateProfile *auth.UpdateProfileUseCase
 }
 
 // NewAuthHandler creates a new auth handler
@@ -25,12 +26,14 @@ func NewAuthHandler(
 	verifyOTP *auth.VerifyOTPUseCase,
 	loginUser *auth.LoginUserUseCase,
 	logoutUser *auth.LogoutUserUseCase,
+	updateProfile *auth.UpdateProfileUseCase,
 ) *AuthHandler {
 	return &AuthHandler{
-		registerUser: registerUser,
-		verifyOTP:    verifyOTP,
-		loginUser:    loginUser,
-		logoutUser:   logoutUser,
+		registerUser:  registerUser,
+		verifyOTP:     verifyOTP,
+		loginUser:     loginUser,
+		logoutUser:    logoutUser,
+		updateProfile: updateProfile,
 	}
 }
 
@@ -162,22 +165,5 @@ func (h *AuthHandler) UpdateProfile(c *fiber.Ctx) error {
 		return c.Status(apiErr.Status).JSON(apiErr.Response())
 	}
 
-// UpdateProfile handles user profile update
-func (h *AuthHandler) UpdateProfile(c *fiber.Ctx) error {
-	userID := middleware.GetUserID(c)
-
-	var req auth.UpdateProfileRequest
-	if err := c.BodyParser(&req); err != nil {
-		apiErr := httperror.FromError(err)
-		return c.Status(apiErr.Status).JSON(apiErr.Response())
-	}
-
-	result, err := h.updateProfile.Execute(c.Context(), userID, &req)
-	if err != nil {
-		apiErr := httperror.FromError(err)
-		return c.Status(apiErr.Status).JSON(apiErr.Response())
-	}
-
 	return c.JSON(result)
-}
 }
