@@ -158,6 +158,377 @@ paths:
           description: Bad request
           content:
             application/json:
+                 schema:
+                 $ref: '#/components/schemas/Error'
+
+  /admin/auth/initiate:
+    post:
+      summary: Initiate admin login
+      description: Generate session ID for admin login flow
+      operationId: initiateAdminLogin
+      tags:
+        - Admin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                whatsapp_number:
+                  type: string
+                  minLength: 13
+                  maxLength: 20
+              required:
+                - whatsapp_number
+      responses:
+        '200':
+          description: Login initiated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InitiateLoginResponse'
+
+  /admin/auth/verify-otp:
+    post:
+      summary: Verify admin OTP
+      description: Verify OTP code for admin login
+      operationId: verifyAdminOTP
+      tags:
+        - Admin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyOTPRequest'
+      responses:
+        '200':
+          description: OTP verified successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerifyOTPResponse'
+        '400':
+          description: Invalid or expired OTP
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /admin/auth/login:
+    post:
+      summary: Admin login
+      description: Login admin with OTP or password
+      operationId: adminLogin
+      tags:
+        - Admin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminLoginRequest'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminLoginResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /admin/profile:
+    get:
+      summary: Get admin profile
+      description: Get current admin profile information
+      operationId: getAdminProfile
+      tags:
+        - Admin
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Admin profile retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminProfileResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /admin/profile/setup-password:
+    put:
+      summary: Setup admin password
+      description: Set initial password for admin account
+      operationId: setupAdminPassword
+      tags:
+        - Admin
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetupPasswordRequest'
+      responses:
+        '200':
+          description: Password set successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /admin/status:
+    get:
+      summary: Get WhatsApp gateway status
+      description: Get WhatsApp gateway connection status
+      operationId: getWhatsAppStatus
+      tags:
+        - Admin
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Status retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WhatsAppStatusResponse'
+
+  /admin/qr-code:
+    post:
+      summary: Get QR code for WhatsApp pairing
+      description: Generate QR code for WhatsApp pairing
+      operationId: getAdminQRCode
+      tags:
+        - Admin
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                phone_number:
+                  type: string
+                  minLength: 13
+                  maxLength: 20
+      responses:
+        '200':
+          description: QR code generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QRCodeResponse'
+
+  /admin/logout:
+    post:
+      summary: Admin logout
+      description: Logout admin and invalidate session
+      operationId: adminLogout
+      tags:
+        - Admin
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Logout successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /admin/admins:
+    get:
+      summary: List all admins
+      description: List all admins (super admin only)
+      operationId: listAdmins
+      tags:
+        - Admin
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Admins list retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListAdminsResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Admins list retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListAdminsResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    post:
+      summary: Create admin
+      description: Create new admin (super admin only)
+      operationId: createAdmin
+      tags:
+        - Admin
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAdminRequest'
+      responses:
+        '201':
+          description: Admin created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateAdminResponse'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /admin/admins/{id}:
+    put:
+      summary: Update admin
+      description: Update admin details (super admin only)
+      operationId: updateAdmin
+      tags:
+        - Admin
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Admin ID
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAdminRequest'
+      responses:
+        '200':
+          description: Admin updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateAdminResponse'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Admin not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      summary: Delete admin
+      description: Delete admin (super admin only)
+      operationId: deleteAdmin
+      tags:
+        - Admin
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Admin deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Admin not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /contacts:
+    put:
+      summary: Update WhatsApp config
+      description: Update WhatsApp API configuration
+      operationId: updateAdminConfig
+      tags:
+        - Admin
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateConfigRequest'
+      responses:
+        '200':
+          description: Config updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
               schema:
                 $ref: '#/components/schemas/Error'
 
@@ -1162,7 +1533,235 @@ components:
               type: string
               example: "Invalid credentials"
 
-    Contact:
+     InitiateLoginRequest:
+       type: object
+       required:
+         - whatsapp_number
+       properties:
+         whatsapp_number:
+           type: string
+           minLength: 13
+           maxLength: 20
+           example: "+6281234567890"
+
+     VerifyOTPRequest:
+       type: object
+       required:
+         - session_id
+         - otp_code
+       properties:
+         session_id:
+           type: string
+           example: "550e8400-e29b-41d4-a716-446655"
+         otp_code:
+           type: string
+           minLength: 6
+           maxLength: 6
+           example: "123456"
+
+     VerifyOTPResponse:
+       type: object
+       properties:
+         token:
+           type: string
+         expires_at:
+           type: string
+           format: date-time
+
+     AdminLoginRequest:
+       type: object
+       required:
+         - whatsapp_number
+         - otp_code
+       properties:
+         whatsapp_number:
+           type: string
+           minLength: 13
+           maxLength: 20
+         otp_code:
+           type: string
+           example: "123456"
+
+     AdminLoginResponse:
+       type: object
+       properties:
+         admin_id:
+           type: string
+           format: uuid
+         whatsapp_number:
+           type: string
+         full_name:
+           type: string
+         role:
+           type: string
+           enum: [admin, super_admin]
+         token:
+           type: string
+
+     AdminProfileResponse:
+       type: object
+       properties:
+         admin_id:
+           type: string
+           format: uuid
+         whatsapp_number:
+           type: string
+         full_name:
+           type: string
+         role:
+           type: string
+           enum: [admin, super_admin]
+         is_verified:
+           type: boolean
+         is_active:
+           type: boolean
+         last_login_at:
+           type: string
+           format: date-time
+           nullable: true
+         created_at:
+           type: string
+           format: date-time
+         updated_at:
+           type: string
+           format: date-time
+
+     SetupPasswordRequest:
+       type: object
+       required:
+         - password
+       properties:
+         password:
+           type: string
+           minLength: 8
+           maxLength: 100
+           format: password
+
+     AdminProfileResponse:
+       type: object
+       properties:
+         success:
+           type: boolean
+           example: true
+         message:
+           type: string
+           example: "Password set successfully"
+
+     ListAdminsResponse:
+       type: object
+       properties:
+         admins:
+           type: array
+           items:
+             $ref: '#/components/schemas/AdminProfile'
+         success:
+           type: boolean
+           example: true
+
+     CreateAdminRequest:
+       type: object
+       required:
+         - whatsapp_number
+         - full_name
+         - role
+       properties:
+         whatsapp_number:
+           type: string
+           minLength: 13
+           maxLength: 20
+         full_name:
+           type: string
+           maxLength: 100
+         role:
+           type: string
+           enum: [admin, super_admin]
+
+     CreateAdminResponse:
+       type: object
+       properties:
+         admin_id:
+           type: string
+           format: uuid
+         message:
+           type: string
+           example: "Admin created successfully"
+
+     UpdateAdminRequest:
+       type: object
+       properties:
+         full_name:
+           type: string
+           maxLength: 100
+         role:
+           type: string
+           enum: [admin, super_admin]
+         is_active:
+           type: boolean
+
+     UpdateAdminResponse:
+       type: object
+       properties:
+         admin_id:
+           type: string
+           format: uuid
+         message:
+           type: string
+           example: "Admin updated successfully"
+
+     WhatsAppStatusResponse:
+       type: object
+       properties:
+         is_connected:
+           type: boolean
+         gateway_token_valid:
+           type: boolean
+         phone_number:
+           type: string
+         last_connected_at:
+           type: string
+           format: date-time
+           nullable: true
+         qr_code:
+           type: string
+           format: byte
+           nullable: true
+         qr_code_expires_at:
+           type: string
+           format: date-time
+           nullable: true
+         message:
+           type: string
+           nullable: true
+
+     QRCodeRequest:
+       type: object
+       properties:
+         phone_number:
+           type: string
+           minLength: 13
+           maxLength: 20
+
+     QRCodeResponse:
+       type: object
+       properties:
+         qr_code:
+           type: string
+           format: byte
+         qr_code_expires_at:
+           type: string
+           format: date-time
+
+     UpdateConfigRequest:
+       type: object
+       properties:
+         phone_number:
+           type: string
+           minLength: 13
+           maxLength: 20
+         token:
+           type: string
+
+     Contact:
       type: object
       properties:
         contact_id:
