@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"github.com/glennprays/letpai-backend/internal/middleware"
 	"github.com/glennprays/letpai-backend/internal/usecase/dashboard"
 	"github.com/gofiber/fiber/v2"
 )
@@ -19,7 +20,7 @@ func NewDashboardHandler(getDashboard *dashboard.GetDashboardUseCase) *Dashboard
 
 // GetDashboard retrieves dashboard statistics
 func (h *DashboardHandler) GetDashboard(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(string)
+	userID := middleware.GetUserID(c)
 
 	result, err := h.getDashboard.Execute(c.Context(), userID)
 	if err != nil {
