@@ -645,7 +645,23 @@ paths:
            content:
              application/json:
                schema:
-                 $ref: '#/components/schemas/Error'
+                  $ref: '#/components/schemas/Error'
+
+   /dashboard:
+     get:
+       summary: Get dashboard
+       description: Get dashboard statistics for the authenticated user
+       tags:
+         - Sessions
+       security:
+         - BearerAuth: []
+       responses:
+         '200':
+           description: Dashboard data retrieved successfully
+           content:
+             application/json:
+               schema:
+                 $ref: '#/components/schemas/DashboardResponse'
 
    /sessions/{id}/send-notifications:
     post:
@@ -1474,6 +1490,22 @@ components:
          new_total:
            type: integer
            example: 400000
+
+     DashboardResponse:
+       type: object
+       properties:
+         active_sessions:
+           type: integer
+           example: 5
+         completed_sessions:
+           type: integer
+           example: 10
+         pending_payments:
+           type: integer
+           example: 3
+         total_pending:
+           type: integer
+           example: 1500000
 
      CalculateSplitsResponse:
       type: object

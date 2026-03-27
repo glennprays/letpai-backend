@@ -18,6 +18,7 @@ type Router struct {
 	PaymentHandler      *handler.PaymentHandler
 	NotificationHandler *handler.NotificationHandler
 	WebhookHandler      *handler.WebhookHandler
+	DashboardHandler    *handler.DashboardHandler
 	jwtService          *service.JWTService
 	rateLimitService    *service.RateLimitService
 }
@@ -32,6 +33,7 @@ func NewRouter(
 	paymentHandler *handler.PaymentHandler,
 	notificationHandler *handler.NotificationHandler,
 	webhookHandler *handler.WebhookHandler,
+	dashboardHandler *handler.DashboardHandler,
 	jwtService *service.JWTService,
 	rateLimitService *service.RateLimitService,
 ) *Router {
@@ -46,6 +48,7 @@ func NewRouter(
 		PaymentHandler:      paymentHandler,
 		NotificationHandler: notificationHandler,
 		WebhookHandler:      webhookHandler,
+		DashboardHandler:    dashboardHandler,
 		jwtService:          jwtService,
 		rateLimitService:    rateLimitService,
 	}
@@ -74,6 +77,7 @@ func (r *Router) Setup(app *fiber.App) {
 	r.setupSessionRoutes(protected)
 	r.setupProtectedPaymentRoutes(protected)
 	r.setupNotificationRoutes(protected)
+	r.setupDashboardRoutes(protected)
 }
 
 func (r *Router) setupHealthRoutes(group fiber.Router) {
@@ -148,4 +152,8 @@ func (r *Router) setupNotificationRoutes(group fiber.Router) {
 	group.Post("/sessions/:id/send-notifications", r.NotificationHandler.SendNotifications)
 	group.Post("/sessions/:id/bulk-reminder", r.NotificationHandler.BulkReminder)
 	group.Post("/participants/:participant_id/reminder", middleware.ReminderRateLimiter(r.rateLimitService), r.NotificationHandler.SendReminder)
+}
+
+func (r *Router) setupDashboardRoutes(group fiber.Router) {
+	group.Get("/dashboard", r.DashboardHandler.GetDashboard)
 }

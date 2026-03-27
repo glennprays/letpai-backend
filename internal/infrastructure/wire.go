@@ -16,6 +16,7 @@ import (
 	"github.com/glennprays/letpai-backend/internal/usecase/billing"
 	"github.com/glennprays/letpai-backend/internal/usecase/contact"
 	"github.com/glennprays/letpai-backend/internal/usecase/contactgroup"
+	"github.com/glennprays/letpai-backend/internal/usecase/dashboard"
 	"github.com/glennprays/letpai-backend/internal/usecase/notification"
 	"github.com/glennprays/letpai-backend/internal/usecase/participant"
 	"github.com/glennprays/letpai-backend/internal/usecase/payment"
@@ -94,6 +95,8 @@ var UseCaseSet = wire.NewSet(
 	notification.NewSendNotificationsUseCase,
 	notification.NewSendReminderUseCase,
 	notification.NewBulkReminderUseCase,
+	// Dashboard use cases
+	dashboard.NewGetDashboardUseCase,
 )
 
 var HandlerSet = wire.NewSet(
