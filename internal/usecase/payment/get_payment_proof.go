@@ -30,7 +30,7 @@ func NewGetPaymentProofUseCase(participantRepo ports.ParticipantRepository) *Get
 }
 
 // Execute retrieves payment proof for a participant
-func (uc *GetPaymentUseCase) Execute(ctx context.Context, participantID string) (*GetPaymentProofResponse, error) {
+func (uc *GetPaymentProofUseCase) Execute(ctx context.Context, participantID string) (*GetPaymentProofResponse, error) {
 	participant, err := uc.participantRepo.FindByID(ctx, participantID)
 	if err != nil {
 		return nil, err
