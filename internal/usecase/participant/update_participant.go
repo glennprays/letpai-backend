@@ -8,7 +8,9 @@ import (
 	"github.com/glennprays/letpai-backend/domain/ports"
 )
 
-// UpdateParticipantRequest represents the request to update a participant
+// UpdateParticipantRequest represents the request to update a participant's
+// custom name / WhatsApp. Payment-status changes go through the dedicated
+// /payments/* endpoints (SubmitPayment / ApprovePayment / RejectPayment).
 type UpdateParticipantRequest struct {
 	CustomName     *string `json:"custom_name,omitempty"`
 	CustomWhatsApp *string `json:"custom_whatsapp,omitempty"`
@@ -40,39 +42,34 @@ func NewUpdateParticipantUseCase(
 	}
 }
 
-// Execute updates a participant
+// Execute updates a participant's custom name / whatsapp. Only valid for
+// custom (unlinked) participants — for linked contacts, the underlying
+// contact must be edited instead.
 func (uc *UpdateParticipantUseCase) Execute(ctx context.Context, userID, sessionID, participantID string, req *UpdateParticipantRequest) (*UpdateParticipantResponse, error) {
-	// Verify session exists and belongs to user
 	session, err := uc.sessionRepo.FindByID(ctx, sessionID, userID)
 	if err != nil {
 		return nil, err
 	}
 
-	// Only allow updating participants in active sessions
 	if !session.IsActive() {
 		return nil, domain.NewError(domain.ErrBadRequest, errors.New("cannot update participants in a completed or cancelled session"))
 	}
 
-	// Fetch existing participant
 	participant, err := uc.participantRepo.FindByID(ctx, participantID)
 	if err != nil {
 		return nil, err
 	}
 
-	// Verify participant belongs to session
 	if participant.SessionID.String() != sessionID {
 		return nil, domain.NewError(domain.ErrNotFound, errors.New("participant not found in this session"))
 	}
 
-	// Only allow updating custom participants
 	if !participant.IsCustom() {
-		return nil, domain.NewError(domain.ErrBadRequest, errors.New("cannot update linked contacts"))
+		return nil, domain.NewError(domain.ErrBadRequest, errors.New("cannot rename linked contact participants"))
 	}
 
-	// Update participant
 	name := coalesceString(req.CustomName, participant.CustomName)
 	whatsapp := coalesceString(req.CustomWhatsApp, participant.CustomWhatsApp)
-
 	participant.Update(name, whatsapp)
 
 	if err := uc.participantRepo.Update(ctx, participant); err != nil {
@@ -81,8 +78,8 @@ func (uc *UpdateParticipantUseCase) Execute(ctx context.Context, userID, session
 
 	return &UpdateParticipantResponse{
 		ParticipantID:  participant.ParticipantID.String(),
-		Name:           name,
-		WhatsAppNumber: whatsapp,
+		Name:           participant.GetName(),
+		WhatsAppNumber: participant.GetWhatsAppNumber(),
 		ShareAmount:    participant.ShareAmount,
 		PaymentStatus:  participant.PaymentStatus.String(),
 	}, nil

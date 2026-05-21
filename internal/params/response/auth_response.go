@@ -31,6 +31,13 @@ type LogoutResponse struct {
 	Message string `json:"message"`
 }
 
+// ForgotPasswordResponse represents the response after initiating a password reset.
+type ForgotPasswordResponse struct {
+	Success   bool   `json:"success"`
+	Message   string `json:"message"`
+	ExpiresAt string `json:"expires_at,omitempty"`
+}
+
 // User represents user data in responses
 type User struct {
 	UserID         string `json:"user_id"`

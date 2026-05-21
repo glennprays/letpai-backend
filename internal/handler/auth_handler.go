@@ -13,11 +13,12 @@ import (
 
 // AuthHandler handles authentication requests
 type AuthHandler struct {
-	registerUser  *auth.RegisterUserUseCase
-	verifyOTP     *auth.VerifyOTPUseCase
-	loginUser     *auth.LoginUserUseCase
-	logoutUser    *auth.LogoutUserUseCase
-	updateProfile *auth.UpdateProfileUseCase
+	registerUser   *auth.RegisterUserUseCase
+	verifyOTP      *auth.VerifyOTPUseCase
+	loginUser      *auth.LoginUserUseCase
+	logoutUser     *auth.LogoutUserUseCase
+	updateProfile  *auth.UpdateProfileUseCase
+	forgotPassword *auth.ForgotPasswordUseCase
 }
 
 // NewAuthHandler creates a new auth handler
@@ -27,13 +28,15 @@ func NewAuthHandler(
 	loginUser *auth.LoginUserUseCase,
 	logoutUser *auth.LogoutUserUseCase,
 	updateProfile *auth.UpdateProfileUseCase,
+	forgotPassword *auth.ForgotPasswordUseCase,
 ) *AuthHandler {
 	return &AuthHandler{
-		registerUser:  registerUser,
-		verifyOTP:     verifyOTP,
-		loginUser:     loginUser,
-		logoutUser:    logoutUser,
-		updateProfile: updateProfile,
+		registerUser:   registerUser,
+		verifyOTP:      verifyOTP,
+		loginUser:      loginUser,
+		logoutUser:     logoutUser,
+		updateProfile:  updateProfile,
+		forgotPassword: forgotPassword,
 	}
 }
 
@@ -146,6 +149,31 @@ func (h *AuthHandler) Logout(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(response.LogoutResponse{
 		Success: true,
 		Message: result.Message,
+	})
+}
+
+// ForgotPassword starts a password-reset flow by sending a one-time code
+// via WhatsApp. The response is intentionally identical whether the supplied
+// number is registered or not, to avoid leaking account existence.
+func (h *AuthHandler) ForgotPassword(c *fiber.Ctx) error {
+	var req request.ForgotPasswordRequest
+	if err := c.BodyParser(&req); err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+
+	result, err := h.forgotPassword.Execute(c.Context(), &auth.ForgotPasswordRequest{
+		WhatsAppNumber: req.WhatsAppNumber,
+	})
+	if err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+
+	return c.Status(fiber.StatusOK).JSON(response.ForgotPasswordResponse{
+		Success:   true,
+		Message:   result.Message,
+		ExpiresAt: result.ExpiresAt,
 	})
 }
 

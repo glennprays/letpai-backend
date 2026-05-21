@@ -34,9 +34,10 @@ type InitiateLoginResult struct {
 
 // InitiateLoginUseCase handles initiating admin login flow
 type InitiateLoginUseCase struct {
-	adminRepo ports.AdminRepository
-	otpRepo   ports.OTPRepository
-	otpSvc    *service.OTPService
+	adminRepo   ports.AdminRepository
+	otpRepo     ports.OTPRepository
+	otpSvc      *service.OTPService
+	whatsappSvc *service.WhatsAppService
 }
 
 // NewInitiateLoginUseCase creates a new initiate login use case
@@ -44,11 +45,13 @@ func NewInitiateLoginUseCase(
 	adminRepo ports.AdminRepository,
 	otpRepo ports.OTPRepository,
 	otpSvc *service.OTPService,
+	whatsappSvc *service.WhatsAppService,
 ) *InitiateLoginUseCase {
 	return &InitiateLoginUseCase{
-		adminRepo: adminRepo,
-		otpRepo:   otpRepo,
-		otpSvc:    otpSvc,
+		adminRepo:   adminRepo,
+		otpRepo:     otpRepo,
+		otpSvc:      otpSvc,
+		whatsappSvc: whatsappSvc,
 	}
 }
 
@@ -81,11 +84,10 @@ func (uc *InitiateLoginUseCase) Execute(ctx context.Context, req *InitiateLoginR
 		return nil, domain.NewError(domain.ErrInternalFailure, fmt.Errorf("failed to create OTP: %w", err))
 	}
 
-	// TODO: Send OTP via WhatsApp gateway
-	// message := uc.otpSvc.FormatWhatsAppMessage(otpCode)
-	// if err := uc.whatsappSvc.SendOTP(ctx, req.WhatsAppNumber, message); err != nil {
-	//     return nil, domain.NewError(domain.ErrInternalFailure, fmt.Errorf("failed to send OTP: %w", err))
-	// }
+	// Send OTP via WhatsApp gateway (best effort — OTP is already persisted,
+	// so the admin can retry verification if delivery glitches).
+	message := uc.otpSvc.FormatWhatsAppMessage(otpCode)
+	_, _ = uc.whatsappSvc.SendOTP(ctx, req.WhatsAppNumber, message)
 
 	return &InitiateLoginResult{
 		Success:   true,

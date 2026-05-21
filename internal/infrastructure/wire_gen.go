@@ -58,9 +58,10 @@ func InitializeApp() (*App, error) {
 	loginUserUseCase := auth.NewLoginUserUseCase(userRepository, passwordService, jwtService)
 	logoutUserUseCase := auth.NewLogoutUserUseCase(jwtService)
 	updateProfileUseCase := auth.NewUpdateProfileUseCase(userRepository)
-	authHandler := handler.NewAuthHandler(registerUserUseCase, verifyOTPUseCase, loginUserUseCase, logoutUserUseCase, updateProfileUseCase)
+	forgotPasswordUseCase := auth.NewForgotPasswordUseCase(userRepository, otpRepository, otpService, whatsAppService)
+	authHandler := handler.NewAuthHandler(registerUserUseCase, verifyOTPUseCase, loginUserUseCase, logoutUserUseCase, updateProfileUseCase, forgotPasswordUseCase)
 	adminRepository := repository.NewPostgresAdminRepository(db)
-	initiateLoginUseCase := admin.NewInitiateLoginUseCase(adminRepository, otpRepository, otpService)
+	initiateLoginUseCase := admin.NewInitiateLoginUseCase(adminRepository, otpRepository, otpService, whatsAppService)
 	adminVerifyOTPUseCase := admin.NewVerifyOTPUseCase(adminRepository, otpRepository, jwtService)
 	getProfileUseCase := admin.NewGetProfileUseCase(adminRepository)
 	setupPasswordUseCase := admin.NewSetupPasswordUseCase(adminRepository, passwordService)
@@ -73,7 +74,7 @@ func InitializeApp() (*App, error) {
 	logoutUseCase := admin.NewLogoutUseCase(adminRepository)
 	updateConfigUseCase := admin.NewUpdateConfigUseCase(whatsAppConfigRepository)
 	adminHandler := handler.NewAdminHandler(initiateLoginUseCase, adminVerifyOTPUseCase, getProfileUseCase, setupPasswordUseCase, listAdminsUseCase, createAdminUseCase, updateAdminUseCase, deleteAdminUseCase, getStatusUseCase, getQRCodeUseCase, logoutUseCase, updateConfigUseCase)
-	whatsAppWebhookHandler := handler.NewWhatsAppWebhookHandler(whatsAppService)
+	whatsAppWebhookHandler := handler.NewWhatsAppWebhookHandler(whatsAppService, whatsAppConfigRepository)
 	contactGroupRepository := repository.NewPostgresContactGroupRepository(db)
 	createGroupUseCase := contactgroup.NewCreateGroupUseCase(contactGroupRepository)
 	getGroupsUseCase := contactgroup.NewGetGroupsUseCase(contactGroupRepository)
@@ -157,7 +158,7 @@ var ServiceSet = wire.NewSet(
 	NewRateLimitService,
 )
 
-var UseCaseSet = wire.NewSet(auth.NewRegisterUserUseCase, auth.NewVerifyOTPUseCase, auth.NewLoginUserUseCase, auth.NewLogoutUserUseCase, auth.NewUpdateProfileUseCase, admin.NewInitiateLoginUseCase, admin.NewVerifyOTPUseCase, admin.NewGetProfileUseCase, admin.NewSetupPasswordUseCase, admin.NewListAdminsUseCase, admin.NewCreateAdminUseCase, admin.NewUpdateAdminUseCase, admin.NewDeleteAdminUseCase, admin.NewGetStatusUseCase, admin.NewGetQRCodeUseCase, admin.NewLogoutUseCase, admin.NewUpdateConfigUseCase, contact.NewCreateContactUseCase, contact.NewGetContactsUseCase, contact.NewGetContactByIDUseCase, contact.NewUpdateContactUseCase, contact.NewDeleteContactUseCase, contact.NewBulkOperationsUseCase, contact.NewImportContactsUseCase, contactgroup.NewCreateGroupUseCase, contactgroup.NewGetGroupsUseCase, contactgroup.NewUpdateGroupUseCase, contactgroup.NewDeleteGroupUseCase, session.NewCreateSessionUseCase, session.NewGetSessionsUseCase, session.NewGetSessionDetailUseCase, session.NewUpdateSessionUseCase, session.NewCancelSessionUseCase, participant.NewAddParticipantsUseCase, participant.NewRemoveParticipantUseCase, participant.NewUpdateParticipantUseCase, participant.NewImportFromGroupUseCase, billing.NewAddBillItemUseCase, billing.NewUpdateBillItemUseCase, billing.NewDeleteBillItemUseCase, billing.NewCalculateSplitsUseCase, payment.NewSubmitPaymentUseCase, payment.NewApprovePaymentUseCase, payment.NewRejectPaymentUseCase, payment.NewBulkApproveUseCase, payment.NewBulkRejectUseCase, payment.NewGetPaymentPageUseCase, payment.NewGetPaymentProofUseCase, notification.NewSendNotificationsUseCase, notification.NewSendReminderUseCase, notification.NewBulkReminderUseCase, dashboard.NewGetDashboardUseCase)
+var UseCaseSet = wire.NewSet(auth.NewRegisterUserUseCase, auth.NewVerifyOTPUseCase, auth.NewLoginUserUseCase, auth.NewLogoutUserUseCase, auth.NewUpdateProfileUseCase, auth.NewForgotPasswordUseCase, admin.NewInitiateLoginUseCase, admin.NewVerifyOTPUseCase, admin.NewGetProfileUseCase, admin.NewSetupPasswordUseCase, admin.NewListAdminsUseCase, admin.NewCreateAdminUseCase, admin.NewUpdateAdminUseCase, admin.NewDeleteAdminUseCase, admin.NewGetStatusUseCase, admin.NewGetQRCodeUseCase, admin.NewLogoutUseCase, admin.NewUpdateConfigUseCase, contact.NewCreateContactUseCase, contact.NewGetContactsUseCase, contact.NewGetContactByIDUseCase, contact.NewUpdateContactUseCase, contact.NewDeleteContactUseCase, contact.NewBulkOperationsUseCase, contact.NewImportContactsUseCase, contactgroup.NewCreateGroupUseCase, contactgroup.NewGetGroupsUseCase, contactgroup.NewUpdateGroupUseCase, contactgroup.NewDeleteGroupUseCase, session.NewCreateSessionUseCase, session.NewGetSessionsUseCase, session.NewGetSessionDetailUseCase, session.NewUpdateSessionUseCase, session.NewCancelSessionUseCase, participant.NewAddParticipantsUseCase, participant.NewRemoveParticipantUseCase, participant.NewUpdateParticipantUseCase, participant.NewImportFromGroupUseCase, billing.NewAddBillItemUseCase, billing.NewUpdateBillItemUseCase, billing.NewDeleteBillItemUseCase, billing.NewCalculateSplitsUseCase, payment.NewSubmitPaymentUseCase, payment.NewApprovePaymentUseCase, payment.NewRejectPaymentUseCase, payment.NewBulkApproveUseCase, payment.NewBulkRejectUseCase, payment.NewGetPaymentPageUseCase, payment.NewGetPaymentProofUseCase, notification.NewSendNotificationsUseCase, notification.NewSendReminderUseCase, notification.NewBulkReminderUseCase, dashboard.NewGetDashboardUseCase)
 
 var HandlerSet = wire.NewSet(handler.NewHealthHandler, handler.NewAuthHandler, handler.NewAdminHandler, handler.NewWhatsAppWebhookHandler, handler.NewContactGroupHandler, handler.NewContactHandler, handler.NewSessionHandler, handler.NewPaymentHandler, handler.NewNotificationHandler, handler.NewWebhookHandler, handler.NewDashboardHandler)
 

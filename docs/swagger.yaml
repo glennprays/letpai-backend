@@ -132,8 +132,40 @@ paths:
               schema:
                 $ref: '#/components/schemas/SuccessResponse'
 
+  /auth/forgot-password:
+    post:
+      summary: Start password reset
+      description: |
+        Sends a one-time verification code via WhatsApp to the supplied
+        number. The response is identical whether or not the number is
+        registered (to avoid leaking account existence). The OTP can then
+        be exchanged via /auth/verify-otp for a session that allows the
+        user to set a new password.
+      operationId: forgotPassword
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ForgotPasswordRequest'
+      responses:
+        '200':
+          description: Reset code dispatched (or silently ignored for unknown numbers)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForgotPasswordResponse'
+        '429':
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /auth/profile:
-    patch:
+    put:
       summary: Update user profile
       description: Update authenticated user's profile (full name, avatar URL)
       operationId: updateProfile
@@ -1014,6 +1046,25 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/UpdateParticipantResponse'
+    delete:
+      summary: Remove participant from session
+      description: Remove a participant from a session. The participant's share is
+        recalculated across the remaining participants when calculate-splits is next run.
+      operationId: removeParticipant
+      tags:
+        - Sessions
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SessionID'
+        - $ref: '#/components/parameters/ParticipantID'
+      responses:
+        '200':
+          description: Participant removed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
 
   /sessions/{id}/bills:
     post:
@@ -1431,6 +1482,31 @@ components:
           type: string
           format: password
           example: "SecurePass123!"
+
+    ForgotPasswordRequest:
+      type: object
+      required:
+        - whatsapp_number
+      properties:
+        whatsapp_number:
+          type: string
+          minLength: 10
+          maxLength: 20
+          example: "6281234567890"
+
+    ForgotPasswordResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "If that number is registered, we've sent a verification code."
+        expires_at:
+          type: string
+          format: date-time
+          description: When the issued OTP expires. Omitted for unknown numbers.
 
     LoginResponse:
       type: object
@@ -2190,15 +2266,20 @@ components:
 
     UpdateParticipantRequest:
       type: object
-      required:
-        - payment_status
+      description: |
+        Edit a participant's custom name / WhatsApp number. Only valid for
+        custom (unlinked) participants — linked contacts must be edited via
+        the Contacts API. Payment-status transitions (submit / approve /
+        reject) go through the dedicated /payments/* endpoints.
       properties:
-        payment_status:
-          type: string
-          enum: [paid, rejected]
-        rejection_reason:
+        custom_name:
           type: string
           nullable: true
+          example: "John Doe"
+        custom_whatsapp:
+          type: string
+          nullable: true
+          example: "6281234567890"
 
     UpdateParticipantResponse:
       type: object
@@ -2251,55 +2332,52 @@ components:
           type: string
           format: uuid
           example: "550e8400-e29b-41d4-a716-446655440000"
-        name:
+        session_id:
           type: string
-          example: "Makan Siang"
+          format: uuid
         description:
           type: string
-          nullable: true
-          example: "Nasi goreng + es teh"
+          description: Primary label for the bill item (e.g. "Nasi Goreng")
+          example: "Nasi Goreng"
         amount:
           type: number
           format: float
+          description: Amount in the session's currency base unit (e.g. IDR rupiah, not cents)
           example: 50000
         category:
           type: string
           nullable: true
           example: "food"
-        currency:
-          type: string
-          default: "IDR"
-          example: "IDR"
         created_at:
           type: string
           format: date-time
           example: "2026-03-18T12:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
 
     CreateBillItemRequest:
       type: object
       required:
-        - name
+        - description
         - amount
       properties:
-        name:
-          type: string
-          maxLength: 200
-          example: "Makan Siang"
         description:
           type: string
-          nullable: true
+          minLength: 1
+          maxLength: 200
+          description: Primary label for the bill item
+          example: "Nasi Goreng"
         amount:
           type: number
           format: float
+          description: Amount in the session's currency base unit (not cents)
+          minimum: 0.01
           example: 50000
         category:
           type: string
           nullable: true
           example: "food"
-        currency:
-          type: string
-          default: "IDR"
-          example: "IDR"
 
     BillItemResponse:
       type: object

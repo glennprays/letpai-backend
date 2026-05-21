@@ -40,7 +40,10 @@ type AddParticipantRequest struct {
 	CustomWhatsApp string  `json:"custom_whatsapp,omitempty"`
 }
 
-// UpdateParticipantRequest represents the request to update a participant
+// UpdateParticipantRequest represents the request to update a participant's
+// custom name / WhatsApp number. Payment-status transitions (submit / approve /
+// reject) go through the dedicated /payments/* endpoints instead — see
+// PaymentHandler.SubmitPayment / ApprovePayment / RejectPayment.
 type UpdateParticipantRequest struct {
 	CustomName     *string `json:"custom_name,omitempty"`
 	CustomWhatsApp *string `json:"custom_whatsapp,omitempty"`

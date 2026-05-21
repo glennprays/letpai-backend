@@ -103,7 +103,8 @@ func (r *Router) setupAuthRoutes(group fiber.Router) {
 	auth.Post("/verify-otp", middleware.VerifyOTPRateLimiter(r.rateLimitService), r.AuthHandler.VerifyOTP)
 	auth.Post("/login", middleware.LoginRateLimiter(r.rateLimitService), r.AuthHandler.Login)
 	auth.Post("/logout", r.AuthHandler.Logout)
-	auth.Post("/profile", r.AuthHandler.UpdateProfile)
+	auth.Post("/forgot-password", middleware.LoginRateLimiter(r.rateLimitService), r.AuthHandler.ForgotPassword)
+	auth.Put("/profile", r.AuthHandler.UpdateProfile)
 }
 
 func (r *Router) setupPublicPaymentRoutes(group fiber.Router) {
