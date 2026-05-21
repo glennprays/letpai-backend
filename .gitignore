@@ -26,3 +26,6 @@ go.work.sum
 .env
 .DS_Store
 !/misc/develop/.env
+
+# Claude Code (per-machine permission overrides)
+.claude/settings.local.json
