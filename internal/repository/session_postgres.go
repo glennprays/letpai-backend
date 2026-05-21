@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"strings"
+	"strconv"
 	"time"
 
 	"github.com/glennprays/letpai-backend/domain"
@@ -122,13 +123,13 @@ func (r *PostgresSessionRepository) FindAll(ctx context.Context, userID string, 
 	argIndex := 2
 
 	if opts.Status != nil {
-		whereConditions = append(whereConditions, "status = $"+string(rune('0'+argIndex)))
+		whereConditions = append(whereConditions, "status = $"+strconv.Itoa(argIndex))
 		args = append(args, string(*opts.Status))
 		argIndex++
 	}
 
 	if opts.Search != nil && *opts.Search != "" {
-		whereConditions = append(whereConditions, "(title ILIKE $"+string(rune('0'+argIndex))+" OR description ILIKE $"+string(rune('0'+argIndex+1))+")")
+		whereConditions = append(whereConditions, "(title ILIKE $"+strconv.Itoa(argIndex)+" OR description ILIKE $"+strconv.Itoa(argIndex+1)+")")
 		searchPattern := "%" + *opts.Search + "%"
 		args = append(args, searchPattern, searchPattern)
 		argIndex += 2
@@ -171,7 +172,7 @@ func (r *PostgresSessionRepository) FindAll(ctx context.Context, userID string, 
 		FROM sessions
 		WHERE ` + whereClause + `
 		ORDER BY ` + opts.SortBy + ` ` + strings.ToUpper(opts.SortOrder) + `
-		LIMIT $` + string(rune('0'+argIndex)) + ` OFFSET $` + string(rune('0'+argIndex+1))
+		LIMIT $` + strconv.Itoa(argIndex) + ` OFFSET $` + strconv.Itoa(argIndex+1)
 	args = append(args, opts.Limit, offset)
 
 	rows, err := r.db.QueryContext(ctx, dataQuery, args...)

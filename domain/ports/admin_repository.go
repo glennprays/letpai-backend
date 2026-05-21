@@ -31,4 +31,8 @@ type AdminRepository interface {
 
 	// CheckExistsByWhatsAppNumber checks if an admin with given WhatsApp exists
 	CheckExistsByWhatsAppNumber(ctx context.Context, whatsappNumber string) (bool, error)
+
+	// CountActiveSuperAdmins returns the number of non-deleted, active
+	// super_admin rows — used as a safety check before demoting/deleting one.
+	CountActiveSuperAdmins(ctx context.Context) (int, error)
 }

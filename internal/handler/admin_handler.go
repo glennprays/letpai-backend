@@ -3,6 +3,7 @@ package handler
 import (
 	"github.com/glennprays/letpai-backend/internal/httperror"
 	"github.com/glennprays/letpai-backend/internal/middleware"
+	"github.com/glennprays/letpai-backend/internal/validation"
 	adminuc "github.com/glennprays/letpai-backend/internal/usecase/admin"
 	"github.com/gofiber/fiber/v2"
 )
@@ -61,6 +62,10 @@ func (h *AdminHandler) InitiateLogin(c *fiber.Ctx) error {
 		apiErr := httperror.FromError(err)
 		return c.Status(apiErr.Status).JSON(apiErr.Response())
 	}
+	if err := validation.Struct(&req); err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
 
 	result, err := h.initiateLoginUseCase.Execute(c.Context(), &req)
 	if err != nil {
@@ -78,6 +83,10 @@ func (h *AdminHandler) Login(c *fiber.Ctx) error {
 		apiErr := httperror.FromError(err)
 		return c.Status(apiErr.Status).JSON(apiErr.Response())
 	}
+	if err := validation.Struct(&req); err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
 
 	// TODO: Implement password-based login
 	// For now, this is essentially a no-op as login is done via OTP
@@ -91,6 +100,10 @@ func (h *AdminHandler) Login(c *fiber.Ctx) error {
 func (h *AdminHandler) VerifyOTP(c *fiber.Ctx) error {
 	var req adminuc.VerifyOTPRequest
 	if err := c.BodyParser(&req); err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+	if err := validation.Struct(&req); err != nil {
 		apiErr := httperror.FromError(err)
 		return c.Status(apiErr.Status).JSON(apiErr.Response())
 	}
@@ -126,6 +139,10 @@ func (h *AdminHandler) SetupPassword(c *fiber.Ctx) error {
 		apiErr := httperror.FromError(err)
 		return c.Status(apiErr.Status).JSON(apiErr.Response())
 	}
+	if err := validation.Struct(&req); err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
 
 	err := h.setupPasswordUseCase.Execute(c.Context(), userID, &req)
 	if err != nil {
@@ -156,6 +173,10 @@ func (h *AdminHandler) CreateAdmin(c *fiber.Ctx) error {
 		apiErr := httperror.FromError(err)
 		return c.Status(apiErr.Status).JSON(apiErr.Response())
 	}
+	if err := validation.Struct(&req); err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
 
 	result, err := h.createAdminUseCase.Execute(c.Context(), &req)
 	if err != nil {
@@ -175,8 +196,13 @@ func (h *AdminHandler) UpdateAdmin(c *fiber.Ctx) error {
 		apiErr := httperror.FromError(err)
 		return c.Status(apiErr.Status).JSON(apiErr.Response())
 	}
+	if err := validation.Struct(&req); err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
 
-	result, err := h.updateAdminUseCase.Execute(c.Context(), adminID, &req)
+	callerID := middleware.GetUserID(c)
+	result, err := h.updateAdminUseCase.Execute(c.Context(), callerID, adminID, &req)
 	if err != nil {
 		apiErr := httperror.FromError(err)
 		return c.Status(apiErr.Status).JSON(apiErr.Response())
@@ -189,7 +215,8 @@ func (h *AdminHandler) UpdateAdmin(c *fiber.Ctx) error {
 func (h *AdminHandler) DeleteAdmin(c *fiber.Ctx) error {
 	adminID := c.Params("id")
 
-	err := h.deleteAdminUseCase.Execute(c.Context(), adminID)
+	callerID := middleware.GetUserID(c)
+	err := h.deleteAdminUseCase.Execute(c.Context(), callerID, adminID)
 	if err != nil {
 		apiErr := httperror.FromError(err)
 		return c.Status(apiErr.Status).JSON(apiErr.Response())
@@ -216,6 +243,10 @@ func (h *AdminHandler) GetStatus(c *fiber.Ctx) error {
 func (h *AdminHandler) GetQRCode(c *fiber.Ctx) error {
 	var req adminuc.GetQRCodeRequest
 	if err := c.BodyParser(&req); err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+	if err := validation.Struct(&req); err != nil {
 		apiErr := httperror.FromError(err)
 		return c.Status(apiErr.Status).JSON(apiErr.Response())
 	}
@@ -248,6 +279,10 @@ func (h *AdminHandler) Logout(c *fiber.Ctx) error {
 func (h *AdminHandler) UpdateConfig(c *fiber.Ctx) error {
 	var req adminuc.UpdateConfigRequest
 	if err := c.BodyParser(&req); err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+	if err := validation.Struct(&req); err != nil {
 		apiErr := httperror.FromError(err)
 		return c.Status(apiErr.Status).JSON(apiErr.Response())
 	}

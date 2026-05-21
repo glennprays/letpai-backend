@@ -7,6 +7,7 @@ import (
 	"github.com/glennprays/letpai-backend/internal/middleware"
 	"github.com/glennprays/letpai-backend/internal/params/request"
 	"github.com/glennprays/letpai-backend/internal/params/response"
+	"github.com/glennprays/letpai-backend/internal/validation"
 	"github.com/glennprays/letpai-backend/internal/usecase/auth"
 	"github.com/gofiber/fiber/v2"
 )
@@ -47,6 +48,10 @@ func (h *AuthHandler) Register(c *fiber.Ctx) error {
 		apiErr := httperror.FromError(err)
 		return c.Status(apiErr.Status).JSON(apiErr.Response())
 	}
+	if err := validation.Struct(&req); err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
 
 	// Convert domain request
 	ucReq := &auth.RegisterUserRequest{
@@ -76,6 +81,10 @@ func (h *AuthHandler) Register(c *fiber.Ctx) error {
 func (h *AuthHandler) VerifyOTP(c *fiber.Ctx) error {
 	var req request.VerifyOTPRequest
 	if err := c.BodyParser(&req); err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+	if err := validation.Struct(&req); err != nil {
 		apiErr := httperror.FromError(err)
 		return c.Status(apiErr.Status).JSON(apiErr.Response())
 	}
@@ -109,6 +118,10 @@ func (h *AuthHandler) VerifyOTP(c *fiber.Ctx) error {
 func (h *AuthHandler) Login(c *fiber.Ctx) error {
 	var req request.LoginRequest
 	if err := c.BodyParser(&req); err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+	if err := validation.Struct(&req); err != nil {
 		apiErr := httperror.FromError(err)
 		return c.Status(apiErr.Status).JSON(apiErr.Response())
 	}
@@ -161,6 +174,10 @@ func (h *AuthHandler) ForgotPassword(c *fiber.Ctx) error {
 		apiErr := httperror.FromError(err)
 		return c.Status(apiErr.Status).JSON(apiErr.Response())
 	}
+	if err := validation.Struct(&req); err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
 
 	result, err := h.forgotPassword.Execute(c.Context(), &auth.ForgotPasswordRequest{
 		WhatsAppNumber: req.WhatsAppNumber,
@@ -183,6 +200,10 @@ func (h *AuthHandler) UpdateProfile(c *fiber.Ctx) error {
 
 	var req auth.UpdateProfileRequest
 	if err := c.BodyParser(&req); err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+	if err := validation.Struct(&req); err != nil {
 		apiErr := httperror.FromError(err)
 		return c.Status(apiErr.Status).JSON(apiErr.Response())
 	}

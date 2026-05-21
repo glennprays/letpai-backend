@@ -65,8 +65,9 @@ func (uc *SendNotificationsUseCase) Execute(ctx context.Context, userID, session
 		return nil, err
 	}
 
-	// Get all participants for the session
-	participants, err := uc.participantRepo.FindBySessionID(ctx, sessionID)
+	// Fetch participants with contact info joined in — one query, no N+1
+	// per-participant contact lookup.
+	participants, err := uc.participantRepo.FindBySessionIDWithContactInfo(ctx, sessionID)
 	if err != nil {
 		return nil, err
 	}
@@ -75,10 +76,14 @@ func (uc *SendNotificationsUseCase) Execute(ctx context.Context, userID, session
 		return nil, domain.NewError(domain.ErrBadRequest, errors.New("no participants found in this session"))
 	}
 
-	// Get bill items to calculate total
-	billItems, _ := uc.billItemRepo.FindBySessionID(ctx, sessionID)
+	// Use the session's stored TotalAmount; bill-list sum is a fallback
+	// for sessions that haven't been recalculated yet.
 	totalAmount := session.TotalAmount
-	if totalAmount == 0 && len(billItems) > 0 {
+	if totalAmount == 0 {
+		billItems, err := uc.billItemRepo.FindBySessionID(ctx, sessionID)
+		if err != nil {
+			return nil, err
+		}
 		for _, bill := range billItems {
 			totalAmount += bill.Amount
 		}
@@ -87,19 +92,8 @@ func (uc *SendNotificationsUseCase) Execute(ctx context.Context, userID, session
 	notifications := make([]NotificationItem, 0, len(participants))
 
 	for _, participant := range participants {
-		// Get WhatsApp number
-		whatsappNumber := ""
-		participantName := ""
-		if participant.ContactID != nil {
-			contact, err := uc.contactRepo.FindByID(ctx, participant.ContactID.String(), userID)
-			if err == nil {
-				whatsappNumber = contact.WhatsAppNumber
-				participantName = contact.Name
-			}
-		} else {
-			whatsappNumber = participant.CustomWhatsApp
-			participantName = participant.CustomName
-		}
+		whatsappNumber := participant.GetWhatsAppNumber()
+		participantName := participant.GetName()
 
 		if whatsappNumber == "" {
 			continue

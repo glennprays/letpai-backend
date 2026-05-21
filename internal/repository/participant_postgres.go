@@ -25,8 +25,8 @@ func NewPostgresParticipantRepository(db *sqlx.DB) ports.ParticipantRepository {
 // Create creates a new participant
 func (r *PostgresParticipantRepository) Create(ctx context.Context, participant *entity.SessionParticipant) error {
 	query := `
-		INSERT INTO session_participants (participant_id, session_id, contact_id, custom_name, custom_whatsapp, share_amount, payment_status, payment_proof_url, rejection_count, rejection_reason, joined_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+		INSERT INTO session_participants (participant_id, session_id, contact_id, custom_name, custom_whatsapp, share_amount, payment_status, payment_proof_url, rejection_count, rejection_reason, notification_count, last_notification_at, joined_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 	`
 
 	_, err := r.db.ExecContext(
@@ -42,6 +42,8 @@ func (r *PostgresParticipantRepository) Create(ctx context.Context, participant 
 		participant.PaymentProofURL,
 		participant.RejectionCount,
 		participant.RejectionReason,
+		participant.NotificationCount,
+		participant.LastNotificationAt,
 		participant.JoinedAt,
 		participant.UpdatedAt,
 	)
@@ -56,7 +58,7 @@ func (r *PostgresParticipantRepository) Create(ctx context.Context, participant 
 // FindByID finds a participant by ID
 func (r *PostgresParticipantRepository) FindByID(ctx context.Context, participantID string) (*entity.SessionParticipant, error) {
 	query := `
-		SELECT participant_id, session_id, contact_id, custom_name, custom_whatsapp, share_amount, payment_status, payment_proof_url, rejection_count, rejection_reason, joined_at, updated_at
+		SELECT participant_id, session_id, contact_id, custom_name, custom_whatsapp, share_amount, payment_status, payment_proof_url, rejection_count, rejection_reason, notification_count, last_notification_at, joined_at, updated_at
 		FROM session_participants
 		WHERE participant_id = $1
 	`
@@ -82,6 +84,8 @@ func (r *PostgresParticipantRepository) FindByID(ctx context.Context, participan
 		&participant.PaymentProofURL,
 		&participant.RejectionCount,
 		&participant.RejectionReason,
+		&participant.NotificationCount,
+		&participant.LastNotificationAt,
 		&participant.JoinedAt,
 		&participant.UpdatedAt,
 	)
@@ -100,7 +104,7 @@ func (r *PostgresParticipantRepository) FindByID(ctx context.Context, participan
 // FindBySessionID finds all participants for a session
 func (r *PostgresParticipantRepository) FindBySessionID(ctx context.Context, sessionID string) ([]*entity.SessionParticipant, error) {
 	query := `
-		SELECT participant_id, session_id, contact_id, custom_name, custom_whatsapp, share_amount, payment_status, payment_proof_url, rejection_count, rejection_reason, joined_at, updated_at
+		SELECT participant_id, session_id, contact_id, custom_name, custom_whatsapp, share_amount, payment_status, payment_proof_url, rejection_count, rejection_reason, notification_count, last_notification_at, joined_at, updated_at
 		FROM session_participants
 		WHERE session_id = $1
 		ORDER BY joined_at ASC
@@ -130,6 +134,8 @@ func (r *PostgresParticipantRepository) FindBySessionID(ctx context.Context, ses
 			&participant.PaymentProofURL,
 			&participant.RejectionCount,
 			&participant.RejectionReason,
+			&participant.NotificationCount,
+			&participant.LastNotificationAt,
 			&participant.JoinedAt,
 			&participant.UpdatedAt,
 		)
@@ -151,12 +157,17 @@ func (r *PostgresParticipantRepository) FindBySessionID(ctx context.Context, ses
 	return participants, nil
 }
 
-// FindBySessionIDWithContactInfo finds all participants for a session with contact info
+// FindBySessionIDWithContactInfo finds all participants for a session with
+// contact info joined in. Returns contact name + whatsapp + avatar so callers
+// don't need a separate per-participant lookup.
 func (r *PostgresParticipantRepository) FindBySessionIDWithContactInfo(ctx context.Context, sessionID string) ([]*entity.SessionParticipant, error) {
 	query := `
 		SELECT sp.participant_id, sp.session_id, sp.contact_id, sp.custom_name, sp.custom_whatsapp,
-		       sp.share_amount, sp.payment_status, sp.payment_proof_url, sp.rejection_count, sp.rejection_reason, sp.joined_at, sp.updated_at,
-		       c.avatar_url as contact_avatar_url
+		       sp.share_amount, sp.payment_status, sp.payment_proof_url, sp.rejection_count, sp.rejection_reason,
+		       sp.notification_count, sp.last_notification_at, sp.joined_at, sp.updated_at,
+		       c.avatar_url as contact_avatar_url,
+		       c.name as contact_name,
+		       c.whatsapp_number as contact_whatsapp
 		FROM session_participants sp
 		LEFT JOIN contacts c ON sp.contact_id = c.contact_id AND c.deleted_at IS NULL
 		WHERE sp.session_id = $1
@@ -187,9 +198,13 @@ func (r *PostgresParticipantRepository) FindBySessionIDWithContactInfo(ctx conte
 			&participant.PaymentProofURL,
 			&participant.RejectionCount,
 			&participant.RejectionReason,
+			&participant.NotificationCount,
+			&participant.LastNotificationAt,
 			&participant.JoinedAt,
 			&participant.UpdatedAt,
 			&participant.ContactAvatarURL,
+			&participant.ContactName,
+			&participant.ContactWhatsApp,
 		)
 		if err != nil {
 			return nil, domain.NewError(domain.ErrInternalFailure, err)
@@ -213,7 +228,7 @@ func (r *PostgresParticipantRepository) FindBySessionIDWithContactInfo(ctx conte
 func (r *PostgresParticipantRepository) Update(ctx context.Context, participant *entity.SessionParticipant) error {
 	query := `
 		UPDATE session_participants
-		SET custom_name = $2, custom_whatsapp = $3, share_amount = $4, payment_status = $5, payment_proof_url = $6, rejection_count = $7, rejection_reason = $8, updated_at = $9
+		SET custom_name = $2, custom_whatsapp = $3, share_amount = $4, payment_status = $5, payment_proof_url = $6, rejection_count = $7, rejection_reason = $8, notification_count = $9, last_notification_at = $10, updated_at = $11
 		WHERE participant_id = $1
 	`
 
@@ -228,6 +243,8 @@ func (r *PostgresParticipantRepository) Update(ctx context.Context, participant 
 		participant.PaymentProofURL,
 		participant.RejectionCount,
 		participant.RejectionReason,
+		participant.NotificationCount,
+		participant.LastNotificationAt,
 		participant.UpdatedAt,
 	)
 
@@ -334,6 +351,27 @@ func (r *PostgresParticipantRepository) UpdatePaymentStatus(ctx context.Context,
 	}
 
 	return nil
+}
+
+// MarkSubmittedWithProof atomically transitions a participant from 'pending'
+// to 'submitted' with the given proof URL. The WHERE clause requires status =
+// 'pending', so two concurrent submitters race once in the database and only
+// the first one's UPDATE returns rowsAffected == 1.
+func (r *PostgresParticipantRepository) MarkSubmittedWithProof(ctx context.Context, participantID, proofURL string) (bool, error) {
+	const query = `
+		UPDATE session_participants
+		SET payment_status = 'submitted', payment_proof_url = $2, updated_at = NOW()
+		WHERE participant_id = $1 AND payment_status = 'pending'
+	`
+	result, err := r.db.ExecContext(ctx, query, participantID, proofURL)
+	if err != nil {
+		return false, domain.NewError(domain.ErrInternalFailure, err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return false, domain.NewError(domain.ErrInternalFailure, err)
+	}
+	return rows == 1, nil
 }
 
 // BulkUpdateShareAmounts updates share amounts for multiple participants

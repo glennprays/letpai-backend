@@ -28,11 +28,15 @@ func main() {
 
 	logger := app.Logger.With(log.String("component", "main"))
 
-	// Create Fiber app with custom error handler
+	// Create Fiber app with custom error handler.
+	// BodyLimit is sized for payment-proof uploads: the frontend caps the
+	// image at 5 MB; base64 inflates that to ~6.7 MB. 8 MB leaves headroom
+	// without inviting denial-of-service via giant payloads.
 	fiberApp := fiber.New(fiber.Config{
 		AppName:               app.Config.AppName,
 		ErrorHandler:          middleware.ErrorHandler(),
 		DisableStartupMessage: true,
+		BodyLimit:             8 * 1024 * 1024,
 	})
 
 	// Built-in middleware

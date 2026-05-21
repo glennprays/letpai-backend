@@ -64,13 +64,25 @@ func (uc *GetSessionsUseCase) Execute(ctx context.Context, userID string, req *G
 		statusFilter = &status
 	}
 
+	// Clamp pagination so a malformed query can't request an unbounded result set.
+	page := req.Page
+	if page < 1 {
+		page = 1
+	}
+	limit := req.Limit
+	if limit <= 0 {
+		limit = 50
+	} else if limit > 200 {
+		limit = 200
+	}
+
 	opts := &ports.SessionFilterOptions{
 		Status:    statusFilter,
 		Search:    req.Search,
 		SortBy:    req.SortBy,
 		SortOrder: req.SortOrder,
-		Page:      req.Page,
-		Limit:     req.Limit,
+		Page:      page,
+		Limit:     limit,
 	}
 
 	result, err := uc.sessionRepo.FindAll(ctx, userID, opts)

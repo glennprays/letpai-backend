@@ -3,6 +3,7 @@ package handler
 import (
 	"github.com/glennprays/letpai-backend/internal/httperror"
 	"github.com/glennprays/letpai-backend/internal/middleware"
+	"github.com/glennprays/letpai-backend/internal/validation"
 	"github.com/glennprays/letpai-backend/internal/usecase/payment"
 	"github.com/gofiber/fiber/v2"
 )
@@ -52,6 +53,10 @@ func (h *PaymentHandler) SubmitPayment(c *fiber.Ctx) error {
 		apiErr := httperror.FromError(err)
 		return c.Status(apiErr.Status).JSON(apiErr.Response())
 	}
+	if err := validation.Struct(&req); err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
 
 	// Execute use case
 	result, err := h.submitPayment.Execute(c.Context(), participantID, &req)
@@ -80,6 +85,10 @@ func (h *PaymentHandler) ApprovePayment(c *fiber.Ctx) error {
 	if err := c.BodyParser(&req); err != nil {
 		// Default to empty request if body is empty
 		req = payment.ApprovePaymentRequest{}
+	}
+	if err := validation.Struct(&req); err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
 	}
 
 	// Execute use case
@@ -110,6 +119,10 @@ func (h *PaymentHandler) RejectPayment(c *fiber.Ctx) error {
 		apiErr := httperror.FromError(err)
 		return c.Status(apiErr.Status).JSON(apiErr.Response())
 	}
+	if err := validation.Struct(&req); err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
 
 	// Execute use case
 	result, err := h.rejectPayment.Execute(c.Context(), userID, participantID, &req)
@@ -134,6 +147,10 @@ func (h *PaymentHandler) BulkApprove(c *fiber.Ctx) error {
 		apiErr := httperror.FromError(err)
 		return c.Status(apiErr.Status).JSON(apiErr.Response())
 	}
+	if err := validation.Struct(&req); err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
 
 	// Execute use case
 	result, err := h.bulkApprove.Execute(c.Context(), userID, &req)
@@ -155,6 +172,10 @@ func (h *PaymentHandler) BulkReject(c *fiber.Ctx) error {
 
 	var req payment.BulkRejectRequest
 	if err := c.BodyParser(&req); err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+	if err := validation.Struct(&req); err != nil {
 		apiErr := httperror.FromError(err)
 		return c.Status(apiErr.Status).JSON(apiErr.Response())
 	}

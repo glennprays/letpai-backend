@@ -12,21 +12,25 @@ var ErrInvalidPaymentStatusTransitionError = errors.New("invalid payment status 
 
 // SessionParticipant represents a participant in a session
 type SessionParticipant struct {
-	ParticipantID   uuid.UUID                 `json:"participant_id" db:"participant_id"`
-	SessionID       uuid.UUID                 `json:"session_id" db:"session_id"`
-	ContactID       *uuid.UUID                `json:"contact_id,omitempty" db:"contact_id"`
-	CustomName      string                    `json:"custom_name,omitempty" db:"custom_name"`
-	CustomWhatsApp  string                    `json:"custom_whatsapp,omitempty" db:"custom_whatsapp"`
-	ShareAmount     float64                   `json:"share_amount" db:"share_amount"`
-	PaymentStatus   valueobject.PaymentStatus `json:"payment_status" db:"payment_status"`
-	PaymentProofURL *string                   `json:"payment_proof_url,omitempty" db:"payment_proof_url"`
-	RejectionCount  int                       `json:"rejection_count" db:"rejection_count"`
-	RejectionReason *string                   `json:"rejection_reason,omitempty" db:"rejection_reason"`
-	JoinedAt        time.Time                 `json:"joined_at" db:"joined_at"`
-	UpdatedAt       time.Time                 `json:"updated_at" db:"updated_at"`
+	ParticipantID       uuid.UUID                 `json:"participant_id" db:"participant_id"`
+	SessionID           uuid.UUID                 `json:"session_id" db:"session_id"`
+	ContactID           *uuid.UUID                `json:"contact_id,omitempty" db:"contact_id"`
+	CustomName          string                    `json:"custom_name,omitempty" db:"custom_name"`
+	CustomWhatsApp      string                    `json:"custom_whatsapp,omitempty" db:"custom_whatsapp"`
+	ShareAmount         float64                   `json:"share_amount" db:"share_amount"`
+	PaymentStatus       valueobject.PaymentStatus `json:"payment_status" db:"payment_status"`
+	PaymentProofURL     *string                   `json:"payment_proof_url,omitempty" db:"payment_proof_url"`
+	RejectionCount      int                       `json:"rejection_count" db:"rejection_count"`
+	RejectionReason     *string                   `json:"rejection_reason,omitempty" db:"rejection_reason"`
+	NotificationCount   int                       `json:"notification_count" db:"notification_count"`
+	LastNotificationAt  *time.Time                `json:"last_notification_at,omitempty" db:"last_notification_at"`
+	JoinedAt            time.Time                 `json:"joined_at" db:"joined_at"`
+	UpdatedAt           time.Time                 `json:"updated_at" db:"updated_at"`
 
-	// Joined fields (not in database)
+	// Joined fields (populated by FindBySessionIDWithContactInfo, not stored on the row)
 	ContactAvatarURL *string `json:"contact_avatar_url,omitempty" db:"contact_avatar_url"`
+	ContactName      *string `json:"-" db:"contact_name"`
+	ContactWhatsApp  *string `json:"-" db:"contact_whatsapp"`
 }
 
 // NewParticipantFromContact creates a new participant from a contact
@@ -127,20 +131,32 @@ func (p *SessionParticipant) IsCustom() bool {
 	return p.ContactID == nil
 }
 
-// GetName returns the participant's name
+// GetName returns the participant's name — preferring the joined contact
+// name when available (set by FindBySessionIDWithContactInfo) to avoid an
+// N+1 contact lookup at the call site.
 func (p *SessionParticipant) GetName() string {
-	if p.ContactID != nil {
-		return "" // Will be fetched from contact
+	if p.ContactName != nil && *p.ContactName != "" {
+		return *p.ContactName
 	}
 	return p.CustomName
 }
 
-// GetWhatsAppNumber returns the participant's WhatsApp number
+// GetWhatsAppNumber returns the participant's WhatsApp number — preferring
+// the joined contact value when populated.
 func (p *SessionParticipant) GetWhatsAppNumber() string {
-	if p.ContactID != nil {
-		return "" // Will be fetched from contact
+	if p.ContactWhatsApp != nil && *p.ContactWhatsApp != "" {
+		return *p.ContactWhatsApp
 	}
 	return p.CustomWhatsApp
+}
+
+// BumpNotificationCount records that a notification was just sent —
+// powers reminder rate-limiting and the "last reminded X minutes ago" UI.
+func (p *SessionParticipant) BumpNotificationCount() {
+	p.NotificationCount++
+	now := time.Now()
+	p.LastNotificationAt = &now
+	p.UpdatedAt = now
 }
 
 // IsPaid checks if the participant has paid

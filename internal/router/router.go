@@ -79,6 +79,7 @@ func (r *Router) Setup(app *fiber.App) {
 
 	// Protected routes (require auth)
 	protected := v1.Use(middleware.Authenticate(r.jwtService))
+	r.setupProtectedAuthRoutes(protected)
 	r.setupContactGroupRoutes(protected)
 	r.setupContactRoutes(protected)
 	r.setupSessionRoutes(protected)
@@ -102,8 +103,13 @@ func (r *Router) setupAuthRoutes(group fiber.Router) {
 	auth.Post("/register", middleware.RegisterRateLimiter(r.rateLimitService), r.AuthHandler.Register)
 	auth.Post("/verify-otp", middleware.VerifyOTPRateLimiter(r.rateLimitService), r.AuthHandler.VerifyOTP)
 	auth.Post("/login", middleware.LoginRateLimiter(r.rateLimitService), r.AuthHandler.Login)
-	auth.Post("/logout", r.AuthHandler.Logout)
 	auth.Post("/forgot-password", middleware.LoginRateLimiter(r.rateLimitService), r.AuthHandler.ForgotPassword)
+}
+
+// Auth routes that require a valid token (logout, profile editing).
+func (r *Router) setupProtectedAuthRoutes(group fiber.Router) {
+	auth := group.Group("/auth")
+	auth.Post("/logout", r.AuthHandler.Logout)
 	auth.Put("/profile", r.AuthHandler.UpdateProfile)
 }
 

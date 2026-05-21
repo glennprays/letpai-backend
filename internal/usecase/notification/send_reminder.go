@@ -109,8 +109,12 @@ func (uc *SendReminderUseCase) Execute(ctx context.Context, userID, participantI
 		return nil, domain.NewError(domain.ErrInternalFailure, err)
 	}
 
-	// Record reminder for rate limiting
+	// Record reminder for rate limiting + bump the participant's notification
+	// counter so the UI can show "last reminded N minutes ago" and so future
+	// in-app gating can use this signal.
 	_ = uc.rateLimitSvc.RecordReminder(ctx, participantID)
+	participant.BumpNotificationCount()
+	_ = uc.participantRepo.Update(ctx, participant)
 
 	return &SendReminderResponse{
 		Message:           fmt.Sprintf("Reminder sent to %s", participantName),

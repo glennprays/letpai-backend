@@ -46,8 +46,12 @@ func FromError(err error) APIError {
 			apiError.Message = "Internal server error"
 		}
 	} else {
+		// Non-domain errors are unexpected. Return a generic message to
+		// avoid leaking internals (SQL errors, file paths, wrapping context
+		// from fmt.Errorf chains). The original err should still be logged
+		// server-side with a trace ID for debugging — see middleware.ErrorHandler.
 		apiError.Status = 500
-		apiError.Message = err.Error()
+		apiError.Message = "Internal server error"
 	}
 
 	return apiError

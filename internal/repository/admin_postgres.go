@@ -2,6 +2,8 @@ package repository
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 
 	"github.com/glennprays/letpai-backend/domain"
@@ -21,7 +23,8 @@ func NewPostgresAdminRepository(db *sqlx.DB) ports.AdminRepository {
 	}
 }
 
-// FindByWhatsAppNumber finds an admin by their WhatsApp number
+// FindByWhatsAppNumber finds an admin by their WhatsApp number.
+// Discriminates sql.ErrNoRows → ErrNotFound so callers get 404, not 500.
 func (r *PostgresAdminRepository) FindByWhatsAppNumber(ctx context.Context, whatsappNumber string) (*entity.Admin, error) {
 	const query = `
 		SELECT admin_id, whatsapp_number, full_name, role, is_active, last_login_at, created_at, updated_at
@@ -32,12 +35,16 @@ func (r *PostgresAdminRepository) FindByWhatsAppNumber(ctx context.Context, what
 	var admin entity.Admin
 	err := r.db.GetContext(ctx, &admin, query, whatsappNumber)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, domain.NewError(domain.ErrNotFound, nil)
+		}
 		return nil, domain.NewError(domain.ErrInternalFailure, fmt.Errorf("failed to find admin by whatsapp: %w", err))
 	}
 	return &admin, nil
 }
 
-// FindByID finds an admin by ID
+// FindByID finds an admin by ID.
+// Discriminates sql.ErrNoRows → ErrNotFound so callers get 404, not 500.
 func (r *PostgresAdminRepository) FindByID(ctx context.Context, adminID string) (*entity.Admin, error) {
 	const query = `
 		SELECT admin_id, whatsapp_number, full_name, role, is_active, last_login_at, created_at, updated_at
@@ -48,6 +55,9 @@ func (r *PostgresAdminRepository) FindByID(ctx context.Context, adminID string) 
 	var admin entity.Admin
 	err := r.db.GetContext(ctx, &admin, query, adminID)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, domain.NewError(domain.ErrNotFound, nil)
+		}
 		return nil, domain.NewError(domain.ErrInternalFailure, fmt.Errorf("failed to find admin by id: %w", err))
 	}
 	return &admin, nil
@@ -154,4 +164,20 @@ func (r *PostgresAdminRepository) CheckExistsByWhatsAppNumber(ctx context.Contex
 		return false, domain.NewError(domain.ErrInternalFailure, fmt.Errorf("failed to check admin exists: %w", err))
 	}
 	return count > 0, nil
+}
+
+// CountActiveSuperAdmins returns the number of non-deleted, active super_admin
+// rows — used as a safety check before demoting/deleting one.
+func (r *PostgresAdminRepository) CountActiveSuperAdmins(ctx context.Context) (int, error) {
+	const query = `
+		SELECT COUNT(*)
+		FROM admins
+		WHERE role = 'super_admin' AND is_active = TRUE AND deleted_at IS NULL
+	`
+
+	var count int
+	if err := r.db.GetContext(ctx, &count, query); err != nil {
+		return 0, domain.NewError(domain.ErrInternalFailure, fmt.Errorf("failed to count super admins: %w", err))
+	}
+	return count, nil
 }

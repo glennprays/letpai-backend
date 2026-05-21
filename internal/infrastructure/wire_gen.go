@@ -74,7 +74,7 @@ func InitializeApp() (*App, error) {
 	logoutUseCase := admin.NewLogoutUseCase(adminRepository)
 	updateConfigUseCase := admin.NewUpdateConfigUseCase(whatsAppConfigRepository)
 	adminHandler := handler.NewAdminHandler(initiateLoginUseCase, adminVerifyOTPUseCase, getProfileUseCase, setupPasswordUseCase, listAdminsUseCase, createAdminUseCase, updateAdminUseCase, deleteAdminUseCase, getStatusUseCase, getQRCodeUseCase, logoutUseCase, updateConfigUseCase)
-	whatsAppWebhookHandler := handler.NewWhatsAppWebhookHandler(whatsAppService, whatsAppConfigRepository)
+	whatsAppWebhookHandler := handler.NewWhatsAppWebhookHandler(configConfig, whatsAppService, whatsAppConfigRepository)
 	contactGroupRepository := repository.NewPostgresContactGroupRepository(db)
 	createGroupUseCase := contactgroup.NewCreateGroupUseCase(contactGroupRepository)
 	getGroupsUseCase := contactgroup.NewGetGroupsUseCase(contactGroupRepository)

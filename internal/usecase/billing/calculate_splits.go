@@ -45,7 +45,16 @@ func NewCalculateSplitsUseCase(
 	}
 }
 
-// Execute calculates equal splits for all participants
+// Execute calculates equal splits for all participants.
+//
+// CONCURRENCY: this method is NOT transactional. A concurrent AddBillItem /
+// DeleteBillItem / AddParticipants / RemoveParticipant between the read
+// (participants + bill total) and the write (BulkUpdateShareAmounts) will
+// leave the split stale until the next CalculateSplits call. The full fix
+// requires a unit-of-work pattern with `SELECT ... FOR UPDATE` on the
+// session row across the read and write; see backlog item B1.
+// Mitigation today: hosts call CalculateSplits after they're done editing,
+// not concurrently with edits.
 func (uc *CalculateSplitsUseCase) Execute(ctx context.Context, userID, sessionID string) (*CalculateSplitsResponse, error) {
 	// Verify session exists and belongs to user
 	session, err := uc.sessionRepo.FindByID(ctx, sessionID, userID)

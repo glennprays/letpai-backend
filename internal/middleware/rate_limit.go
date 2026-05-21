@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"time"
@@ -61,16 +62,37 @@ func RateLimitMiddleware(config RateLimitConfig) fiber.Handler {
 	}
 }
 
-// LoginRateLimiter returns rate limiting middleware for login endpoint
+// extractWhatsAppNumber peeks at the JSON request body to extract a phone
+// number for rate-limit keying. Fiber's c.Body() returns the raw bytes
+// without consuming them, so this is safe to call before BodyParser runs.
+// Returns "" on any failure (caller falls back to IP-only rate limit).
+func extractWhatsAppNumber(c *fiber.Ctx) string {
+	body := c.Body()
+	if len(body) == 0 || len(body) > 4096 {
+		return ""
+	}
+	var payload struct {
+		WhatsAppNumber string `json:"whatsapp_number"`
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return ""
+	}
+	return payload.WhatsAppNumber
+}
+
+// LoginRateLimiter returns rate limiting middleware for login endpoint.
+// Keys on `ip:{ip}:phone:{phone}` so that an attacker with multiple IPs can't
+// brute-force one account, and a victim isn't locked out by attackers
+// targeting unrelated accounts from their IP.
 func LoginRateLimiter(rateLimitService *service.RateLimitService) fiber.Handler {
 	return RateLimitMiddleware(RateLimitConfig{
 		KeyExtractor: func(c *fiber.Ctx) string {
-			// Use IP address + WhatsApp number combination for login rate limiting
-			// This prevents both IP-based and credential-based attacks
 			ip := c.IP()
-			// Also extract the WhatsApp number from request if available
-			// For login, we check rate limit before parsing body, so use IP first
-			return fmt.Sprintf("login:ip:%s", ip)
+			phone := extractWhatsAppNumber(c)
+			if phone == "" {
+				return fmt.Sprintf("login:ip:%s", ip)
+			}
+			return fmt.Sprintf("login:ip:%s:phone:%s", ip, phone)
 		},
 		CheckRateLimit: func(ctx context.Context, key string) (*service.RateLimitResult, error) {
 			return rateLimitService.CheckLoginRateLimit(ctx, key)

@@ -40,9 +40,13 @@ type SessionRepository interface {
 	// Delete performs a soft delete on a session
 	Delete(ctx context.Context, sessionID string, userID string) error
 
-	// UpdateTotalAmount updates the total amount of a session
+	// UpdateTotalAmount updates the total amount of a session.
+	// SECURITY: not scoped by user_id. Callers MUST verify session ownership
+	// via FindByID(ctx, sessionID, userID) first.
 	UpdateTotalAmount(ctx context.Context, sessionID string, totalAmount float64) error
 
-	// UpdateStatus updates the status of a session
+	// UpdateStatus updates the status of a session.
+	// SECURITY: not scoped by user_id. Callers MUST verify session ownership
+	// via FindByID(ctx, sessionID, userID) first.
 	UpdateStatus(ctx context.Context, sessionID string, status valueobject.SessionStatus) error
 }

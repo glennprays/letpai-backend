@@ -6,7 +6,13 @@ import (
 	"github.com/glennprays/letpai-backend/domain/entity"
 )
 
-// BillItemRepository defines the interface for bill item data operations
+// BillItemRepository defines the interface for bill item data operations.
+//
+// SECURITY: methods here are scoped by bill_item_id / session_id only.
+// Callers reached via an authenticated HTTP route MUST verify session
+// ownership (SessionRepository.FindByID(ctx, sessionID, userID)) before
+// touching bills. Public endpoints (e.g. GET /payments/{id}/public) skip
+// that check by design.
 type BillItemRepository interface {
 	// Create creates a new bill item
 	Create(ctx context.Context, item *entity.BillItem) error
