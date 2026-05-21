@@ -13,4 +13,4 @@ CREATE TABLE whatsapp_configs (
 );
 
 CREATE INDEX idx_whatsapp_configs_phone ON whatsapp_configs(phone_number);
-CREATE INDEX idx_whatsapp_configs_status ON whatsapp_configs(connection_status) WHERE deleted_at IS NULL;
+CREATE INDEX idx_whatsapp_configs_status ON whatsapp_configs(connection_status);

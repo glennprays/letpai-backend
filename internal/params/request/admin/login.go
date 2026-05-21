@@ -13,9 +13,12 @@ type LoginResponse struct {
 	Token          string `json:"token"`
 }
 
+// VerifyOTPRequest mirrors AdminVerifyOTPRequest in docs/swagger.yaml.
+// The admin login flow is two-step (initiate → verify); the session_id
+// returned by InitiateLogin is what's passed back here, not whatsapp_number.
 type VerifyOTPRequest struct {
-	WhatsAppNumber string `json:"whatsapp_number" validate:"required,len=13,max=20"`
-	OTPCode        string `json:"otp_code" validate:"required,len=6,max=6"`
+	SessionID string `json:"session_id" validate:"required"`
+	OTPCode   string `json:"otp_code" validate:"required,len=6,max=6"`
 }
 
 type VerifyOTPResponse struct {

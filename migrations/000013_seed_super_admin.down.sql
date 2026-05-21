@@ -1,6 +1,5 @@
--- Down migration: delete seeded super admin
--- Only deletes if whatsapp_number is empty (indicating seeded admin)
+-- Down migration: delete the seeded super admin only if it still has the placeholder
+-- whatsapp_number. Operators who rotated the number/credentials keep their account.
 DELETE FROM admins
 WHERE role = 'super_admin'
-  AND whatsapp_number = ''
-  AND created_at = (SELECT MIN(created_at) FROM admins WHERE role = 'super_admin');
+  AND whatsapp_number = '6280000000000';

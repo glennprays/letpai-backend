@@ -201,7 +201,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/VerifyOTPRequest'
+              $ref: '#/components/schemas/AdminVerifyOTPRequest'
       responses:
         '200':
           description: OTP verified successfully
@@ -379,21 +379,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-
-        - BearerAuth: []
-      responses:
-        '200':
-          description: Admins list retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ListAdminsResponse'
-        '403':
-          description: Forbidden
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
     post:
       summary: Create admin
       description: Create new admin (super admin only)
@@ -497,7 +482,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /contacts:
+  /admin/config:
     put:
       summary: Update WhatsApp config
       description: Update WhatsApp API configuration
@@ -1533,235 +1518,266 @@ components:
               type: string
               example: "Invalid credentials"
 
-     InitiateLoginRequest:
-       type: object
-       required:
-         - whatsapp_number
-       properties:
-         whatsapp_number:
-           type: string
-           minLength: 13
-           maxLength: 20
-           example: "+6281234567890"
+    InitiateLoginRequest:
+      type: object
+      required:
+        - whatsapp_number
+      properties:
+        whatsapp_number:
+          type: string
+          minLength: 13
+          maxLength: 20
+          example: "+6281234567890"
 
-     VerifyOTPRequest:
-       type: object
-       required:
-         - session_id
-         - otp_code
-       properties:
-         session_id:
-           type: string
-           example: "550e8400-e29b-41d4-a716-446655"
-         otp_code:
-           type: string
-           minLength: 6
-           maxLength: 6
-           example: "123456"
+    InitiateLoginResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Login initiated"
+        session_id:
+          type: string
+          example: "550e8400-e29b-41d4-a716-446655"
+        expires_at:
+          type: string
+          format: date-time
+          example: "2026-03-18T18:00:00Z"
 
-     VerifyOTPResponse:
-       type: object
-       properties:
-         token:
-           type: string
-         expires_at:
-           type: string
-           format: date-time
+    AdminVerifyOTPRequest:
+      type: object
+      required:
+        - session_id
+        - otp_code
+      properties:
+        session_id:
+          type: string
+          example: "550e8400-e29b-41d4-a716-446655"
+        otp_code:
+          type: string
+          minLength: 6
+          maxLength: 6
+          example: "123456"
 
-     AdminLoginRequest:
-       type: object
-       required:
-         - whatsapp_number
-         - otp_code
-       properties:
-         whatsapp_number:
-           type: string
-           minLength: 13
-           maxLength: 20
-         otp_code:
-           type: string
-           example: "123456"
+    VerifyOTPResponse:
+      type: object
+      properties:
+        token:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
 
-     AdminLoginResponse:
-       type: object
-       properties:
-         admin_id:
-           type: string
-           format: uuid
-         whatsapp_number:
-           type: string
-         full_name:
-           type: string
-         role:
-           type: string
-           enum: [admin, super_admin]
-         token:
-           type: string
+    AdminLoginRequest:
+      type: object
+      required:
+        - whatsapp_number
+        - otp_code
+      properties:
+        whatsapp_number:
+          type: string
+          minLength: 13
+          maxLength: 20
+        otp_code:
+          type: string
+          example: "123456"
 
-     AdminProfileResponse:
-       type: object
-       properties:
-         admin_id:
-           type: string
-           format: uuid
-         whatsapp_number:
-           type: string
-         full_name:
-           type: string
-         role:
-           type: string
-           enum: [admin, super_admin]
-         is_verified:
-           type: boolean
-         is_active:
-           type: boolean
-         last_login_at:
-           type: string
-           format: date-time
-           nullable: true
-         created_at:
-           type: string
-           format: date-time
-         updated_at:
-           type: string
-           format: date-time
+    AdminLoginResponse:
+      type: object
+      properties:
+        admin_id:
+          type: string
+          format: uuid
+        whatsapp_number:
+          type: string
+        full_name:
+          type: string
+        role:
+          type: string
+          enum: [admin, super_admin]
+        token:
+          type: string
 
-     SetupPasswordRequest:
-       type: object
-       required:
-         - password
-       properties:
-         password:
-           type: string
-           minLength: 8
-           maxLength: 100
-           format: password
+    AdminProfile:
+      type: object
+      properties:
+        admin_id:
+          type: string
+          format: uuid
+        whatsapp_number:
+          type: string
+        full_name:
+          type: string
+        role:
+          type: string
+          enum: [admin, super_admin]
 
-     AdminProfileResponse:
-       type: object
-       properties:
-         success:
-           type: boolean
-           example: true
-         message:
-           type: string
-           example: "Password set successfully"
+    AdminProfileResponse:
+      type: object
+      properties:
+        admin_id:
+          type: string
+          format: uuid
+        whatsapp_number:
+          type: string
+        full_name:
+          type: string
+        role:
+          type: string
+          enum: [admin, super_admin]
+        is_verified:
+          type: boolean
+        is_active:
+          type: boolean
+        last_login_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
 
-     ListAdminsResponse:
-       type: object
-       properties:
-         admins:
-           type: array
-           items:
-             $ref: '#/components/schemas/AdminProfile'
-         success:
-           type: boolean
-           example: true
+    SetupPasswordRequest:
+      type: object
+      required:
+        - password
+      properties:
+        password:
+          type: string
+          minLength: 8
+          maxLength: 100
+          format: password
 
-     CreateAdminRequest:
-       type: object
-       required:
-         - whatsapp_number
-         - full_name
-         - role
-       properties:
-         whatsapp_number:
-           type: string
-           minLength: 13
-           maxLength: 20
-         full_name:
-           type: string
-           maxLength: 100
-         role:
-           type: string
-           enum: [admin, super_admin]
+    SetupPasswordResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Password set successfully"
 
-     CreateAdminResponse:
-       type: object
-       properties:
-         admin_id:
-           type: string
-           format: uuid
-         message:
-           type: string
-           example: "Admin created successfully"
+    ListAdminsResponse:
+      type: object
+      properties:
+        admins:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminProfile'
+        success:
+          type: boolean
+          example: true
 
-     UpdateAdminRequest:
-       type: object
-       properties:
-         full_name:
-           type: string
-           maxLength: 100
-         role:
-           type: string
-           enum: [admin, super_admin]
-         is_active:
-           type: boolean
+    CreateAdminRequest:
+      type: object
+      required:
+        - whatsapp_number
+        - full_name
+        - role
+      properties:
+        whatsapp_number:
+          type: string
+          minLength: 13
+          maxLength: 20
+        full_name:
+          type: string
+          maxLength: 100
+        role:
+          type: string
+          enum: [admin, super_admin]
 
-     UpdateAdminResponse:
-       type: object
-       properties:
-         admin_id:
-           type: string
-           format: uuid
-         message:
-           type: string
-           example: "Admin updated successfully"
+    CreateAdminResponse:
+      type: object
+      properties:
+        admin_id:
+          type: string
+          format: uuid
+        message:
+          type: string
+          example: "Admin created successfully"
 
-     WhatsAppStatusResponse:
-       type: object
-       properties:
-         is_connected:
-           type: boolean
-         gateway_token_valid:
-           type: boolean
-         phone_number:
-           type: string
-         last_connected_at:
-           type: string
-           format: date-time
-           nullable: true
-         qr_code:
-           type: string
-           format: byte
-           nullable: true
-         qr_code_expires_at:
-           type: string
-           format: date-time
-           nullable: true
-         message:
-           type: string
-           nullable: true
+    UpdateAdminRequest:
+      type: object
+      properties:
+        full_name:
+          type: string
+          maxLength: 100
+        role:
+          type: string
+          enum: [admin, super_admin]
+        is_active:
+          type: boolean
 
-     QRCodeRequest:
-       type: object
-       properties:
-         phone_number:
-           type: string
-           minLength: 13
-           maxLength: 20
+    UpdateAdminResponse:
+      type: object
+      properties:
+        admin_id:
+          type: string
+          format: uuid
+        message:
+          type: string
+          example: "Admin updated successfully"
 
-     QRCodeResponse:
-       type: object
-       properties:
-         qr_code:
-           type: string
-           format: byte
-         qr_code_expires_at:
-           type: string
-           format: date-time
+    WhatsAppStatusResponse:
+      type: object
+      properties:
+        is_connected:
+          type: boolean
+        gateway_token_valid:
+          type: boolean
+        phone_number:
+          type: string
+        last_connected_at:
+          type: string
+          format: date-time
+          nullable: true
+        qr_code:
+          type: string
+          format: byte
+          nullable: true
+        qr_code_expires_at:
+          type: string
+          format: date-time
+          nullable: true
+        message:
+          type: string
+          nullable: true
 
-     UpdateConfigRequest:
-       type: object
-       properties:
-         phone_number:
-           type: string
-           minLength: 13
-           maxLength: 20
-         token:
-           type: string
+    QRCodeRequest:
+      type: object
+      properties:
+        phone_number:
+          type: string
+          minLength: 13
+          maxLength: 20
 
-     Contact:
+    QRCodeResponse:
+      type: object
+      properties:
+        qr_code:
+          type: string
+          format: byte
+        qr_code_expires_at:
+          type: string
+          format: date-time
+
+    UpdateConfigRequest:
+      type: object
+      properties:
+        phone_number:
+          type: string
+          minLength: 13
+          maxLength: 20
+        token:
+          type: string
+
+    Contact:
       type: object
       properties:
         contact_id:

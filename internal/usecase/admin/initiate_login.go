@@ -23,9 +23,13 @@ type InitiateLoginRequest struct {
 	WhatsAppNumber string `json:"whatsapp_number" validate:"required,len=13,max=20"`
 }
 
-// InitiateLoginResult represents login initiation result
+// InitiateLoginResult represents login initiation result.
+// Fields mirror the InitiateLoginResponse schema in docs/swagger.yaml.
 type InitiateLoginResult struct {
+	Success   bool   `json:"success"`
+	Message   string `json:"message"`
 	SessionID string `json:"session_id"`
+	ExpiresAt string `json:"expires_at"`
 }
 
 // InitiateLoginUseCase handles initiating admin login flow
@@ -84,7 +88,10 @@ func (uc *InitiateLoginUseCase) Execute(ctx context.Context, req *InitiateLoginR
 	// }
 
 	return &InitiateLoginResult{
+		Success:   true,
+		Message:   "Login initiated",
 		SessionID: otpRecord.OTPID.String(),
+		ExpiresAt: otpRecord.ExpiresAt.Format(time.RFC3339),
 	}, nil
 }
 
