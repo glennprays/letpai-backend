@@ -37,7 +37,7 @@ var CoreSet = wire.NewSet(
 
 var RepositorySet = wire.NewSet(
 	repository.NewPostgresUserRepository,
-	repository.NewPostgresOTPRepository,
+	repository.NewRedisOTPRepository,
 	repository.NewPostgresContactGroupRepository,
 	repository.NewPostgresContactRepository,
 	repository.NewPostgresSessionRepository,
@@ -46,7 +46,6 @@ var RepositorySet = wire.NewSet(
 	repository.NewPostgresNotificationLogRepository,
 	repository.NewPostgresWhatsAppConfigRepository,
 	repository.NewPostgresAdminRepository,
-	repository.NewPostgresAdminOTPVerificationRepository,
 )
 
 var ServiceSet = wire.NewSet(

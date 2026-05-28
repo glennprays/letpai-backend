@@ -47,7 +47,11 @@ func InitializeApp() (*App, error) {
 	}
 	healthHandler := handler.NewHealthHandler()
 	userRepository := repository.NewPostgresUserRepository(db)
-	otpRepository := repository.NewPostgresOTPRepository(db)
+	client, err := NewRedisConnection(configConfig)
+	if err != nil {
+		return nil, err
+	}
+	otpRepository := repository.NewRedisOTPRepository(client)
 	passwordService := NewPasswordService()
 	otpService := NewOTPService(configConfig)
 	whatsAppConfigRepository := repository.NewPostgresWhatsAppConfigRepository(db)
@@ -121,10 +125,6 @@ func InitializeApp() (*App, error) {
 	markPaidWithoutProofUseCase := payment.NewMarkPaidWithoutProofUseCase(sessionRepository, participantRepository)
 	paymentHandler := handler.NewPaymentHandler(submitPaymentUseCase, approvePaymentUseCase, rejectPaymentUseCase, bulkApproveUseCase, bulkRejectUseCase, getPaymentPageUseCase, getPaymentProofUseCase, markPaidWithoutProofUseCase)
 	sendNotificationsUseCase := notification.NewSendNotificationsUseCase(sessionRepository, participantRepository, contactRepository, billItemRepository, whatsAppService, notificationLogRepository)
-	client, err := NewRedisConnection(configConfig)
-	if err != nil {
-		return nil, err
-	}
 	rateLimitService := NewRateLimitService(client)
 	sendReminderUseCase := notification.NewSendReminderUseCase(participantRepository, sessionRepository, contactRepository, whatsAppService, rateLimitService)
 	bulkReminderUseCase := notification.NewBulkReminderUseCase(participantRepository, sessionRepository, contactRepository, whatsAppService, rateLimitService)
@@ -148,7 +148,7 @@ var CoreSet = wire.NewSet(config.Load, logger.ProviderLogger, NewPostgresConnect
 	NewRedisConnection,
 )
 
-var RepositorySet = wire.NewSet(repository.NewPostgresUserRepository, repository.NewPostgresOTPRepository, repository.NewPostgresContactGroupRepository, repository.NewPostgresContactRepository, repository.NewPostgresSessionRepository, repository.NewPostgresParticipantRepository, repository.NewPostgresBillItemRepository, repository.NewPostgresNotificationLogRepository, repository.NewPostgresWhatsAppConfigRepository, repository.NewPostgresAdminRepository, repository.NewPostgresAdminOTPVerificationRepository)
+var RepositorySet = wire.NewSet(repository.NewPostgresUserRepository, repository.NewRedisOTPRepository, repository.NewPostgresContactGroupRepository, repository.NewPostgresContactRepository, repository.NewPostgresSessionRepository, repository.NewPostgresParticipantRepository, repository.NewPostgresBillItemRepository, repository.NewPostgresNotificationLogRepository, repository.NewPostgresWhatsAppConfigRepository, repository.NewPostgresAdminRepository)
 
 var ServiceSet = wire.NewSet(
 	NewJWTService,
