@@ -25,8 +25,8 @@ func NewPostgresParticipantRepository(db *sqlx.DB) ports.ParticipantRepository {
 // Create creates a new participant
 func (r *PostgresParticipantRepository) Create(ctx context.Context, participant *entity.SessionParticipant) error {
 	query := `
-		INSERT INTO session_participants (participant_id, session_id, contact_id, custom_name, custom_whatsapp, share_amount, payment_status, payment_proof_url, rejection_count, rejection_reason, notification_count, last_notification_at, joined_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+		INSERT INTO session_participants (participant_id, session_id, contact_id, custom_name, custom_whatsapp, share_amount, payment_status, payment_proof_url, rejection_count, rejection_reason, notification_count, last_notification_at, paid_manually, joined_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 	`
 
 	_, err := r.db.ExecContext(
@@ -44,6 +44,7 @@ func (r *PostgresParticipantRepository) Create(ctx context.Context, participant 
 		participant.RejectionReason,
 		participant.NotificationCount,
 		participant.LastNotificationAt,
+		participant.PaidManually,
 		participant.JoinedAt,
 		participant.UpdatedAt,
 	)
@@ -58,7 +59,7 @@ func (r *PostgresParticipantRepository) Create(ctx context.Context, participant 
 // FindByID finds a participant by ID
 func (r *PostgresParticipantRepository) FindByID(ctx context.Context, participantID string) (*entity.SessionParticipant, error) {
 	query := `
-		SELECT participant_id, session_id, contact_id, custom_name, custom_whatsapp, share_amount, payment_status, payment_proof_url, rejection_count, rejection_reason, notification_count, last_notification_at, joined_at, updated_at
+		SELECT participant_id, session_id, contact_id, custom_name, custom_whatsapp, share_amount, payment_status, payment_proof_url, rejection_count, rejection_reason, notification_count, last_notification_at, paid_manually, joined_at, updated_at
 		FROM session_participants
 		WHERE participant_id = $1
 	`
@@ -86,6 +87,7 @@ func (r *PostgresParticipantRepository) FindByID(ctx context.Context, participan
 		&participant.RejectionReason,
 		&participant.NotificationCount,
 		&participant.LastNotificationAt,
+		&participant.PaidManually,
 		&participant.JoinedAt,
 		&participant.UpdatedAt,
 	)
@@ -104,7 +106,7 @@ func (r *PostgresParticipantRepository) FindByID(ctx context.Context, participan
 // FindBySessionID finds all participants for a session
 func (r *PostgresParticipantRepository) FindBySessionID(ctx context.Context, sessionID string) ([]*entity.SessionParticipant, error) {
 	query := `
-		SELECT participant_id, session_id, contact_id, custom_name, custom_whatsapp, share_amount, payment_status, payment_proof_url, rejection_count, rejection_reason, notification_count, last_notification_at, joined_at, updated_at
+		SELECT participant_id, session_id, contact_id, custom_name, custom_whatsapp, share_amount, payment_status, payment_proof_url, rejection_count, rejection_reason, notification_count, last_notification_at, paid_manually, joined_at, updated_at
 		FROM session_participants
 		WHERE session_id = $1
 		ORDER BY joined_at ASC
@@ -136,6 +138,7 @@ func (r *PostgresParticipantRepository) FindBySessionID(ctx context.Context, ses
 			&participant.RejectionReason,
 			&participant.NotificationCount,
 			&participant.LastNotificationAt,
+			&participant.PaidManually,
 			&participant.JoinedAt,
 			&participant.UpdatedAt,
 		)
@@ -164,7 +167,7 @@ func (r *PostgresParticipantRepository) FindBySessionIDWithContactInfo(ctx conte
 	query := `
 		SELECT sp.participant_id, sp.session_id, sp.contact_id, sp.custom_name, sp.custom_whatsapp,
 		       sp.share_amount, sp.payment_status, sp.payment_proof_url, sp.rejection_count, sp.rejection_reason,
-		       sp.notification_count, sp.last_notification_at, sp.joined_at, sp.updated_at,
+		       sp.notification_count, sp.last_notification_at, sp.paid_manually, sp.joined_at, sp.updated_at,
 		       c.avatar_url as contact_avatar_url,
 		       c.name as contact_name,
 		       c.whatsapp_number as contact_whatsapp
@@ -200,6 +203,7 @@ func (r *PostgresParticipantRepository) FindBySessionIDWithContactInfo(ctx conte
 			&participant.RejectionReason,
 			&participant.NotificationCount,
 			&participant.LastNotificationAt,
+			&participant.PaidManually,
 			&participant.JoinedAt,
 			&participant.UpdatedAt,
 			&participant.ContactAvatarURL,
@@ -228,7 +232,7 @@ func (r *PostgresParticipantRepository) FindBySessionIDWithContactInfo(ctx conte
 func (r *PostgresParticipantRepository) Update(ctx context.Context, participant *entity.SessionParticipant) error {
 	query := `
 		UPDATE session_participants
-		SET custom_name = $2, custom_whatsapp = $3, share_amount = $4, payment_status = $5, payment_proof_url = $6, rejection_count = $7, rejection_reason = $8, notification_count = $9, last_notification_at = $10, updated_at = $11
+		SET custom_name = $2, custom_whatsapp = $3, share_amount = $4, payment_status = $5, payment_proof_url = $6, rejection_count = $7, rejection_reason = $8, notification_count = $9, last_notification_at = $10, paid_manually = $11, updated_at = $12
 		WHERE participant_id = $1
 	`
 
@@ -245,6 +249,7 @@ func (r *PostgresParticipantRepository) Update(ctx context.Context, participant 
 		participant.RejectionReason,
 		participant.NotificationCount,
 		participant.LastNotificationAt,
+		participant.PaidManually,
 		participant.UpdatedAt,
 	)
 

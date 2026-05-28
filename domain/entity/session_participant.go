@@ -24,6 +24,7 @@ type SessionParticipant struct {
 	RejectionReason     *string                   `json:"rejection_reason,omitempty" db:"rejection_reason"`
 	NotificationCount   int                       `json:"notification_count" db:"notification_count"`
 	LastNotificationAt  *time.Time                `json:"last_notification_at,omitempty" db:"last_notification_at"`
+	PaidManually        bool                      `json:"paid_manually" db:"paid_manually"`
 	JoinedAt            time.Time                 `json:"joined_at" db:"joined_at"`
 	UpdatedAt           time.Time                 `json:"updated_at" db:"updated_at"`
 
@@ -110,6 +111,24 @@ func (p *SessionParticipant) ApprovePayment() error {
 	}
 	p.RejectionCount = 0
 	p.RejectionReason = nil
+	p.PaidManually = false
+	return nil
+}
+
+// MarkPaidManually moves the participant directly to Paid without a proof
+// upload. Used by the host's "Mark as paid" action. Returns an error if
+// the participant is already paid (a no-op the caller can surface as 409).
+func (p *SessionParticipant) MarkPaidManually() error {
+	if p.PaymentStatus == valueobject.PaymentStatusPaid {
+		return ErrInvalidPaymentStatusTransitionError
+	}
+	// Forced transition: paid_manually bypasses the regular state machine.
+	p.PaymentStatus = valueobject.PaymentStatusPaid
+	p.PaidManually = true
+	p.RejectionCount = 0
+	p.RejectionReason = nil
+	p.PaymentProofURL = nil
+	p.UpdatedAt = time.Now()
 	return nil
 }
 

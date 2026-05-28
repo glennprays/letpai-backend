@@ -2,28 +2,41 @@ package session
 
 import (
 	"context"
+	"time"
 
 	"github.com/glennprays/letpai-backend/domain/ports"
 )
 
-// ParticipantItem represents a participant in session detail
+// ParticipantItem represents a participant in session detail.
+//
+// PaidManually surfaces whether the host closed this participant out
+// without a proof upload. NotificationCount / LastNotificationAt mirror
+// the participant row so the host UI can show "Reminded 2× — Last 4h
+// ago" and derive cooldown state without an extra round trip.
 type ParticipantItem struct {
-	ParticipantID   string  `json:"participant_id"`
-	ContactID       *string `json:"contact_id,omitempty"`
-	Name            string  `json:"name"`
-	WhatsAppNumber  string  `json:"whatsapp_number"`
-	AvatarURL       *string `json:"avatar_url,omitempty"`
-	ShareAmount     float64 `json:"share_amount"`
-	PaymentStatus   string  `json:"payment_status"`
-	PaymentProofURL *string `json:"payment_proof_url,omitempty"`
+	ParticipantID      string     `json:"participant_id"`
+	ContactID          *string    `json:"contact_id,omitempty"`
+	Name               string     `json:"name"`
+	WhatsAppNumber     string     `json:"whatsapp_number"`
+	AvatarURL          *string    `json:"avatar_url,omitempty"`
+	ShareAmount        float64    `json:"share_amount"`
+	PaymentStatus      string     `json:"payment_status"`
+	PaymentProofURL    *string    `json:"payment_proof_url,omitempty"`
+	PaidManually       bool       `json:"paid_manually"`
+	NotificationCount  int        `json:"notification_count"`
+	LastNotificationAt *time.Time `json:"last_notification_at,omitempty"`
 }
 
-// BillItemItem represents a bill item in session detail
+// BillItemItem represents a bill item in session detail.
+//
+// ParticipantIDs is the per-bill participant assignment; an empty slice
+// means "applies to everyone in the session" (legacy default).
 type BillItemItem struct {
-	BillItemID  string  `json:"bill_item_id"`
-	Description string  `json:"description"`
-	Amount      float64 `json:"amount"`
-	Category    *string `json:"category,omitempty"`
+	BillItemID     string   `json:"bill_item_id"`
+	Description    string   `json:"description"`
+	Amount         float64  `json:"amount"`
+	Category       *string  `json:"category,omitempty"`
+	ParticipantIDs []string `json:"participant_ids"`
 }
 
 // GetSessionDetailResponse represents the response for getting session details
@@ -111,24 +124,32 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, userID, sessionI
 		avatarURL := p.ContactAvatarURL
 
 		participantItems = append(participantItems, &ParticipantItem{
-			ParticipantID:   p.ParticipantID.String(),
-			ContactID:       contactID,
-			Name:            name,
-			WhatsAppNumber:  whatsappNumber,
-			AvatarURL:       avatarURL,
-			ShareAmount:     p.ShareAmount,
-			PaymentStatus:   p.PaymentStatus.String(),
-			PaymentProofURL: p.PaymentProofURL,
+			ParticipantID:      p.ParticipantID.String(),
+			ContactID:          contactID,
+			Name:               name,
+			WhatsAppNumber:     whatsappNumber,
+			AvatarURL:          avatarURL,
+			ShareAmount:        p.ShareAmount,
+			PaymentStatus:      p.PaymentStatus.String(),
+			PaymentProofURL:    p.PaymentProofURL,
+			PaidManually:       p.PaidManually,
+			NotificationCount:  p.NotificationCount,
+			LastNotificationAt: p.LastNotificationAt,
 		})
 	}
 
 	billItems := make([]*BillItemItem, 0, len(bills))
 	for _, b := range bills {
+		pidStrs := make([]string, 0, len(b.ParticipantIDs))
+		for _, id := range b.ParticipantIDs {
+			pidStrs = append(pidStrs, id.String())
+		}
 		billItems = append(billItems, &BillItemItem{
-			BillItemID:  b.BillItemID.String(),
-			Description: b.Description,
-			Amount:      b.Amount,
-			Category:    b.Category,
+			BillItemID:     b.BillItemID.String(),
+			Description:    b.Description,
+			Amount:         b.Amount,
+			Category:       b.Category,
+			ParticipantIDs: pidStrs,
 		})
 	}
 

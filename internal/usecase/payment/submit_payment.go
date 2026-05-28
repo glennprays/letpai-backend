@@ -58,6 +58,13 @@ func (uc *SubmitPaymentUseCase) Execute(ctx context.Context, participantID strin
 		return nil, err
 	}
 
+	// A host-driven "Mark as paid" closes the participant out before a
+	// proof is uploaded. Subsequent uploads should fail with a clear
+	// message rather than silently overwriting the manual closure.
+	if participant.IsPaid() && participant.PaidManually {
+		return nil, domain.NewError(domain.ErrConflict, errors.New("your host already marked this payment as complete"))
+	}
+
 	if !participant.HasPendingPayment() {
 		return nil, domain.NewError(domain.ErrBadRequest, errors.New("payment has already been submitted"))
 	}

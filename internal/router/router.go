@@ -162,6 +162,10 @@ func (r *Router) setupProtectedPaymentRoutes(group fiber.Router) {
 	payments.Post("/:proof_id/reject", r.PaymentHandler.RejectPayment)
 	payments.Post("/bulk-approve", r.PaymentHandler.BulkApprove)
 	payments.Post("/bulk-reject", r.PaymentHandler.BulkReject)
+
+	// Host can manually mark a participant as paid without a proof
+	// upload (e.g. cash payments). 409 if the participant is already paid.
+	group.Post("/participants/:participant_id/mark-paid", r.PaymentHandler.MarkPaidWithoutProof)
 }
 
 func (r *Router) setupNotificationRoutes(group fiber.Router) {

@@ -6,28 +6,36 @@ import (
 	"github.com/google/uuid"
 )
 
-// BillItem represents a bill item in a session
+// BillItem represents a bill item in a session.
+//
+// ParticipantIDs is populated by the repository via the
+// bill_item_participants join table. An empty slice means "applies to
+// everyone in the session" (legacy behaviour); a non-empty slice means
+// the bill is shared only among the listed participants.
 type BillItem struct {
-	BillItemID  uuid.UUID `json:"bill_item_id" db:"bill_item_id"`
-	SessionID   uuid.UUID `json:"session_id" db:"session_id"`
-	Description string    `json:"description" db:"description"`
-	Amount      float64   `json:"amount" db:"amount"`
-	Category    *string   `json:"category,omitempty" db:"category"`
-	CreatedAt   time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at" db:"updated_at"`
+	BillItemID     uuid.UUID   `json:"bill_item_id" db:"bill_item_id"`
+	SessionID      uuid.UUID   `json:"session_id" db:"session_id"`
+	Description    string      `json:"description" db:"description"`
+	Amount         float64     `json:"amount" db:"amount"`
+	Category       *string     `json:"category,omitempty" db:"category"`
+	CreatedAt      time.Time   `json:"created_at" db:"created_at"`
+	UpdatedAt      time.Time   `json:"updated_at" db:"updated_at"`
+	ParticipantIDs []uuid.UUID `json:"participant_ids" db:"-"`
 }
 
-// NewBillItem creates a new bill item
-func NewBillItem(sessionID uuid.UUID, description string, amount float64, category *string) *BillItem {
+// NewBillItem creates a new bill item. participantIDs may be nil/empty to
+// apply the bill to every participant in the session.
+func NewBillItem(sessionID uuid.UUID, description string, amount float64, category *string, participantIDs []uuid.UUID) *BillItem {
 	now := time.Now()
 	return &BillItem{
-		BillItemID:  uuid.New(),
-		SessionID:   sessionID,
-		Description: description,
-		Amount:      amount,
-		Category:    category,
-		CreatedAt:   now,
-		UpdatedAt:   now,
+		BillItemID:     uuid.New(),
+		SessionID:      sessionID,
+		Description:    description,
+		Amount:         amount,
+		Category:       category,
+		CreatedAt:      now,
+		UpdatedAt:      now,
+		ParticipantIDs: participantIDs,
 	}
 }
 

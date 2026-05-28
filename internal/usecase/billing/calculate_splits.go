@@ -45,73 +45,115 @@ func NewCalculateSplitsUseCase(
 	}
 }
 
-// Execute calculates equal splits for all participants.
+// Execute calculates per-bill splits, accumulates per-participant shares,
+// and writes them back to the session participants.
 //
-// CONCURRENCY: this method is NOT transactional. A concurrent AddBillItem /
-// DeleteBillItem / AddParticipants / RemoveParticipant between the read
-// (participants + bill total) and the write (BulkUpdateShareAmounts) will
-// leave the split stale until the next CalculateSplits call. The full fix
-// requires a unit-of-work pattern with `SELECT ... FOR UPDATE` on the
-// session row across the read and write; see backlog item B1.
-// Mitigation today: hosts call CalculateSplits after they're done editing,
-// not concurrently with edits.
+// SEMANTICS: each bill is divided among its assigned participants (empty
+// assignment ⇒ everyone in the session). Per-participant shares are
+// rounded to 2 decimals; any rounding remainder is added to the last
+// participant in the bill's iteration order so the bill total matches
+// the original amount exactly.
+//
+// CONCURRENCY: NOT transactional. Concurrent AddBillItem / DeleteBillItem
+// / AddParticipants / RemoveParticipant calls between the read and the
+// write can leave the split stale until the next call. Hosts should
+// call this once their edits are done.
 func (uc *CalculateSplitsUseCase) Execute(ctx context.Context, userID, sessionID string) (*CalculateSplitsResponse, error) {
-	// Verify session exists and belongs to user
 	session, err := uc.sessionRepo.FindByID(ctx, sessionID, userID)
 	if err != nil {
 		return nil, err
 	}
-
-	// Only allow calculating splits for active sessions
 	if !session.IsActive() {
 		return nil, domain.NewError(domain.ErrBadRequest, errors.New("cannot calculate splits for a completed or cancelled session"))
 	}
 
-	// Fetch all participants
 	participants, err := uc.participantRepo.FindBySessionID(ctx, sessionID)
 	if err != nil {
 		return nil, err
 	}
+	if len(participants) == 0 {
+		return nil, domain.NewError(domain.ErrBadRequest, errors.New("no participants in session"))
+	}
 
-	// Get total from bill items (sum of all bills)
-	billTotal, err := uc.billItemRepo.SumBySessionID(ctx, sessionID)
+	orderedIDs := make([]string, 0, len(participants))
+	participantByID := make(map[string]bool, len(participants))
+	for _, p := range participants {
+		id := p.ParticipantID.String()
+		orderedIDs = append(orderedIDs, id)
+		participantByID[id] = true
+	}
+
+	bills, err := uc.billItemRepo.FindBySessionID(ctx, sessionID)
 	if err != nil {
 		return nil, err
 	}
 
-	// Calculate share per person
-	participantCount := len(participants)
-	if participantCount == 0 {
-		return nil, domain.NewError(domain.ErrBadRequest, errors.New("no participants in session"))
+	accumulated := make(map[string]float64, len(orderedIDs))
+	for _, id := range orderedIDs {
+		accumulated[id] = 0
 	}
 
-	sharePerPerson := math.Round(billTotal/float64(participantCount)*100) / 100
+	billTotal := 0.0
+	for _, bill := range bills {
+		shareIDs := make([]string, 0)
+		if len(bill.ParticipantIDs) == 0 {
+			shareIDs = append(shareIDs, orderedIDs...)
+		} else {
+			for _, pid := range bill.ParticipantIDs {
+				idStr := pid.String()
+				if participantByID[idStr] {
+					shareIDs = append(shareIDs, idStr)
+				}
+			}
+			if len(shareIDs) == 0 {
+				// All originally-assigned participants have been removed;
+				// fall back to "everyone" so the bill still contributes.
+				shareIDs = append(shareIDs, orderedIDs...)
+			}
+		}
 
-	// Update all participants' share amounts
-	updates := make(map[string]float64)
-	participantSplits := make([]*ParticipantSplit, 0, participantCount)
+		perPerson := math.Round((bill.Amount/float64(len(shareIDs)))*100) / 100
+		distributed := perPerson * float64(len(shareIDs))
+		remainder := math.Round((bill.Amount-distributed)*100) / 100
 
+		for _, id := range shareIDs {
+			accumulated[id] += perPerson
+		}
+		if remainder != 0 {
+			accumulated[shareIDs[len(shareIDs)-1]] += remainder
+		}
+
+		billTotal += bill.Amount
+	}
+
+	updates := make(map[string]float64, len(orderedIDs))
+	participantSplits := make([]*ParticipantSplit, 0, len(orderedIDs))
 	for _, p := range participants {
-		p.SetShareAmount(sharePerPerson)
-		updates[p.ParticipantID.String()] = sharePerPerson
-
+		idStr := p.ParticipantID.String()
+		amount := math.Round(accumulated[idStr]*100) / 100
+		p.SetShareAmount(amount)
+		updates[idStr] = amount
 		participantSplits = append(participantSplits, &ParticipantSplit{
-			ParticipantID: p.ParticipantID.String(),
-			ShareAmount:   sharePerPerson,
+			ParticipantID: idStr,
+			ShareAmount:   amount,
 			PaymentStatus: p.PaymentStatus.String(),
 		})
 	}
 
-	// Bulk update share amounts
 	if err := uc.participantRepo.BulkUpdateShareAmounts(ctx, updates); err != nil {
 		return nil, err
+	}
+
+	avg := 0.0
+	if len(orderedIDs) > 0 {
+		avg = math.Round((billTotal/float64(len(orderedIDs)))*100) / 100
 	}
 
 	return &CalculateSplitsResponse{
 		Message:          "Splits calculated successfully",
 		TotalAmount:      billTotal,
-		ParticipantCount: participantCount,
-		SharePerPerson:   sharePerPerson,
+		ParticipantCount: len(orderedIDs),
+		SharePerPerson:   avg,
 		Participants:     participantSplits,
 	}, nil
 }

@@ -116,6 +116,7 @@ var UseCaseSet = wire.NewSet(
 	payment.NewBulkRejectUseCase,
 	payment.NewGetPaymentPageUseCase,
 	payment.NewGetPaymentProofUseCase,
+	payment.NewMarkPaidWithoutProofUseCase,
 	// Notification use cases
 	notification.NewSendNotificationsUseCase,
 	notification.NewSendReminderUseCase,
