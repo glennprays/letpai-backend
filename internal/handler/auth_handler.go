@@ -214,5 +214,14 @@ func (h *AuthHandler) UpdateProfile(c *fiber.Ctx) error {
 		return c.Status(apiErr.Status).JSON(apiErr.Response())
 	}
 
-	return c.JSON(result)
+	return c.Status(fiber.StatusOK).JSON(response.UpdateProfileResponse{
+		Success: true,
+		Message: "Profile updated successfully",
+		User: &response.User{
+			UserID:         result.UserID,
+			WhatsAppNumber: result.WhatsAppNumber,
+			FullName:       result.FullName,
+			AvatarURL:      result.AvatarURL,
+		},
+	})
 }

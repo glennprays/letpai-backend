@@ -14,10 +14,11 @@ type UpdateProfileRequest struct {
 
 // UpdateProfileResponse represents response after updating profile
 type UpdateProfileResponse struct {
-	UserID    string `json:"user_id"`
-	FullName  string `json:"full_name"`
-	AvatarURL string `json:"avatar_url"`
-	UpdatedAt string `json:"updated_at"`
+	UserID         string `json:"user_id"`
+	WhatsAppNumber string `json:"whatsapp_number"`
+	FullName       string `json:"full_name"`
+	AvatarURL      string `json:"avatar_url"`
+	UpdatedAt      string `json:"updated_at"`
 }
 
 // UpdateProfileUseCase handles updating user profile
@@ -52,9 +53,10 @@ func (uc *UpdateProfileUseCase) Execute(ctx context.Context, userID string, req 
 	}
 
 	return &UpdateProfileResponse{
-		UserID:    user.UserID.String(),
-		FullName:  user.FullName,
-		AvatarURL: user.AvatarURL,
-		UpdatedAt: user.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		UserID:         user.UserID.String(),
+		WhatsAppNumber: user.WhatsAppNumber,
+		FullName:       user.FullName,
+		AvatarURL:      user.AvatarURL,
+		UpdatedAt:      user.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	}, nil
 }

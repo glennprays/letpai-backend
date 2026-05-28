@@ -31,6 +31,13 @@ type LogoutResponse struct {
 	Message string `json:"message"`
 }
 
+// UpdateProfileResponse represents the response after a successful profile update
+type UpdateProfileResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+	User    *User  `json:"user"`
+}
+
 // ForgotPasswordResponse represents the response after initiating a password reset.
 type ForgotPasswordResponse struct {
 	Success   bool   `json:"success"`
@@ -43,4 +50,5 @@ type User struct {
 	UserID         string `json:"user_id"`
 	WhatsAppNumber string `json:"whatsapp_number"`
 	FullName       string `json:"full_name,omitempty"`
+	AvatarURL      string `json:"avatar_url,omitempty"`
 }
