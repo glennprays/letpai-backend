@@ -8,6 +8,7 @@ import (
 	"github.com/glennprays/letpai-backend/domain"
 	"github.com/glennprays/letpai-backend/domain/entity"
 	"github.com/glennprays/letpai-backend/domain/ports"
+	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 )
 
@@ -194,6 +195,44 @@ func (r *PostgresNotificationLogRepository) FindLatestByParticipantIDWithType(ct
 	}
 
 	return &log, nil
+}
+
+// FindLatestPerParticipantBySessionID returns one row per participant
+// (the most recent log), keyed by participant_id. The DISTINCT ON +
+// ORDER BY (participant_id, sent_at DESC) shape relies on the
+// composite index added in migration 000022 — without it Postgres
+// would scan every log row for the session. Skips participants with
+// no logs (caller renders them as "Not sent yet").
+func (r *PostgresNotificationLogRepository) FindLatestPerParticipantBySessionID(ctx context.Context, sessionID string) (map[uuid.UUID]*entity.NotificationLog, error) {
+	const q = `
+		SELECT DISTINCT ON (nl.participant_id)
+		       nl.log_id, nl.participant_id, nl.notification_type,
+		       nl.whatsapp_message_id, nl.message_content, nl.sent_at,
+		       nl.status, nl.error_message
+		  FROM notification_logs nl
+		  JOIN session_participants sp ON sp.participant_id = nl.participant_id
+		 WHERE sp.session_id = $1
+		 ORDER BY nl.participant_id, nl.sent_at DESC
+	`
+	rows, err := r.db.QueryxContext(ctx, q, sessionID)
+	if err != nil {
+		return nil, domain.NewError(domain.ErrInternalFailure, err)
+	}
+	defer rows.Close()
+
+	out := make(map[uuid.UUID]*entity.NotificationLog)
+	for rows.Next() {
+		var log entity.NotificationLog
+		if err := rows.StructScan(&log); err != nil {
+			return nil, domain.NewError(domain.ErrInternalFailure, err)
+		}
+		copy := log
+		out[log.ParticipantID] = &copy
+	}
+	if err := rows.Err(); err != nil {
+		return nil, domain.NewError(domain.ErrInternalFailure, err)
+	}
+	return out, nil
 }
 
 // FindBySessionID finds all notification logs for all participants in a session

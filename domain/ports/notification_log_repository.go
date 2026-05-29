@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/glennprays/letpai-backend/domain/entity"
+	"github.com/google/uuid"
 )
 
 // NotificationLogRepository defines the interface for notification log data operations
@@ -28,6 +29,12 @@ type NotificationLogRepository interface {
 
 	// FindBySessionID finds all notification logs for all participants in a session
 	FindBySessionID(ctx context.Context, sessionID string) ([]*entity.NotificationLog, error)
+
+	// FindLatestPerParticipantBySessionID returns the most recent
+	// notification_log row for each participant in the session,
+	// keyed by participant_id. Used to drive the host-side delivery
+	// status chip on /sessions/:id without N+1 lookups.
+	FindLatestPerParticipantBySessionID(ctx context.Context, sessionID string) (map[uuid.UUID]*entity.NotificationLog, error)
 
 	// FindFailed finds all failed notifications
 	FindFailed(ctx context.Context) ([]*entity.NotificationLog, error)

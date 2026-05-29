@@ -72,15 +72,64 @@ type notificationVars struct {
 	URL             string
 }
 
+// ErrSessionNotDirty is the canonical not-dirty sentinel. Handlers
+// translate this into 409 SESSION_NOT_DIRTY so the FE can render its
+// "you already sent these — resend anyway?" confirm modal.
+var ErrSessionNotDirty = errors.New("session has no changes since last notification")
+
+// NotDirtyError wraps ErrSessionNotDirty with the timestamp the FE
+// needs to render its confirm modal ("Already sent 12 min ago"). The
+// handler unwraps to populate the 409 body without an extra DB round
+// trip.
+type NotDirtyError struct {
+	LastNotifiedAt time.Time
+}
+
+func (e *NotDirtyError) Error() string { return ErrSessionNotDirty.Error() }
+func (e *NotDirtyError) Unwrap() error { return ErrSessionNotDirty }
+
 // Execute queues WhatsApp notifications to all participants in a
 // session and returns immediately. The gateway sends run on
 // background goroutines so a slow upstream gateway can't time out
 // the HTTP request.
-func (uc *SendNotificationsUseCase) Execute(ctx context.Context, userID, sessionID string) (*SendNotificationsResponse, error) {
+//
+// `force=true` bypasses the dirty-for-notify check (host explicitly
+// chose to resend via the /resend escape hatch). `force=false` is
+// the default UX path and returns ErrSessionNotDirty when the
+// session has been notified and nothing has changed since.
+func (uc *SendNotificationsUseCase) Execute(ctx context.Context, userID, sessionID string, force bool) (*SendNotificationsResponse, error) {
 	// Verify session exists and belongs to user
 	session, err := uc.sessionRepo.FindByID(ctx, sessionID, userID)
 	if err != nil {
 		return nil, err
+	}
+
+	// Count unpaid participants up front. Two reasons:
+	//   1. Feeds IsDirtyForNotify so "mark everyone paid" doesn't
+	//      keep the gate open via the trigger-driven updated_at bump.
+	//   2. Lets us short-circuit when there's literally no one left
+	//      to notify (saves a goroutine spawn and a gateway round
+	//      trip per zero-fanout call).
+	pendingCount, err := uc.participantRepo.CountBySessionIDAndStatus(ctx, sessionID, "pending")
+	if err != nil {
+		return nil, err
+	}
+	submittedCount, err := uc.participantRepo.CountBySessionIDAndStatus(ctx, sessionID, "submitted")
+	if err != nil {
+		return nil, err
+	}
+	rejectedCount, err := uc.participantRepo.CountBySessionIDAndStatus(ctx, sessionID, "rejected")
+	if err != nil {
+		return nil, err
+	}
+	hasUnpaid := (pendingCount + submittedCount + rejectedCount) > 0
+
+	if !force && !session.IsDirtyForNotify(hasUnpaid) {
+		nde := &NotDirtyError{}
+		if session.LastNotifiedAt != nil {
+			nde.LastNotifiedAt = *session.LastNotifiedAt
+		}
+		return nil, domain.NewError(domain.ErrConflict, nde)
 	}
 
 	// Fetch participants with contact info joined in — one query, no N+1
@@ -135,6 +184,18 @@ func (uc *SendNotificationsUseCase) Execute(ctx context.Context, userID, session
 			Status:        "queued",
 			QueuedAt:      time.Now(),
 		})
+	}
+
+	// Stamp last_notified_at exactly once, after all dispatches are
+	// queued. We mark even if some individual goroutines later fail —
+	// the host's "send now" intent was honoured; per-participant
+	// delivery state surfaces via the status chip + retry button.
+	if err := uc.sessionRepo.MarkNotified(ctx, sessionID, time.Now()); err != nil {
+		// Best-effort: a failure here means the gate doesn't latch
+		// but the messages still went out, which is the safer
+		// failure direction (host can re-fire if they want; the
+		// rate-limit on individual reminders still applies).
+		_ = err
 	}
 
 	return &SendNotificationsResponse{

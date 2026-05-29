@@ -29,6 +29,13 @@ type Session struct {
 	BankAccountNumber *string `json:"bank_account_number,omitempty" db:"bank_account_number"`
 	BankAccountHolder *string `json:"bank_account_holder,omitempty" db:"bank_account_holder"`
 
+	// LastNotifiedAt is the timestamp of the most recent successful
+	// `POST /sessions/:id/send-notifications` call. IsDirtyForNotify
+	// compares it against UpdatedAt (which child-touch triggers bump
+	// on every participant / bill mutation) to decide whether the
+	// host is allowed to fire a fresh batch.
+	LastNotifiedAt *time.Time `json:"last_notified_at,omitempty" db:"last_notified_at"`
+
 	CreatedAt time.Time  `json:"created_at" db:"created_at"`
 	UpdatedAt time.Time  `json:"updated_at" db:"updated_at"`
 	DeletedAt *time.Time `json:"deleted_at,omitempty" db:"deleted_at"`
@@ -133,6 +140,34 @@ func (s *Session) Cancel() error {
 // IsActive checks if the session is active
 func (s *Session) IsActive() bool {
 	return s.Status == valueobject.SessionStatusActive
+}
+
+// IsDirtyForNotify reports whether the host is allowed to fire a fresh
+// `POST /sessions/:id/send-notifications` batch. The check is pure
+// over the loaded entity — DB triggers guarantee UpdatedAt advances on
+// every child mutation, and MarkNotified updates LastNotifiedAt
+// without touching UpdatedAt (intentionally — see migration 000021),
+// so a successful send naturally collapses the predicate to false.
+//
+// hasUnpaid is required so that "mark everyone paid" doesn't re-open
+// the gate (an updated_at bump from a participant write would, by
+// itself, satisfy the timestamp predicate). When every participant is
+// settled there's no one left to notify, so dirty is false regardless.
+func (s *Session) IsDirtyForNotify(hasUnpaid bool) bool {
+	if !hasUnpaid {
+		return false
+	}
+	if s.LastNotifiedAt == nil {
+		return true
+	}
+	return s.UpdatedAt.After(*s.LastNotifiedAt)
+}
+
+// MarkNotified updates the in-memory timestamp. The repo call that
+// persists this must NOT touch UpdatedAt or the predicate flips back
+// to dirty immediately.
+func (s *Session) MarkNotified(at time.Time) {
+	s.LastNotifiedAt = &at
 }
 
 // IsTerminal checks if the session is in a terminal state

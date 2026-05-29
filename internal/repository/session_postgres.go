@@ -65,7 +65,7 @@ func (r *PostgresSessionRepository) Create(ctx context.Context, session *entity.
 // have the token, so we don't double-gate by host).
 func (r *PostgresSessionRepository) FindByID(ctx context.Context, sessionID string, userID string) (*entity.Session, error) {
 	query := `
-		SELECT session_id, user_id, title, description, status, total_amount, currency, session_date, bank_name, bank_account_number, bank_account_holder, created_at, updated_at, deleted_at
+		SELECT session_id, user_id, title, description, status, total_amount, currency, session_date, bank_name, bank_account_number, bank_account_holder, last_notified_at, created_at, updated_at, deleted_at
 		FROM sessions
 		WHERE session_id = $1 AND deleted_at IS NULL
 	`
@@ -97,6 +97,7 @@ func (r *PostgresSessionRepository) FindByID(ctx context.Context, sessionID stri
 		&session.BankName,
 		&session.BankAccountNumber,
 		&session.BankAccountHolder,
+		&session.LastNotifiedAt,
 		&session.CreatedAt,
 		&session.UpdatedAt,
 		&session.DeletedAt,
@@ -192,7 +193,7 @@ func (r *PostgresSessionRepository) FindAll(ctx context.Context, userID string, 
 	// MarkPaidManually writes, so manual marks are included
 	// automatically by the FILTER clause.
 	dataQuery := `
-		SELECT s.session_id, s.user_id, s.title, s.description, s.status, s.total_amount, s.currency, s.session_date, s.bank_name, s.bank_account_number, s.bank_account_holder, s.created_at, s.updated_at, s.deleted_at,
+		SELECT s.session_id, s.user_id, s.title, s.description, s.status, s.total_amount, s.currency, s.session_date, s.bank_name, s.bank_account_number, s.bank_account_holder, s.last_notified_at, s.created_at, s.updated_at, s.deleted_at,
 		       COALESCE(sp_agg.participant_count, 0)::int AS participant_count,
 		       COALESCE(sp_agg.paid_count, 0)::int        AS paid_count
 		FROM sessions s
@@ -237,6 +238,7 @@ func (r *PostgresSessionRepository) FindAll(ctx context.Context, userID string, 
 			&session.BankName,
 			&session.BankAccountNumber,
 			&session.BankAccountHolder,
+			&session.LastNotifiedAt,
 			&session.CreatedAt,
 			&session.UpdatedAt,
 			&session.DeletedAt,
@@ -268,6 +270,35 @@ func (r *PostgresSessionRepository) FindAll(ctx context.Context, userID string, 
 		Sessions: sessions,
 		Total:    total,
 	}, nil
+}
+
+// MarkNotified stamps last_notified_at without touching updated_at.
+//
+// Bumping updated_at here would defeat the whole dirty-for-notify
+// gate (the predicate compares updated_at to last_notified_at, so
+// touching the former would instantly re-mark the session dirty).
+// The triggers in migration 000021 only fire on child tables, not
+// on `sessions`, so this UPDATE is genuinely the only writer that
+// can leave updated_at untouched.
+func (r *PostgresSessionRepository) MarkNotified(ctx context.Context, sessionID string, at time.Time) error {
+	const query = `
+		UPDATE sessions
+		   SET last_notified_at = $2
+		 WHERE session_id = $1
+		   AND deleted_at IS NULL
+	`
+	res, err := r.db.ExecContext(ctx, query, sessionID, at)
+	if err != nil {
+		return domain.NewError(domain.ErrInternalFailure, err)
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return domain.NewError(domain.ErrInternalFailure, err)
+	}
+	if rows == 0 {
+		return domain.NewError(domain.ErrNotFound, nil)
+	}
+	return nil
 }
 
 // Update updates a session

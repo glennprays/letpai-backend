@@ -2,6 +2,7 @@ package ports
 
 import (
 	"context"
+	"time"
 
 	"github.com/glennprays/letpai-backend/domain/entity"
 	"github.com/glennprays/letpai-backend/domain/valueobject"
@@ -49,4 +50,11 @@ type SessionRepository interface {
 	// SECURITY: not scoped by user_id. Callers MUST verify session ownership
 	// via FindByID(ctx, sessionID, userID) first.
 	UpdateStatus(ctx context.Context, sessionID string, status valueobject.SessionStatus) error
+
+	// MarkNotified persists the timestamp of the most recent successful
+	// `send-notifications` call. CRITICAL: implementations MUST NOT
+	// touch updated_at — the dirty-for-notify predicate compares
+	// updated_at against last_notified_at, so bumping the former
+	// would re-open the gate the moment we close it.
+	MarkNotified(ctx context.Context, sessionID string, at time.Time) error
 }

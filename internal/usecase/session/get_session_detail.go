@@ -4,8 +4,22 @@ import (
 	"context"
 	"time"
 
+	"github.com/glennprays/letpai-backend/domain/entity"
 	"github.com/glennprays/letpai-backend/domain/ports"
 )
+
+// LastNotification mirrors the most recent notification_logs row for
+// a participant. `FriendlyStatus` is mapped at the use-case boundary
+// (not on the entity) because the "queued > 2 minutes → Stuck" rule
+// is a presentation policy, not a domain invariant.
+type LastNotification struct {
+	LogID          string  `json:"log_id"`
+	Type           string  `json:"type"`
+	Status         string  `json:"status"`
+	SentAt         string  `json:"sent_at"`
+	ErrorMessage   *string `json:"error_message,omitempty"`
+	FriendlyStatus string  `json:"friendly_status"`
+}
 
 // ParticipantItem represents a participant in session detail.
 //
@@ -14,17 +28,18 @@ import (
 // the participant row so the host UI can show "Reminded 2× — Last 4h
 // ago" and derive cooldown state without an extra round trip.
 type ParticipantItem struct {
-	ParticipantID      string     `json:"participant_id"`
-	ContactID          *string    `json:"contact_id,omitempty"`
-	Name               string     `json:"name"`
-	WhatsAppNumber     string     `json:"whatsapp_number"`
-	AvatarURL          *string    `json:"avatar_url,omitempty"`
-	ShareAmount        float64    `json:"share_amount"`
-	PaymentStatus      string     `json:"payment_status"`
-	PaymentProofURL    *string    `json:"payment_proof_url,omitempty"`
-	PaidManually       bool       `json:"paid_manually"`
-	NotificationCount  int        `json:"notification_count"`
-	LastNotificationAt *time.Time `json:"last_notification_at,omitempty"`
+	ParticipantID      string            `json:"participant_id"`
+	ContactID          *string           `json:"contact_id,omitempty"`
+	Name               string            `json:"name"`
+	WhatsAppNumber     string            `json:"whatsapp_number"`
+	AvatarURL          *string           `json:"avatar_url,omitempty"`
+	ShareAmount        float64           `json:"share_amount"`
+	PaymentStatus      string            `json:"payment_status"`
+	PaymentProofURL    *string           `json:"payment_proof_url,omitempty"`
+	PaidManually       bool              `json:"paid_manually"`
+	NotificationCount  int               `json:"notification_count"`
+	LastNotificationAt *time.Time        `json:"last_notification_at,omitempty"`
+	LastNotification   *LastNotification `json:"last_notification,omitempty"`
 }
 
 // BillItemItem represents a bill item in session detail.
@@ -51,6 +66,8 @@ type GetSessionDetailResponse struct {
 	BankName          *string            `json:"bank_name,omitempty"`
 	BankAccountNumber *string            `json:"bank_account_number,omitempty"`
 	BankAccountHolder *string            `json:"bank_account_holder,omitempty"`
+	LastNotifiedAt    *string            `json:"last_notified_at,omitempty"`
+	IsDirty           bool               `json:"is_dirty"`
 	CreatedAt         string             `json:"created_at"`
 	UpdatedAt         string             `json:"updated_at"`
 	ParticipantCount  int                `json:"participant_count"`
@@ -62,9 +79,10 @@ type GetSessionDetailResponse struct {
 
 // GetSessionDetailUseCase handles retrieving session details
 type GetSessionDetailUseCase struct {
-	sessionRepo     ports.SessionRepository
-	participantRepo ports.ParticipantRepository
-	billItemRepo    ports.BillItemRepository
+	sessionRepo         ports.SessionRepository
+	participantRepo     ports.ParticipantRepository
+	billItemRepo        ports.BillItemRepository
+	notificationLogRepo ports.NotificationLogRepository
 }
 
 // NewGetSessionDetailUseCase creates a new get session detail use case
@@ -72,12 +90,33 @@ func NewGetSessionDetailUseCase(
 	sessionRepo ports.SessionRepository,
 	participantRepo ports.ParticipantRepository,
 	billItemRepo ports.BillItemRepository,
+	notificationLogRepo ports.NotificationLogRepository,
 ) *GetSessionDetailUseCase {
 	return &GetSessionDetailUseCase{
-		sessionRepo:     sessionRepo,
-		participantRepo: participantRepo,
-		billItemRepo:    billItemRepo,
+		sessionRepo:         sessionRepo,
+		participantRepo:     participantRepo,
+		billItemRepo:        billItemRepo,
+		notificationLogRepo: notificationLogRepo,
 	}
+}
+
+// friendlyNotificationStatus renders the gateway-jargon log status as
+// a UI-stable label. Kept on the use case rather than the entity
+// because the 2-minute stuck threshold and the "tap to retry"
+// language are presentation policy, not domain truth.
+func friendlyNotificationStatus(status entity.NotificationStatus, age time.Duration) string {
+	switch status {
+	case entity.NotificationStatusSent:
+		return "Sent"
+	case entity.NotificationStatusQueued:
+		if age > 2*time.Minute {
+			return "Stuck — tap to retry"
+		}
+		return "Sending…"
+	case entity.NotificationStatusFailed:
+		return "Failed — tap to retry"
+	}
+	return "Unknown"
 }
 
 // Execute retrieves session details with participants and bills
@@ -106,6 +145,11 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, userID, sessionI
 		paidCount = 0
 	}
 
+	// Latest notification per participant. Best-effort: a failure here
+	// just leaves last_notification absent on the response (the chip
+	// falls back to "Not sent yet").
+	latestLogs, _ := uc.notificationLogRepo.FindLatestPerParticipantBySessionID(ctx, sessionID)
+
 	// Build response
 	var sessionDate *string
 	if session.SessionDate != nil {
@@ -126,6 +170,19 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, userID, sessionI
 		whatsappNumber := p.CustomWhatsApp
 		avatarURL := p.ContactAvatarURL
 
+		var lastNotif *LastNotification
+		if log := latestLogs[p.ParticipantID]; log != nil {
+			age := time.Since(log.SentAt)
+			lastNotif = &LastNotification{
+				LogID:          log.LogID.String(),
+				Type:           log.NotificationType.String(),
+				Status:         string(log.Status),
+				SentAt:         log.SentAt.UTC().Format("2006-01-02T15:04:05Z07:00"),
+				ErrorMessage:   log.ErrorMessage,
+				FriendlyStatus: friendlyNotificationStatus(log.Status, age),
+			}
+		}
+
 		participantItems = append(participantItems, &ParticipantItem{
 			ParticipantID:      p.ParticipantID.String(),
 			ContactID:          contactID,
@@ -138,6 +195,7 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, userID, sessionI
 			PaidManually:       p.PaidManually,
 			NotificationCount:  p.NotificationCount,
 			LastNotificationAt: p.LastNotificationAt,
+			LastNotification:   lastNotif,
 		})
 	}
 
@@ -156,6 +214,24 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, userID, sessionI
 		})
 	}
 
+	var lastNotifiedStr *string
+	if session.LastNotifiedAt != nil {
+		s := session.LastNotifiedAt.UTC().Format("2006-01-02T15:04:05Z07:00")
+		lastNotifiedStr = &s
+	}
+
+	// Compute dirty for the FE so it can flip the Send/Resend button
+	// label without re-deriving the predicate. Treat the participant
+	// list we already have in memory as authoritative (cheaper than
+	// re-counting via the repo).
+	hasUnpaid := false
+	for _, p := range participants {
+		if !p.IsPaid() {
+			hasUnpaid = true
+			break
+		}
+	}
+
 	return &GetSessionDetailResponse{
 		SessionID:         session.SessionID.String(),
 		Title:             session.Title,
@@ -167,6 +243,8 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, userID, sessionI
 		BankName:          session.BankName,
 		BankAccountNumber: session.BankAccountNumber,
 		BankAccountHolder: session.BankAccountHolder,
+		LastNotifiedAt:    lastNotifiedStr,
+		IsDirty:           session.IsDirtyForNotify(hasUnpaid),
 		CreatedAt:         session.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		UpdatedAt:         session.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		ParticipantCount:  len(participants),

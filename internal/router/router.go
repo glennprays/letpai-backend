@@ -174,9 +174,16 @@ func (r *Router) setupProtectedPaymentRoutes(group fiber.Router) {
 func (r *Router) setupNotificationRoutes(group fiber.Router) {
 	// Notification routes
 	group.Post("/sessions/:id/send-notifications", r.NotificationHandler.SendNotifications)
+	// Escape-hatch: bypasses the dirty-for-notify check. Same auth.
+	group.Post("/sessions/:id/send-notifications/resend", r.NotificationHandler.ResendNotifications)
 	group.Post("/sessions/:id/bulk-reminder", r.NotificationHandler.BulkReminder)
 	group.Post("/participants/:participant_id/reminder", middleware.ReminderRateLimiter(r.rateLimitService), r.NotificationHandler.SendReminder)
 	group.Get("/participants/:participant_id/reminder-status", r.NotificationHandler.ReminderStatus)
+	// Retry the most recent notification for one participant.
+	// NOT gated by the session-level dirty predicate — that gate
+	// exists to stop spam-resends of the batch; individual retry of
+	// a failed delivery is exactly the case we want to allow.
+	group.Post("/participants/:participant_id/notifications/retry", r.NotificationHandler.RetryNotification)
 }
 
 func (r *Router) setupDashboardRoutes(group fiber.Router) {
