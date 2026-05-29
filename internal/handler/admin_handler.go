@@ -10,25 +10,30 @@ import (
 
 // AdminHandler handles admin requests
 type AdminHandler struct {
-	initiateLoginUseCase *adminuc.InitiateLoginUseCase
-	verifyOTPUseCase     *adminuc.VerifyOTPUseCase
-	getProfileUseCase    *adminuc.GetProfileUseCase
-	setupPasswordUseCase *adminuc.SetupPasswordUseCase
-	listAdminsUseCase    *adminuc.ListAdminsUseCase
-	createAdminUseCase   *adminuc.CreateAdminUseCase
-	updateAdminUseCase   *adminuc.UpdateAdminUseCase
-	deleteAdminUseCase   *adminuc.DeleteAdminUseCase
-	getStatusUseCase     *adminuc.GetStatusUseCase
-	getQRCodeUseCase     *adminuc.GetQRCodeUseCase
-	logoutUseCase        *adminuc.LogoutUseCase
-	updateConfigUseCase  *adminuc.UpdateConfigUseCase
+	initiateLoginUseCase    *adminuc.InitiateLoginUseCase
+	verifyOTPUseCase        *adminuc.VerifyOTPUseCase
+	loginUseCase            *adminuc.LoginUseCase
+	getProfileUseCase       *adminuc.GetProfileUseCase
+	updateProfileUseCase    *adminuc.UpdateProfileUseCase
+	setupPasswordUseCase    *adminuc.SetupPasswordUseCase
+	listAdminsUseCase       *adminuc.ListAdminsUseCase
+	createAdminUseCase      *adminuc.CreateAdminUseCase
+	updateAdminUseCase      *adminuc.UpdateAdminUseCase
+	deleteAdminUseCase      *adminuc.DeleteAdminUseCase
+	getStatusUseCase        *adminuc.GetStatusUseCase
+	getQRCodeUseCase        *adminuc.GetQRCodeUseCase
+	logoutUseCase           *adminuc.LogoutUseCase
+	updateConfigUseCase     *adminuc.UpdateConfigUseCase
+	disconnectDeviceUseCase *adminuc.DisconnectDeviceUseCase
 }
 
 // NewAdminHandler creates a new admin handler
 func NewAdminHandler(
 	initiateLoginUseCase *adminuc.InitiateLoginUseCase,
 	verifyOTPUseCase *adminuc.VerifyOTPUseCase,
+	loginUseCase *adminuc.LoginUseCase,
 	getProfileUseCase *adminuc.GetProfileUseCase,
+	updateProfileUseCase *adminuc.UpdateProfileUseCase,
 	setupPasswordUseCase *adminuc.SetupPasswordUseCase,
 	listAdminsUseCase *adminuc.ListAdminsUseCase,
 	createAdminUseCase *adminuc.CreateAdminUseCase,
@@ -38,20 +43,24 @@ func NewAdminHandler(
 	getQRCodeUseCase *adminuc.GetQRCodeUseCase,
 	logoutUseCase *adminuc.LogoutUseCase,
 	updateConfigUseCase *adminuc.UpdateConfigUseCase,
+	disconnectDeviceUseCase *adminuc.DisconnectDeviceUseCase,
 ) *AdminHandler {
 	return &AdminHandler{
-		initiateLoginUseCase: initiateLoginUseCase,
-		verifyOTPUseCase:     verifyOTPUseCase,
-		getProfileUseCase:    getProfileUseCase,
-		setupPasswordUseCase: setupPasswordUseCase,
-		listAdminsUseCase:    listAdminsUseCase,
-		createAdminUseCase:   createAdminUseCase,
-		updateAdminUseCase:   updateAdminUseCase,
-		deleteAdminUseCase:   deleteAdminUseCase,
-		getStatusUseCase:     getStatusUseCase,
-		getQRCodeUseCase:     getQRCodeUseCase,
-		logoutUseCase:        logoutUseCase,
-		updateConfigUseCase:  updateConfigUseCase,
+		initiateLoginUseCase:    initiateLoginUseCase,
+		verifyOTPUseCase:        verifyOTPUseCase,
+		loginUseCase:            loginUseCase,
+		getProfileUseCase:       getProfileUseCase,
+		updateProfileUseCase:    updateProfileUseCase,
+		setupPasswordUseCase:    setupPasswordUseCase,
+		listAdminsUseCase:       listAdminsUseCase,
+		createAdminUseCase:      createAdminUseCase,
+		updateAdminUseCase:      updateAdminUseCase,
+		deleteAdminUseCase:      deleteAdminUseCase,
+		getStatusUseCase:        getStatusUseCase,
+		getQRCodeUseCase:        getQRCodeUseCase,
+		logoutUseCase:           logoutUseCase,
+		updateConfigUseCase:     updateConfigUseCase,
+		disconnectDeviceUseCase: disconnectDeviceUseCase,
 	}
 }
 
@@ -88,12 +97,52 @@ func (h *AdminHandler) Login(c *fiber.Ctx) error {
 		return c.Status(apiErr.Status).JSON(apiErr.Response())
 	}
 
-	// TODO: Implement password-based login
-	// For now, this is essentially a no-op as login is done via OTP
-	return c.Status(fiber.StatusNotImplemented).JSON(fiber.Map{
-		"success": false,
-		"error":   "Password login not implemented yet. Please use OTP login.",
-	})
+	result, err := h.loginUseCase.Execute(c.Context(), &req)
+	if err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+	return c.Status(fiber.StatusOK).JSON(result)
+}
+
+// UpdateProfile lets the calling admin rename themselves. The path
+// has no admin_id — adminID is sourced from the bearer token's
+// claims via middleware.GetUserID so a caller can only edit their
+// own row.
+func (h *AdminHandler) UpdateProfile(c *fiber.Ctx) error {
+	adminID := middleware.GetUserID(c)
+	if adminID == "" {
+		apiErr := httperror.FromError(httperror.ErrUnauthorized("not authenticated"))
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+
+	var req adminuc.UpdateProfileRequest
+	if err := c.BodyParser(&req); err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+	if err := validation.Struct(&req); err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+
+	result, err := h.updateProfileUseCase.Execute(c.Context(), adminID, &req)
+	if err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+	return c.Status(fiber.StatusOK).JSON(result)
+}
+
+// DisconnectDevice releases the WhatsApp gateway pairing. Distinct
+// from POST /admin/logout, which ends the admin's panel session.
+func (h *AdminHandler) DisconnectDevice(c *fiber.Ctx) error {
+	result, err := h.disconnectDeviceUseCase.Execute(c.Context())
+	if err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+	return c.Status(fiber.StatusOK).JSON(result)
 }
 
 // VerifyOTP handles OTP verification

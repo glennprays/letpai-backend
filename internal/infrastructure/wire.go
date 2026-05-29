@@ -68,8 +68,11 @@ var UseCaseSet = wire.NewSet(
 	// Admin use cases
 	admin.NewInitiateLoginUseCase,
 	admin.NewVerifyOTPUseCase,
+	admin.NewLoginUseCase,
 	admin.NewGetProfileUseCase,
+	admin.NewUpdateProfileUseCase,
 	admin.NewSetupPasswordUseCase,
+	admin.NewDisconnectDeviceUseCase,
 	admin.NewListAdminsUseCase,
 	admin.NewCreateAdminUseCase,
 	admin.NewUpdateAdminUseCase,

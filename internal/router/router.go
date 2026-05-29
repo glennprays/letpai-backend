@@ -189,12 +189,14 @@ func (r *Router) setupAdminRoutes(group fiber.Router) {
 	// Protected admin routes
 	protectedAdmin := admin.Use(middleware.Authenticate(r.jwtService))
 	protectedAdmin.Get("/profile", r.AdminHandler.GetProfile)
+	protectedAdmin.Put("/profile", r.AdminHandler.UpdateProfile)
 	protectedAdmin.Put("/profile/setup-password", r.AdminHandler.SetupPassword)
 
 	// Super admin only routes
 	protectedAdmin.Get("/status", r.AdminHandler.GetStatus)
 	protectedAdmin.Post("/qr-code", r.AdminHandler.GetQRCode)
 	protectedAdmin.Post("/logout", r.AdminHandler.Logout)
+	protectedAdmin.Post("/disconnect-device", r.AdminHandler.DisconnectDevice)
 	protectedAdmin.Put("/config", r.AdminHandler.UpdateConfig)
 
 	// Admin management routes (super admin only)
