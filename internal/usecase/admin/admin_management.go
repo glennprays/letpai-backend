@@ -23,7 +23,7 @@ import (
 type CreateAdminRequest struct {
 	WhatsAppNumber string `json:"whatsapp_number" validate:"required,len=13,max=20"`
 	FullName       string `json:"full_name" validate:"required,max=100"`
-	Role           string `json:"role" validate:"required,oneof=super_admin,admin"`
+	Role           string `json:"role" validate:"required,oneof=super_admin admin"`
 	Password       string `json:"password,omitempty" validate:"omitempty,min=8,max=100"`
 }
 
@@ -89,7 +89,7 @@ func (uc *CreateAdminUseCase) Execute(ctx context.Context, req *CreateAdminReque
 // UpdateAdminRequest represents update admin request
 type UpdateAdminRequest struct {
 	FullName string `json:"full_name" validate:"omitempty,max=100"`
-	Role     string `json:"role" validate:"omitempty,oneof=super_admin,admin"`
+	Role     string `json:"role" validate:"omitempty,oneof=super_admin admin"`
 	IsActive *bool  `json:"is_active" validate:"omitempty"`
 }
 
