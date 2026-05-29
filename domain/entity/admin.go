@@ -6,18 +6,26 @@ import (
 	"github.com/google/uuid"
 )
 
-// Admin represents an admin user in the system
+// Admin represents an admin user in the system.
+//
+// db tags are explicit because sqlx's default mapper is
+// strings.ToLower, which would turn PasswordHash into passwordhash
+// (no underscore) and silently fail to populate the field from a
+// password_hash column. That blew up the password login flow before
+// these tags were added: bootstrap wrote a real bcrypt hash to
+// password_hash, but FindByWhatsAppNumber's GetContext read it back
+// as an empty string, so LoginUseCase always returned 401.
 type Admin struct {
-	AdminID        uuid.UUID  `json:"admin_id"`
-	WhatsAppNumber string     `json:"whatsapp_number"`
-	PasswordHash   string     `json:"-"`
-	FullName       string     `json:"full_name"`
-	Role           string     `json:"role"`
-	IsActive       bool       `json:"is_active"`
-	LastLoginAt    *time.Time `json:"last_login_at,omitempty"`
-	CreatedAt      time.Time  `json:"created_at"`
-	UpdatedAt      time.Time  `json:"updated_at"`
-	DeletedAt      *time.Time `json:"deleted_at,omitempty"`
+	AdminID        uuid.UUID  `json:"admin_id"            db:"admin_id"`
+	WhatsAppNumber string     `json:"whatsapp_number"     db:"whatsapp_number"`
+	PasswordHash   string     `json:"-"                   db:"password_hash"`
+	FullName       string     `json:"full_name"           db:"full_name"`
+	Role           string     `json:"role"                db:"role"`
+	IsActive       bool       `json:"is_active"           db:"is_active"`
+	LastLoginAt    *time.Time `json:"last_login_at,omitempty" db:"last_login_at"`
+	CreatedAt      time.Time  `json:"created_at"          db:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"          db:"updated_at"`
+	DeletedAt      *time.Time `json:"deleted_at,omitempty" db:"deleted_at"`
 }
 
 const (
