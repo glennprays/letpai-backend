@@ -26,7 +26,15 @@ func FromError(err error) APIError {
 	var domainError domain.Error
 
 	if errors.As(err, &domainError) {
-		apiError.Message = domainError.AppError().Error()
+		// Several repo paths return NewError(svc, nil) — notably NotFound
+		// rows — so AppError() can be nil. Dereferencing it used to crash
+		// the handler. Fall back to the domain's own Error() message,
+		// which already handles the appErr-is-nil branch.
+		if appErr := domainError.AppError(); appErr != nil {
+			apiError.Message = appErr.Error()
+		} else {
+			apiError.Message = domainError.Error()
+		}
 		svcErr := domainError.ServiceError()
 		switch svcErr {
 		case domain.ErrBadRequest:
