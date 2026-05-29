@@ -72,7 +72,6 @@ var UseCaseSet = wire.NewSet(
 	admin.NewGetProfileUseCase,
 	admin.NewUpdateProfileUseCase,
 	admin.NewSetupPasswordUseCase,
-	admin.NewDisconnectDeviceUseCase,
 	admin.NewNeedsSetupUseCase,
 	admin.NewBootstrapUseCase,
 	admin.NewListAdminsUseCase,
@@ -82,7 +81,6 @@ var UseCaseSet = wire.NewSet(
 	admin.NewGetStatusUseCase,
 	admin.NewGetQRCodeUseCase,
 	admin.NewLogoutUseCase,
-	admin.NewUpdateConfigUseCase,
 	// Contact use cases
 	contact.NewCreateContactUseCase,
 	contact.NewGetContactsUseCase,
@@ -168,12 +166,13 @@ func NewPasswordService() *service.PasswordService {
 	return service.NewPasswordService(12) // bcrypt cost
 }
 
-// NewWhatsAppService creates a new WhatsApp service with config values
-func NewWhatsAppService(cfg *config.Config, configRepo ports.WhatsAppConfigRepository) *service.WhatsAppService {
+// NewWhatsAppService creates a new WhatsApp service with config values.
+// No DB dependency: the service is a pass-through to the WAGA SDK and
+// stores no state locally.
+func NewWhatsAppService(cfg *config.Config) *service.WhatsAppService {
 	return service.NewWhatsAppService(
 		cfg.WhatsAppGatewayURL,
 		cfg.WhatsAppAPIKey,
-		configRepo,
 	)
 }
 

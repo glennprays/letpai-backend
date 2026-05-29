@@ -198,8 +198,6 @@ func (r *Router) setupAdminRoutes(group fiber.Router) {
 	protectedAdmin.Get("/status", r.AdminHandler.GetStatus)
 	protectedAdmin.Post("/qr-code", r.AdminHandler.GetQRCode)
 	protectedAdmin.Post("/logout", r.AdminHandler.Logout)
-	protectedAdmin.Post("/disconnect-device", r.AdminHandler.DisconnectDevice)
-	protectedAdmin.Put("/config", r.AdminHandler.UpdateConfig)
 
 	// Admin management routes (super admin only)
 	superAdmin := protectedAdmin.Use(middleware.RequireSuperAdminRole(r.jwtService))

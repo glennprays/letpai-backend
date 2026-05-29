@@ -2,7 +2,6 @@ package admin
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/glennprays/letpai-backend/domain"
@@ -79,45 +78,7 @@ func (uc *LogoutUseCase) Execute(ctx context.Context, adminID string) error {
 	return nil
 }
 
-// UpdateConfigRequest represents update config request
-type UpdateConfigRequest struct {
-	PhoneNumber string `json:"phone_number" validate:"omitempty,len=13,max=20"`
-	Token       string `json:"token" validate:"omitempty"`
-}
-
-// UpdateConfigUseCase handles updating WhatsApp configuration
-type UpdateConfigUseCase struct {
-	whatsappConfigRepo ports.WhatsAppConfigRepository
-}
-
-// NewUpdateConfigUseCase creates a new update config use case
-func NewUpdateConfigUseCase(whatsappConfigRepo ports.WhatsAppConfigRepository) *UpdateConfigUseCase {
-	return &UpdateConfigUseCase{
-		whatsappConfigRepo: whatsappConfigRepo,
-	}
-}
-
-// Execute updates WhatsApp configuration
-func (uc *UpdateConfigUseCase) Execute(ctx context.Context, req *UpdateConfigRequest) error {
-	if req.PhoneNumber == "" && req.Token == "" {
-		return domain.NewError(domain.ErrBadRequest, errors.New("at least one field is required"))
-	}
-
-	config, err := uc.whatsappConfigRepo.Get(ctx)
-	if err != nil {
-		return domain.NewError(domain.ErrInternalFailure, fmt.Errorf("failed to get config: %w", err))
-	}
-
-	if config == nil {
-		return domain.NewError(domain.ErrNotFound, errors.New("no WhatsApp configuration found"))
-	}
-
-	// Update token if provided
-	if req.Token != "" {
-		if err := uc.whatsappConfigRepo.UpdateToken(ctx, config.PhoneNumber, req.Token); err != nil {
-			return domain.NewError(domain.ErrInternalFailure, fmt.Errorf("failed to update token: %w", err))
-		}
-	}
-
-	return nil
-}
+// UpdateConfigUseCase was removed along with the rest of the local
+// whatsapp_configs persistence layer. Gateway tokens are now sourced
+// solely from the WHATSAPP_API_KEY env var; rotate by editing .env
+// and restarting the backend.

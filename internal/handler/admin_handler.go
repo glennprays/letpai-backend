@@ -10,23 +10,21 @@ import (
 
 // AdminHandler handles admin requests
 type AdminHandler struct {
-	initiateLoginUseCase    *adminuc.InitiateLoginUseCase
-	verifyOTPUseCase        *adminuc.VerifyOTPUseCase
-	loginUseCase            *adminuc.LoginUseCase
-	getProfileUseCase       *adminuc.GetProfileUseCase
-	updateProfileUseCase    *adminuc.UpdateProfileUseCase
-	setupPasswordUseCase    *adminuc.SetupPasswordUseCase
-	listAdminsUseCase       *adminuc.ListAdminsUseCase
-	createAdminUseCase      *adminuc.CreateAdminUseCase
-	updateAdminUseCase      *adminuc.UpdateAdminUseCase
-	deleteAdminUseCase      *adminuc.DeleteAdminUseCase
-	getStatusUseCase        *adminuc.GetStatusUseCase
-	getQRCodeUseCase        *adminuc.GetQRCodeUseCase
-	logoutUseCase           *adminuc.LogoutUseCase
-	updateConfigUseCase     *adminuc.UpdateConfigUseCase
-	disconnectDeviceUseCase *adminuc.DisconnectDeviceUseCase
-	needsSetupUseCase       *adminuc.NeedsSetupUseCase
-	bootstrapUseCase        *adminuc.BootstrapUseCase
+	initiateLoginUseCase *adminuc.InitiateLoginUseCase
+	verifyOTPUseCase     *adminuc.VerifyOTPUseCase
+	loginUseCase         *adminuc.LoginUseCase
+	getProfileUseCase    *adminuc.GetProfileUseCase
+	updateProfileUseCase *adminuc.UpdateProfileUseCase
+	setupPasswordUseCase *adminuc.SetupPasswordUseCase
+	listAdminsUseCase    *adminuc.ListAdminsUseCase
+	createAdminUseCase   *adminuc.CreateAdminUseCase
+	updateAdminUseCase   *adminuc.UpdateAdminUseCase
+	deleteAdminUseCase   *adminuc.DeleteAdminUseCase
+	getStatusUseCase     *adminuc.GetStatusUseCase
+	getQRCodeUseCase     *adminuc.GetQRCodeUseCase
+	logoutUseCase        *adminuc.LogoutUseCase
+	needsSetupUseCase    *adminuc.NeedsSetupUseCase
+	bootstrapUseCase     *adminuc.BootstrapUseCase
 }
 
 // NewAdminHandler creates a new admin handler
@@ -44,29 +42,25 @@ func NewAdminHandler(
 	getStatusUseCase *adminuc.GetStatusUseCase,
 	getQRCodeUseCase *adminuc.GetQRCodeUseCase,
 	logoutUseCase *adminuc.LogoutUseCase,
-	updateConfigUseCase *adminuc.UpdateConfigUseCase,
-	disconnectDeviceUseCase *adminuc.DisconnectDeviceUseCase,
 	needsSetupUseCase *adminuc.NeedsSetupUseCase,
 	bootstrapUseCase *adminuc.BootstrapUseCase,
 ) *AdminHandler {
 	return &AdminHandler{
-		initiateLoginUseCase:    initiateLoginUseCase,
-		verifyOTPUseCase:        verifyOTPUseCase,
-		loginUseCase:            loginUseCase,
-		getProfileUseCase:       getProfileUseCase,
-		updateProfileUseCase:    updateProfileUseCase,
-		setupPasswordUseCase:    setupPasswordUseCase,
-		listAdminsUseCase:       listAdminsUseCase,
-		createAdminUseCase:      createAdminUseCase,
-		updateAdminUseCase:      updateAdminUseCase,
-		deleteAdminUseCase:      deleteAdminUseCase,
-		getStatusUseCase:        getStatusUseCase,
-		getQRCodeUseCase:        getQRCodeUseCase,
-		logoutUseCase:           logoutUseCase,
-		updateConfigUseCase:     updateConfigUseCase,
-		disconnectDeviceUseCase: disconnectDeviceUseCase,
-		needsSetupUseCase:       needsSetupUseCase,
-		bootstrapUseCase:        bootstrapUseCase,
+		initiateLoginUseCase: initiateLoginUseCase,
+		verifyOTPUseCase:     verifyOTPUseCase,
+		loginUseCase:         loginUseCase,
+		getProfileUseCase:    getProfileUseCase,
+		updateProfileUseCase: updateProfileUseCase,
+		setupPasswordUseCase: setupPasswordUseCase,
+		listAdminsUseCase:    listAdminsUseCase,
+		createAdminUseCase:   createAdminUseCase,
+		updateAdminUseCase:   updateAdminUseCase,
+		deleteAdminUseCase:   deleteAdminUseCase,
+		getStatusUseCase:     getStatusUseCase,
+		getQRCodeUseCase:     getQRCodeUseCase,
+		logoutUseCase:        logoutUseCase,
+		needsSetupUseCase:    needsSetupUseCase,
+		bootstrapUseCase:     bootstrapUseCase,
 	}
 }
 
@@ -176,16 +170,10 @@ func (h *AdminHandler) UpdateProfile(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(result)
 }
 
-// DisconnectDevice releases the WhatsApp gateway pairing. Distinct
-// from POST /admin/logout, which ends the admin's panel session.
-func (h *AdminHandler) DisconnectDevice(c *fiber.Ctx) error {
-	result, err := h.disconnectDeviceUseCase.Execute(c.Context())
-	if err != nil {
-		apiErr := httperror.FromError(err)
-		return c.Status(apiErr.Status).JSON(apiErr.Response())
-	}
-	return c.Status(fiber.StatusOK).JSON(result)
-}
+// DisconnectDevice and UpdateConfig were removed along with their use
+// cases. WAGA's SDK has no gateway-side logout, so "disconnect" was
+// only ever flipping a column we no longer read; token rotation now
+// happens via WHATSAPP_API_KEY in .env + a restart.
 
 // VerifyOTP handles OTP verification
 func (h *AdminHandler) VerifyOTP(c *fiber.Ctx) error {
@@ -366,25 +354,3 @@ func (h *AdminHandler) Logout(c *fiber.Ctx) error {
 	})
 }
 
-// UpdateConfig updates WhatsApp API configuration
-func (h *AdminHandler) UpdateConfig(c *fiber.Ctx) error {
-	var req adminuc.UpdateConfigRequest
-	if err := c.BodyParser(&req); err != nil {
-		apiErr := httperror.FromError(err)
-		return c.Status(apiErr.Status).JSON(apiErr.Response())
-	}
-	if err := validation.Struct(&req); err != nil {
-		apiErr := httperror.FromError(err)
-		return c.Status(apiErr.Status).JSON(apiErr.Response())
-	}
-
-	err := h.updateConfigUseCase.Execute(c.Context(), &req)
-	if err != nil {
-		apiErr := httperror.FromError(err)
-		return c.Status(apiErr.Status).JSON(apiErr.Response())
-	}
-
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"success": true,
-	})
-}

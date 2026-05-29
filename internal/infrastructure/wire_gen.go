@@ -8,7 +8,6 @@ package infrastructure
 
 import (
 	"github.com/glennprays/letpai-backend/config"
-	"github.com/glennprays/letpai-backend/domain/ports"
 	"github.com/glennprays/letpai-backend/internal/handler"
 	"github.com/glennprays/letpai-backend/internal/repository"
 	"github.com/glennprays/letpai-backend/internal/router"
@@ -55,7 +54,7 @@ func InitializeApp() (*App, error) {
 	passwordService := NewPasswordService()
 	otpService := NewOTPService(configConfig)
 	whatsAppConfigRepository := repository.NewPostgresWhatsAppConfigRepository(db)
-	whatsAppService := NewWhatsAppService(configConfig, whatsAppConfigRepository)
+	whatsAppService := NewWhatsAppService(configConfig)
 	registerUserUseCase := auth.NewRegisterUserUseCase(userRepository, otpRepository, passwordService, otpService, whatsAppService)
 	jwtService := NewJWTService(configConfig)
 	verifyOTPUseCase := auth.NewVerifyOTPUseCase(userRepository, otpRepository, jwtService, otpService)
@@ -75,14 +74,12 @@ func InitializeApp() (*App, error) {
 	createAdminUseCase := admin.NewCreateAdminUseCase(adminRepository, passwordService)
 	updateAdminUseCase := admin.NewUpdateAdminUseCase(adminRepository)
 	deleteAdminUseCase := admin.NewDeleteAdminUseCase(adminRepository)
-	getStatusUseCase := admin.NewGetStatusUseCase(whatsAppConfigRepository, whatsAppService)
+	getStatusUseCase := admin.NewGetStatusUseCase(whatsAppService)
 	getQRCodeUseCase := admin.NewGetQRCodeUseCase(whatsAppService)
 	logoutUseCase := admin.NewLogoutUseCase(adminRepository)
-	updateConfigUseCase := admin.NewUpdateConfigUseCase(whatsAppConfigRepository)
-	disconnectDeviceUseCase := admin.NewDisconnectDeviceUseCase(whatsAppService)
 	needsSetupUseCase := admin.NewNeedsSetupUseCase(adminRepository)
 	bootstrapUseCase := admin.NewBootstrapUseCase(adminRepository, passwordService, jwtService)
-	adminHandler := handler.NewAdminHandler(initiateLoginUseCase, adminVerifyOTPUseCase, adminLoginUseCase, getProfileUseCase, adminUpdateProfileUseCase, setupPasswordUseCase, listAdminsUseCase, createAdminUseCase, updateAdminUseCase, deleteAdminUseCase, getStatusUseCase, getQRCodeUseCase, logoutUseCase, updateConfigUseCase, disconnectDeviceUseCase, needsSetupUseCase, bootstrapUseCase)
+	adminHandler := handler.NewAdminHandler(initiateLoginUseCase, adminVerifyOTPUseCase, adminLoginUseCase, getProfileUseCase, adminUpdateProfileUseCase, setupPasswordUseCase, listAdminsUseCase, createAdminUseCase, updateAdminUseCase, deleteAdminUseCase, getStatusUseCase, getQRCodeUseCase, logoutUseCase, needsSetupUseCase, bootstrapUseCase)
 	whatsAppWebhookHandler := handler.NewWhatsAppWebhookHandler(configConfig, whatsAppService, whatsAppConfigRepository)
 	contactGroupRepository := repository.NewPostgresContactGroupRepository(db)
 	createGroupUseCase := contactgroup.NewCreateGroupUseCase(contactGroupRepository)
@@ -164,7 +161,7 @@ var ServiceSet = wire.NewSet(
 	NewRateLimitService,
 )
 
-var UseCaseSet = wire.NewSet(auth.NewRegisterUserUseCase, auth.NewVerifyOTPUseCase, auth.NewLoginUserUseCase, auth.NewLogoutUserUseCase, auth.NewUpdateProfileUseCase, auth.NewForgotPasswordUseCase, admin.NewInitiateLoginUseCase, admin.NewVerifyOTPUseCase, admin.NewGetProfileUseCase, admin.NewSetupPasswordUseCase, admin.NewListAdminsUseCase, admin.NewCreateAdminUseCase, admin.NewUpdateAdminUseCase, admin.NewDeleteAdminUseCase, admin.NewGetStatusUseCase, admin.NewGetQRCodeUseCase, admin.NewLogoutUseCase, admin.NewUpdateConfigUseCase, contact.NewCreateContactUseCase, contact.NewGetContactsUseCase, contact.NewGetContactByIDUseCase, contact.NewUpdateContactUseCase, contact.NewDeleteContactUseCase, contact.NewBulkOperationsUseCase, contact.NewImportContactsUseCase, contactgroup.NewCreateGroupUseCase, contactgroup.NewGetGroupsUseCase, contactgroup.NewUpdateGroupUseCase, contactgroup.NewDeleteGroupUseCase, session.NewCreateSessionUseCase, session.NewGetSessionsUseCase, session.NewGetSessionDetailUseCase, session.NewUpdateSessionUseCase, session.NewCancelSessionUseCase, participant.NewAddParticipantsUseCase, participant.NewRemoveParticipantUseCase, participant.NewUpdateParticipantUseCase, participant.NewImportFromGroupUseCase, billing.NewAddBillItemUseCase, billing.NewUpdateBillItemUseCase, billing.NewDeleteBillItemUseCase, billing.NewCalculateSplitsUseCase, payment.NewSubmitPaymentUseCase, payment.NewApprovePaymentUseCase, payment.NewRejectPaymentUseCase, payment.NewBulkApproveUseCase, payment.NewBulkRejectUseCase, payment.NewGetPaymentPageUseCase, payment.NewGetPaymentProofUseCase, payment.NewMarkPaidWithoutProofUseCase, notification.NewSendNotificationsUseCase, notification.NewSendReminderUseCase, notification.NewBulkReminderUseCase, dashboard.NewGetDashboardUseCase)
+var UseCaseSet = wire.NewSet(auth.NewRegisterUserUseCase, auth.NewVerifyOTPUseCase, auth.NewLoginUserUseCase, auth.NewLogoutUserUseCase, auth.NewUpdateProfileUseCase, auth.NewForgotPasswordUseCase, admin.NewInitiateLoginUseCase, admin.NewVerifyOTPUseCase, admin.NewGetProfileUseCase, admin.NewSetupPasswordUseCase, admin.NewListAdminsUseCase, admin.NewCreateAdminUseCase, admin.NewUpdateAdminUseCase, admin.NewDeleteAdminUseCase, admin.NewGetStatusUseCase, admin.NewGetQRCodeUseCase, admin.NewLogoutUseCase, contact.NewCreateContactUseCase, contact.NewGetContactsUseCase, contact.NewGetContactByIDUseCase, contact.NewUpdateContactUseCase, contact.NewDeleteContactUseCase, contact.NewBulkOperationsUseCase, contact.NewImportContactsUseCase, contactgroup.NewCreateGroupUseCase, contactgroup.NewGetGroupsUseCase, contactgroup.NewUpdateGroupUseCase, contactgroup.NewDeleteGroupUseCase, session.NewCreateSessionUseCase, session.NewGetSessionsUseCase, session.NewGetSessionDetailUseCase, session.NewUpdateSessionUseCase, session.NewCancelSessionUseCase, participant.NewAddParticipantsUseCase, participant.NewRemoveParticipantUseCase, participant.NewUpdateParticipantUseCase, participant.NewImportFromGroupUseCase, billing.NewAddBillItemUseCase, billing.NewUpdateBillItemUseCase, billing.NewDeleteBillItemUseCase, billing.NewCalculateSplitsUseCase, payment.NewSubmitPaymentUseCase, payment.NewApprovePaymentUseCase, payment.NewRejectPaymentUseCase, payment.NewBulkApproveUseCase, payment.NewBulkRejectUseCase, payment.NewGetPaymentPageUseCase, payment.NewGetPaymentProofUseCase, payment.NewMarkPaidWithoutProofUseCase, notification.NewSendNotificationsUseCase, notification.NewSendReminderUseCase, notification.NewBulkReminderUseCase, dashboard.NewGetDashboardUseCase)
 
 var HandlerSet = wire.NewSet(handler.NewHealthHandler, handler.NewAuthHandler, handler.NewAdminHandler, handler.NewWhatsAppWebhookHandler, handler.NewContactGroupHandler, handler.NewContactHandler, handler.NewSessionHandler, handler.NewPaymentHandler, handler.NewNotificationHandler, handler.NewWebhookHandler, handler.NewDashboardHandler)
 
@@ -193,11 +190,10 @@ func NewPasswordService() *service.PasswordService {
 }
 
 // NewWhatsAppService creates a new WhatsApp service with config values
-func NewWhatsAppService(cfg *config.Config, configRepo ports.WhatsAppConfigRepository) *service.WhatsAppService {
+func NewWhatsAppService(cfg *config.Config) *service.WhatsAppService {
 	return service.NewWhatsAppService(
 		cfg.WhatsAppGatewayURL,
 		cfg.WhatsAppAPIKey,
-		configRepo,
 	)
 }
 
