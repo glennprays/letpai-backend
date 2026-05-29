@@ -35,7 +35,7 @@ func NewGetQRCodeUseCase(whatsappSvc *service.WhatsAppService) *GetQRCodeUseCase
 
 // Execute generates QR code for WhatsApp pairing
 func (uc *GetQRCodeUseCase) Execute(ctx context.Context, req *GetQRCodeRequest) (*GetQRCodeResponse, error) {
-	qrCode, expiresAt, err := uc.whatsappSvc.GetQRCode(ctx)
+	qrCode, expiresAt, err := uc.whatsappSvc.GetQRCode(ctx, req.PhoneNumber)
 	if err != nil {
 		return nil, domain.NewError(domain.ErrInternalFailure, fmt.Errorf("failed to generate QR code: %w", err))
 	}

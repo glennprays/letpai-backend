@@ -73,7 +73,7 @@ func InitializeApp() (*App, error) {
 	createAdminUseCase := admin.NewCreateAdminUseCase(adminRepository)
 	updateAdminUseCase := admin.NewUpdateAdminUseCase(adminRepository)
 	deleteAdminUseCase := admin.NewDeleteAdminUseCase(adminRepository)
-	getStatusUseCase := admin.NewGetStatusUseCase(whatsAppConfigRepository)
+	getStatusUseCase := admin.NewGetStatusUseCase(whatsAppConfigRepository, whatsAppService)
 	getQRCodeUseCase := admin.NewGetQRCodeUseCase(whatsAppService)
 	logoutUseCase := admin.NewLogoutUseCase(adminRepository)
 	updateConfigUseCase := admin.NewUpdateConfigUseCase(whatsAppConfigRepository)
