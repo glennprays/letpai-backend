@@ -182,6 +182,8 @@ func (r *Router) setupDashboardRoutes(group fiber.Router) {
 func (r *Router) setupAdminRoutes(group fiber.Router) {
 	// Admin authentication routes
 	admin := group.Group("/admin")
+	admin.Get("/auth/needs-setup", r.AdminHandler.NeedsSetup)
+	admin.Post("/auth/bootstrap", r.AdminHandler.Bootstrap)
 	admin.Post("/auth/initiate", r.AdminHandler.InitiateLogin)
 	admin.Post("/auth/login", r.AdminHandler.Login)
 	admin.Post("/auth/verify-otp", r.AdminHandler.VerifyOTP)

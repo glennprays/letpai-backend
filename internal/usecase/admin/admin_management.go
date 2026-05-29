@@ -10,13 +10,21 @@ import (
 	"github.com/glennprays/letpai-backend/domain"
 	"github.com/glennprays/letpai-backend/domain/entity"
 	"github.com/glennprays/letpai-backend/domain/ports"
+	"github.com/glennprays/letpai-backend/internal/service"
 )
 
-// CreateAdminRequest represents create admin request
+// CreateAdminRequest represents create admin request.
+//
+// Password is optional. When provided, the invited admin can sign in
+// via the password flow without needing the WhatsApp gateway to be
+// online — useful when an inviter wants to onboard someone before
+// pairing WAGA. When empty the admin is created without a hash and
+// must sign in via OTP for their first session.
 type CreateAdminRequest struct {
 	WhatsAppNumber string `json:"whatsapp_number" validate:"required,len=13,max=20"`
 	FullName       string `json:"full_name" validate:"required,max=100"`
 	Role           string `json:"role" validate:"required,oneof=super_admin,admin"`
+	Password       string `json:"password,omitempty" validate:"omitempty,min=8,max=100"`
 }
 
 // CreateAdminResult represents create admin result
@@ -27,13 +35,18 @@ type CreateAdminResult struct {
 
 // CreateAdminUseCase handles creating a new admin
 type CreateAdminUseCase struct {
-	adminRepo ports.AdminRepository
+	adminRepo   ports.AdminRepository
+	passwordSvc *service.PasswordService
 }
 
 // NewCreateAdminUseCase creates a new create admin use case
-func NewCreateAdminUseCase(adminRepo ports.AdminRepository) *CreateAdminUseCase {
+func NewCreateAdminUseCase(
+	adminRepo ports.AdminRepository,
+	passwordSvc *service.PasswordService,
+) *CreateAdminUseCase {
 	return &CreateAdminUseCase{
-		adminRepo: adminRepo,
+		adminRepo:   adminRepo,
+		passwordSvc: passwordSvc,
 	}
 }
 
@@ -49,8 +62,19 @@ func (uc *CreateAdminUseCase) Execute(ctx context.Context, req *CreateAdminReque
 		return nil, domain.NewError(domain.ErrConflict, errors.New("whatsapp number already in use"))
 	}
 
-	// Create new admin
-	newAdmin := entity.NewAdmin(req.WhatsAppNumber, "", req.FullName, req.Role)
+	// Optional temporary password: when the inviter supplies one we
+	// bcrypt it on the way in so the invited admin can sign in via
+	// the password flow before WAGA is paired.
+	passwordHash := ""
+	if req.Password != "" {
+		hashed, err := uc.passwordSvc.Hash(req.Password)
+		if err != nil {
+			return nil, domain.NewError(domain.ErrInternalFailure, fmt.Errorf("failed to hash password: %w", err))
+		}
+		passwordHash = hashed
+	}
+
+	newAdmin := entity.NewAdmin(req.WhatsAppNumber, passwordHash, req.FullName, req.Role)
 
 	if err := uc.adminRepo.Create(ctx, newAdmin); err != nil {
 		return nil, domain.NewError(domain.ErrInternalFailure, fmt.Errorf("failed to create admin: %w", err))

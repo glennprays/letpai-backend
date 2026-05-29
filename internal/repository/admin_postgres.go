@@ -9,6 +9,7 @@ import (
 	"github.com/glennprays/letpai-backend/domain"
 	"github.com/glennprays/letpai-backend/domain/entity"
 	"github.com/glennprays/letpai-backend/domain/ports"
+	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 )
 
@@ -25,9 +26,13 @@ func NewPostgresAdminRepository(db *sqlx.DB) ports.AdminRepository {
 
 // FindByWhatsAppNumber finds an admin by their WhatsApp number.
 // Discriminates sql.ErrNoRows → ErrNotFound so callers get 404, not 500.
+//
+// password_hash is included in the SELECT because the password Login
+// use case needs it for bcrypt verification. The hash never leaves the
+// process via JSON (Admin.PasswordHash carries `json:"-"`).
 func (r *PostgresAdminRepository) FindByWhatsAppNumber(ctx context.Context, whatsappNumber string) (*entity.Admin, error) {
 	const query = `
-		SELECT admin_id, whatsapp_number, full_name, role, is_active, last_login_at, created_at, updated_at
+		SELECT admin_id, whatsapp_number, password_hash, full_name, role, is_active, last_login_at, created_at, updated_at
 		FROM admins
 		WHERE whatsapp_number = $1 AND deleted_at IS NULL
 	`
@@ -45,9 +50,10 @@ func (r *PostgresAdminRepository) FindByWhatsAppNumber(ctx context.Context, what
 
 // FindByID finds an admin by ID.
 // Discriminates sql.ErrNoRows → ErrNotFound so callers get 404, not 500.
+// Includes password_hash (see FindByWhatsAppNumber for the rationale).
 func (r *PostgresAdminRepository) FindByID(ctx context.Context, adminID string) (*entity.Admin, error) {
 	const query = `
-		SELECT admin_id, whatsapp_number, full_name, role, is_active, last_login_at, created_at, updated_at
+		SELECT admin_id, whatsapp_number, password_hash, full_name, role, is_active, last_login_at, created_at, updated_at
 		FROM admins
 		WHERE admin_id = $1 AND deleted_at IS NULL
 	`
@@ -180,4 +186,112 @@ func (r *PostgresAdminRepository) CountActiveSuperAdmins(ctx context.Context) (i
 		return 0, domain.NewError(domain.ErrInternalFailure, fmt.Errorf("failed to count super admins: %w", err))
 	}
 	return count, nil
+}
+
+// hasUsableSuperAdminSQL is shared by HasUsableSuperAdmin and the
+// re-check inside UpsertBootstrapSuperAdmin so the placeholder rule
+// lives in exactly one place. The literal here must stay in sync with
+// migrations/000013_seed_super_admin.up.sql.
+const hasUsableSuperAdminSQL = `
+	SELECT EXISTS (
+		SELECT 1 FROM admins
+		WHERE role = 'super_admin'
+		  AND is_active = TRUE
+		  AND deleted_at IS NULL
+		  AND password_hash IS NOT NULL
+		  AND password_hash <> ''
+		  AND password_hash NOT LIKE '$2a$10$xxxxxxxxxx%'
+	)
+`
+
+// HasUsableSuperAdmin returns true once at least one active, non-deleted
+// super_admin row carries a real bcrypt password (i.e. not the seed
+// placeholder). Drives the first-boot wizard gate.
+func (r *PostgresAdminRepository) HasUsableSuperAdmin(ctx context.Context) (bool, error) {
+	var exists bool
+	if err := r.db.GetContext(ctx, &exists, hasUsableSuperAdminSQL); err != nil {
+		return false, domain.NewError(domain.ErrInternalFailure, fmt.Errorf("failed to check bootstrap state: %w", err))
+	}
+	return exists, nil
+}
+
+// UpsertBootstrapSuperAdmin atomically claims the bootstrap slot.
+//
+// Approach:
+//  1. Open a SERIALIZABLE transaction.
+//  2. Re-check the gate inside the transaction. If a usable super admin
+//     already exists, refuse with ErrConflict (which the handler maps
+//     to a 409). A second concurrent setup request that loses the race
+//     will hit this branch — or a Postgres serialization error, which
+//     bubbles up as ErrInternalFailure and the FE shows it as
+//     "another admin completed setup; please refresh".
+//  3. Try to UPDATE an existing placeholder row in place. The WHERE
+//     clause matches only rows that look like the seed placeholder
+//     (empty / NULL hash or the xxxxx literal).
+//  4. If no placeholder row exists (the seed migration was skipped or
+//     someone wiped the table), INSERT a fresh row.
+func (r *PostgresAdminRepository) UpsertBootstrapSuperAdmin(ctx context.Context, admin *entity.Admin) error {
+	tx, err := r.db.BeginTxx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
+	if err != nil {
+		return domain.NewError(domain.ErrInternalFailure, fmt.Errorf("failed to begin tx: %w", err))
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var alreadyUsable bool
+	if err := tx.GetContext(ctx, &alreadyUsable, hasUsableSuperAdminSQL); err != nil {
+		return domain.NewError(domain.ErrInternalFailure, fmt.Errorf("failed to recheck bootstrap state: %w", err))
+	}
+	if alreadyUsable {
+		return domain.NewError(domain.ErrConflict, errors.New("bootstrap not allowed: a super admin already exists"))
+	}
+
+	const updatePlaceholder = `
+		UPDATE admins
+		SET whatsapp_number = $1,
+		    password_hash   = $2,
+		    full_name       = $3,
+		    is_active       = TRUE,
+		    updated_at      = NOW()
+		WHERE role = 'super_admin'
+		  AND deleted_at IS NULL
+		  AND (
+		      password_hash IS NULL
+		      OR password_hash = ''
+		      OR password_hash LIKE '$2a$10$xxxxxxxxxx%'
+		  )
+		RETURNING admin_id
+	`
+
+	var updatedID string
+	err = tx.GetContext(ctx, &updatedID, updatePlaceholder,
+		admin.WhatsAppNumber, admin.PasswordHash, admin.FullName)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return domain.NewError(domain.ErrInternalFailure, fmt.Errorf("failed to update placeholder admin: %w", err))
+	}
+
+	if errors.Is(err, sql.ErrNoRows) {
+		// No placeholder row matched — insert a fresh super admin.
+		const insertFresh = `
+			INSERT INTO admins (admin_id, whatsapp_number, password_hash, full_name, role, is_active, created_at, updated_at)
+			VALUES ($1, $2, $3, $4, 'super_admin', TRUE, $5, $6)
+		`
+		if _, err := tx.ExecContext(ctx, insertFresh,
+			admin.AdminID, admin.WhatsAppNumber, admin.PasswordHash, admin.FullName,
+			admin.CreatedAt, admin.UpdatedAt); err != nil {
+			return domain.NewError(domain.ErrInternalFailure, fmt.Errorf("failed to insert bootstrap admin: %w", err))
+		}
+	} else {
+		// The caller's admin.AdminID is the freshly-minted UUID it
+		// expected to use; align it with the row we actually updated
+		// so the handler can return the correct admin_id.
+		parsed, parseErr := uuid.Parse(updatedID)
+		if parseErr == nil {
+			admin.AdminID = parsed
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return domain.NewError(domain.ErrInternalFailure, fmt.Errorf("failed to commit bootstrap tx: %w", err))
+	}
+	return nil
 }

@@ -25,6 +25,8 @@ type AdminHandler struct {
 	logoutUseCase           *adminuc.LogoutUseCase
 	updateConfigUseCase     *adminuc.UpdateConfigUseCase
 	disconnectDeviceUseCase *adminuc.DisconnectDeviceUseCase
+	needsSetupUseCase       *adminuc.NeedsSetupUseCase
+	bootstrapUseCase        *adminuc.BootstrapUseCase
 }
 
 // NewAdminHandler creates a new admin handler
@@ -44,6 +46,8 @@ func NewAdminHandler(
 	logoutUseCase *adminuc.LogoutUseCase,
 	updateConfigUseCase *adminuc.UpdateConfigUseCase,
 	disconnectDeviceUseCase *adminuc.DisconnectDeviceUseCase,
+	needsSetupUseCase *adminuc.NeedsSetupUseCase,
+	bootstrapUseCase *adminuc.BootstrapUseCase,
 ) *AdminHandler {
 	return &AdminHandler{
 		initiateLoginUseCase:    initiateLoginUseCase,
@@ -61,7 +65,45 @@ func NewAdminHandler(
 		logoutUseCase:           logoutUseCase,
 		updateConfigUseCase:     updateConfigUseCase,
 		disconnectDeviceUseCase: disconnectDeviceUseCase,
+		needsSetupUseCase:       needsSetupUseCase,
+		bootstrapUseCase:        bootstrapUseCase,
 	}
+}
+
+// NeedsSetup tells the FE whether the first-boot wizard at
+// /admin/setup should be reachable. Public, unauthenticated — the
+// wizard needs it to decide where to route an unauthenticated user
+// landing on /admin/login.
+func (h *AdminHandler) NeedsSetup(c *fiber.Ctx) error {
+	result, err := h.needsSetupUseCase.Execute(c.Context())
+	if err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+	return c.Status(fiber.StatusOK).JSON(result)
+}
+
+// Bootstrap claims the first-super-admin slot. Public, unauthenticated;
+// the use case + repository reject the request once any real super
+// admin already exists, so this endpoint can't be used to escalate
+// privileges on a live deployment.
+func (h *AdminHandler) Bootstrap(c *fiber.Ctx) error {
+	var req adminuc.BootstrapRequest
+	if err := c.BodyParser(&req); err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+	if err := validation.Struct(&req); err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+
+	result, err := h.bootstrapUseCase.Execute(c.Context(), &req, true)
+	if err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+	return c.Status(fiber.StatusOK).JSON(result)
 }
 
 // InitiateLogin initiates admin login flow
