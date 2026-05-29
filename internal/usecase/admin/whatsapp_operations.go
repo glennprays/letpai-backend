@@ -10,10 +10,14 @@ import (
 	"github.com/glennprays/letpai-backend/internal/service"
 )
 
-// GetQRCodeRequest represents get QR code request
-type GetQRCodeRequest struct {
-	PhoneNumber string `json:"phone_number" validate:"required,len=13,max=20"`
-}
+// GetQRCodeRequest is intentionally empty.
+//
+// WAGA's JWT (configured via WHATSAPP_API_KEY) is phone-scoped at
+// registration time, so the gateway derives the phone from the bearer
+// token on every subsequent SDK call. Asking the operator to retype
+// it on /admin/whatsapp was app-layer ceremony with no functional
+// effect — dropped to match the actual protocol.
+type GetQRCodeRequest struct{}
 
 // GetQRCodeResponse represents QR code response
 type GetQRCodeResponse struct {
@@ -34,8 +38,8 @@ func NewGetQRCodeUseCase(whatsappSvc *service.WhatsAppService) *GetQRCodeUseCase
 }
 
 // Execute generates QR code for WhatsApp pairing
-func (uc *GetQRCodeUseCase) Execute(ctx context.Context, req *GetQRCodeRequest) (*GetQRCodeResponse, error) {
-	qrCode, expiresAt, err := uc.whatsappSvc.GetQRCode(ctx, req.PhoneNumber)
+func (uc *GetQRCodeUseCase) Execute(ctx context.Context, _ *GetQRCodeRequest) (*GetQRCodeResponse, error) {
+	qrCode, expiresAt, err := uc.whatsappSvc.GetQRCode(ctx)
 	if err != nil {
 		return nil, domain.NewError(domain.ErrInternalFailure, fmt.Errorf("failed to generate QR code: %w", err))
 	}
