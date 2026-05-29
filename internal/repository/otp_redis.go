@@ -28,6 +28,54 @@ const (
 	otpIndexKeyFmt = "otpidx:%s"
 )
 
+// storedOTP is a serialization-only mirror of entity.OTPVerification.
+//
+// The entity itself carries `OTPCode string \`json:"-"\`` so it never
+// leaks into API responses — the upside of that tag is correct, but
+// it ALSO makes json.Marshal silently drop the code when persisting
+// the entity. Storing the entity directly leaves Redis with an OTP
+// row that's missing its code, so every verify call ends up comparing
+// the user's input against the empty string and returning "invalid
+// OTP code". This DTO breaks the coupling: callers always go through
+// entityToStored / storedToEntity instead of marshaling the entity
+// itself.
+type storedOTP struct {
+	OTPID          uuid.UUID  `json:"otp_id"`
+	UserID         *uuid.UUID `json:"user_id,omitempty"`
+	WhatsAppNumber string     `json:"whatsapp_number"`
+	OTPCode        string     `json:"otp_code"`
+	ExpiresAt      time.Time  `json:"expires_at"`
+	IsUsed         bool       `json:"is_used"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UsedAt         *time.Time `json:"used_at,omitempty"`
+}
+
+func entityToStored(o *entity.OTPVerification) storedOTP {
+	return storedOTP{
+		OTPID:          o.OTPID,
+		UserID:         o.UserID,
+		WhatsAppNumber: o.WhatsAppNumber,
+		OTPCode:        o.OTPCode,
+		ExpiresAt:      o.ExpiresAt,
+		IsUsed:         o.IsUsed,
+		CreatedAt:      o.CreatedAt,
+		UsedAt:         o.UsedAt,
+	}
+}
+
+func (s storedOTP) toEntity() *entity.OTPVerification {
+	return &entity.OTPVerification{
+		OTPID:          s.OTPID,
+		UserID:         s.UserID,
+		WhatsAppNumber: s.WhatsAppNumber,
+		OTPCode:        s.OTPCode,
+		ExpiresAt:      s.ExpiresAt,
+		IsUsed:         s.IsUsed,
+		CreatedAt:      s.CreatedAt,
+		UsedAt:         s.UsedAt,
+	}
+}
+
 // RedisOTPRepository implements OTPRepository using Redis as the storage
 // backend instead of Postgres. OTPs are short-lived (≤ a few minutes),
 // so we use the key's TTL instead of a periodic cleanup job.
@@ -53,7 +101,7 @@ func (r *RedisOTPRepository) Create(ctx context.Context, otp *entity.OTPVerifica
 		return domain.NewError(domain.ErrBadRequest, errors.New("otp expiry is in the past"))
 	}
 
-	payload, err := json.Marshal(otp)
+	payload, err := json.Marshal(entityToStored(otp))
 	if err != nil {
 		return domain.NewError(domain.ErrInternalFailure, err)
 	}
@@ -83,10 +131,11 @@ func (r *RedisOTPRepository) FindValidByPhone(ctx context.Context, whatsappNumbe
 		return nil, domain.NewError(domain.ErrInternalFailure, err)
 	}
 
-	var otp entity.OTPVerification
-	if err := json.Unmarshal(raw, &otp); err != nil {
+	var stored storedOTP
+	if err := json.Unmarshal(raw, &stored); err != nil {
 		return nil, domain.NewError(domain.ErrInternalFailure, err)
 	}
+	otp := stored.toEntity()
 	if otp.IsUsed {
 		return nil, domain.NewError(domain.ErrNotFound, nil)
 	}
@@ -96,7 +145,7 @@ func (r *RedisOTPRepository) FindValidByPhone(ctx context.Context, whatsappNumbe
 		// path.
 		return nil, domain.NewError(domain.ErrNotFound, nil)
 	}
-	return &otp, nil
+	return otp, nil
 }
 
 // FindByID is unused by the live OTP flow today but is part of the port
