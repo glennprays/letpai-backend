@@ -73,10 +73,13 @@ func (h *SessionHandler) Create(c *fiber.Ctx) error {
 	}
 
 	ucReq := &session.CreateSessionRequest{
-		Title:       req.Title,
-		Description: req.Description,
-		Currency:    req.Currency,
-		SessionDate: req.SessionDate,
+		Title:             req.Title,
+		Description:       req.Description,
+		Currency:          req.Currency,
+		SessionDate:       req.SessionDate,
+		BankName:          req.BankName,
+		BankAccountNumber: req.BankAccountNumber,
+		BankAccountHolder: req.BankAccountHolder,
 	}
 
 	result, err := h.createSession.Execute(c.Context(), userID, ucReq)
@@ -169,10 +172,13 @@ func (h *SessionHandler) Update(c *fiber.Ctx) error {
 	}
 
 	ucReq := &session.UpdateSessionRequest{
-		Title:       req.Title,
-		Description: req.Description,
-		Currency:    req.Currency,
-		SessionDate: req.SessionDate,
+		Title:             req.Title,
+		Description:       req.Description,
+		Currency:          req.Currency,
+		SessionDate:       req.SessionDate,
+		BankName:          req.BankName,
+		BankAccountNumber: req.BankAccountNumber,
+		BankAccountHolder: req.BankAccountHolder,
 	}
 
 	result, err := h.updateSession.Execute(c.Context(), userID, sessionID, ucReq)
@@ -312,9 +318,10 @@ func (h *SessionHandler) AddBillItem(c *fiber.Ctx) error {
 	}
 
 	ucReq := &billing.AddBillItemRequest{
-		Description: req.Description,
-		Amount:      req.Amount,
-		Category:    req.Category,
+		Description:    req.Description,
+		Amount:         req.Amount,
+		Category:       req.Category,
+		ParticipantIDs: req.ParticipantIDs,
 	}
 
 	result, err := h.addBillItem.Execute(c.Context(), userID, sessionID, ucReq)
@@ -363,9 +370,10 @@ func (h *SessionHandler) UpdateBillItem(c *fiber.Ctx) error {
 	}
 
 	billingReq := &billing.UpdateBillItemRequest{
-		Description: req.Description,
-		Amount:      req.Amount,
-		Category:    req.Category,
+		Description:    req.Description,
+		Amount:         req.Amount,
+		Category:       req.Category,
+		ParticipantIDs: req.ParticipantIDs,
 	}
 	result, err := h.updateBillItem.Execute(c.Context(), userID, sessionID, billItemID, billingReq)
 	if err != nil {

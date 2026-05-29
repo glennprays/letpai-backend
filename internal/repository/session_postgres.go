@@ -28,8 +28,8 @@ func NewPostgresSessionRepository(db *sqlx.DB) ports.SessionRepository {
 // Create creates a new session
 func (r *PostgresSessionRepository) Create(ctx context.Context, session *entity.Session) error {
 	query := `
-		INSERT INTO sessions (session_id, user_id, title, description, status, total_amount, currency, session_date, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		INSERT INTO sessions (session_id, user_id, title, description, status, total_amount, currency, session_date, bank_name, bank_account_number, bank_account_holder, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 	`
 
 	_, err := r.db.ExecContext(
@@ -43,6 +43,9 @@ func (r *PostgresSessionRepository) Create(ctx context.Context, session *entity.
 		session.TotalAmount,
 		session.Currency,
 		session.SessionDate,
+		session.BankName,
+		session.BankAccountNumber,
+		session.BankAccountHolder,
 		session.CreatedAt,
 		session.UpdatedAt,
 	)
@@ -54,15 +57,25 @@ func (r *PostgresSessionRepository) Create(ctx context.Context, session *entity.
 	return nil
 }
 
-// FindByID finds a session by ID
+// FindByID finds a session by ID.
+//
+// userID is the authenticated host's id. Pass an empty string to skip
+// the ownership filter — used by the public payment-page lookup, which
+// scopes by the participant token (the page is only reachable if you
+// have the token, so we don't double-gate by host).
 func (r *PostgresSessionRepository) FindByID(ctx context.Context, sessionID string, userID string) (*entity.Session, error) {
 	query := `
-		SELECT session_id, user_id, title, description, status, total_amount, currency, session_date, created_at, updated_at, deleted_at
+		SELECT session_id, user_id, title, description, status, total_amount, currency, session_date, bank_name, bank_account_number, bank_account_holder, created_at, updated_at, deleted_at
 		FROM sessions
-		WHERE session_id = $1 AND user_id = $2 AND deleted_at IS NULL
+		WHERE session_id = $1 AND deleted_at IS NULL
 	`
+	args := []any{sessionID}
+	if userID != "" {
+		query += " AND user_id = $2"
+		args = append(args, userID)
+	}
 
-	row := r.db.QueryRowxContext(ctx, query, sessionID, userID)
+	row := r.db.QueryRowxContext(ctx, query, args...)
 	if row.Err() != nil {
 		if errors.Is(row.Err(), sql.ErrNoRows) {
 			return nil, domain.NewError(domain.ErrNotFound, nil)
@@ -81,6 +94,9 @@ func (r *PostgresSessionRepository) FindByID(ctx context.Context, sessionID stri
 		&session.TotalAmount,
 		&session.Currency,
 		&session.SessionDate,
+		&session.BankName,
+		&session.BankAccountNumber,
+		&session.BankAccountHolder,
 		&session.CreatedAt,
 		&session.UpdatedAt,
 		&session.DeletedAt,
@@ -168,7 +184,7 @@ func (r *PostgresSessionRepository) FindAll(ctx context.Context, userID string, 
 
 	// Data query
 	dataQuery := `
-		SELECT session_id, user_id, title, description, status, total_amount, currency, session_date, created_at, updated_at, deleted_at
+		SELECT session_id, user_id, title, description, status, total_amount, currency, session_date, bank_name, bank_account_number, bank_account_holder, created_at, updated_at, deleted_at
 		FROM sessions
 		WHERE ` + whereClause + `
 		ORDER BY ` + opts.SortBy + ` ` + strings.ToUpper(opts.SortOrder) + `
@@ -200,6 +216,9 @@ func (r *PostgresSessionRepository) FindAll(ctx context.Context, userID string, 
 			&session.TotalAmount,
 			&session.Currency,
 			&session.SessionDate,
+			&session.BankName,
+			&session.BankAccountNumber,
+			&session.BankAccountHolder,
 			&session.CreatedAt,
 			&session.UpdatedAt,
 			&session.DeletedAt,
@@ -232,8 +251,8 @@ func (r *PostgresSessionRepository) FindAll(ctx context.Context, userID string, 
 func (r *PostgresSessionRepository) Update(ctx context.Context, session *entity.Session) error {
 	query := `
 		UPDATE sessions
-		SET title = $2, description = $3, status = $4, total_amount = $5, currency = $6, session_date = $7, updated_at = $8
-		WHERE session_id = $1 AND user_id = $9 AND deleted_at IS NULL
+		SET title = $2, description = $3, status = $4, total_amount = $5, currency = $6, session_date = $7, bank_name = $8, bank_account_number = $9, bank_account_holder = $10, updated_at = $11
+		WHERE session_id = $1 AND user_id = $12 AND deleted_at IS NULL
 	`
 
 	result, err := r.db.ExecContext(
@@ -246,6 +265,9 @@ func (r *PostgresSessionRepository) Update(ctx context.Context, session *entity.
 		session.TotalAmount,
 		session.Currency,
 		session.SessionDate,
+		session.BankName,
+		session.BankAccountNumber,
+		session.BankAccountHolder,
 		session.UpdatedAt,
 		session.UserID,
 	)

@@ -2,29 +2,50 @@ package payment
 
 import (
 	"context"
+	"math"
 	"time"
 
 	"github.com/glennprays/letpai-backend/domain/ports"
 )
 
-// PaymentPageResponse represents the public payment page data
+// PaymentPageResponse represents the public payment page data.
+//
+// BillItems is now filtered to only items that include this participant
+// (or items with no explicit assignment, treated as "everyone").
+// `your_share` on each item is the per-item amount THIS participant
+// pays — useful so the participant sees exactly what they owe and why,
+// not just the bill's total which gets divided across multiple people.
 type PaymentPageResponse struct {
-	SessionName     string         `json:"session_name"`
-	ParticipantName string         `json:"participant_name"`
-	ShareAmount     float64        `json:"share_amount"`
-	Currency        string         `json:"currency"`
-	BillItems       []BillItemInfo `json:"bill_items"`
-	PaymentStatus   string         `json:"payment_status"`
-	LinkExpiresAt   string         `json:"link_expires_at"`
-	IsExpired       bool           `json:"is_expired"`
+	SessionID         string         `json:"session_id"`
+	ParticipantID     string         `json:"participant_id"`
+	SessionName       string         `json:"session_name"`
+	ParticipantName   string         `json:"participant_name"`
+	TotalAmount       float64        `json:"total_amount"`
+	ShareAmount       float64        `json:"share_amount"`
+	Currency          string         `json:"currency"`
+	BillItems         []BillItemInfo `json:"bill_items"`
+	PaymentStatus     string         `json:"payment_status"`
+	PaymentProofURL   *string        `json:"payment_proof_url,omitempty"`
+	RejectionReason   *string        `json:"rejection_reason,omitempty"`
+	BankName          *string        `json:"bank_name,omitempty"`
+	BankAccountNumber *string        `json:"bank_account_number,omitempty"`
+	BankAccountHolder *string        `json:"bank_account_holder,omitempty"`
+	LinkExpiresAt     string         `json:"link_expires_at"`
+	IsExpired         bool           `json:"is_expired"`
 }
 
-// BillItemInfo represents bill item information
+// BillItemInfo carries both the bill's full amount and THIS
+// participant's slice of it. `your_share` is what the participant
+// actually owes for the line; `shared_with` counts how many people
+// the bill was divided across so the UI can render "Rp 50000 / 3
+// people = Rp 16667 your share".
 type BillItemInfo struct {
 	BillItemID  string  `json:"bill_item_id"`
 	Description string  `json:"description"`
 	Amount      float64 `json:"amount"`
 	Category    *string `json:"category,omitempty"`
+	YourShare   float64 `json:"your_share"`
+	SharedWith  int     `json:"shared_with"`
 }
 
 // GetPaymentPageUseCase handles getting public payment page data
@@ -81,14 +102,50 @@ func (uc *GetPaymentPageUseCase) Execute(ctx context.Context, participantID stri
 		return nil, err
 	}
 
-	billItemInfos := make([]BillItemInfo, len(billItems))
-	for i, bill := range billItems {
-		billItemInfos[i] = BillItemInfo{
+	// All participants are needed so we can correctly compute "shared
+	// with N people" for bills with no explicit assignment (legacy
+	// "everyone" semantics).
+	allParticipants, err := uc.participantRepo.FindBySessionID(ctx, participant.SessionID.String())
+	if err != nil {
+		return nil, err
+	}
+	totalParticipants := len(allParticipants)
+	if totalParticipants == 0 {
+		totalParticipants = 1 // defensive — shouldn't happen if this participant exists
+	}
+
+	pidStr := participant.ParticipantID.String()
+	billItemInfos := make([]BillItemInfo, 0, len(billItems))
+	for _, bill := range billItems {
+		// Decide whether this bill applies to this participant and how
+		// many people it's split across. An empty ParticipantIDs list
+		// means "everyone in the session"; a populated list means only
+		// the listed participants share the bill.
+		isMine := false
+		sharedWith := 0
+		if len(bill.ParticipantIDs) == 0 {
+			isMine = true
+			sharedWith = totalParticipants
+		} else {
+			for _, pid := range bill.ParticipantIDs {
+				if pid.String() == pidStr {
+					isMine = true
+				}
+			}
+			sharedWith = len(bill.ParticipantIDs)
+		}
+		if !isMine {
+			continue
+		}
+		yourShare := math.Floor(bill.Amount / float64(sharedWith))
+		billItemInfos = append(billItemInfos, BillItemInfo{
 			BillItemID:  bill.BillItemID.String(),
 			Description: bill.Description,
 			Amount:      bill.Amount,
 			Category:    bill.Category,
-		}
+			YourShare:   yourShare,
+			SharedWith:  sharedWith,
+		})
 	}
 
 	// Calculate link expiry (7 days from session creation or completion)
@@ -96,13 +153,21 @@ func (uc *GetPaymentPageUseCase) Execute(ctx context.Context, participantID stri
 	isExpired := time.Now().After(linkExpiresAt)
 
 	return &PaymentPageResponse{
-		SessionName:     session.Title,
-		ParticipantName: participantName,
-		ShareAmount:     participant.ShareAmount,
-		Currency:        session.Currency,
-		BillItems:       billItemInfos,
-		PaymentStatus:   participant.PaymentStatus.String(),
-		LinkExpiresAt:   linkExpiresAt.Format("2006-01-02T15:04:05Z07:00"),
-		IsExpired:       isExpired,
+		SessionID:         session.SessionID.String(),
+		ParticipantID:     participant.ParticipantID.String(),
+		SessionName:       session.Title,
+		ParticipantName:   participantName,
+		TotalAmount:       session.TotalAmount,
+		ShareAmount:       participant.ShareAmount,
+		Currency:          session.Currency,
+		BillItems:         billItemInfos,
+		PaymentStatus:     participant.PaymentStatus.String(),
+		PaymentProofURL:   participant.PaymentProofURL,
+		RejectionReason:   participant.RejectionReason,
+		BankName:          session.BankName,
+		BankAccountNumber: session.BankAccountNumber,
+		BankAccountHolder: session.BankAccountHolder,
+		LinkExpiresAt:     linkExpiresAt.Format("2006-01-02T15:04:05Z07:00"),
+		IsExpired:         isExpired,
 	}, nil
 }

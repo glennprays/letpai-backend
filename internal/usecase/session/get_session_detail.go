@@ -41,20 +41,23 @@ type BillItemItem struct {
 
 // GetSessionDetailResponse represents the response for getting session details
 type GetSessionDetailResponse struct {
-	SessionID        string             `json:"session_id"`
-	Title            string             `json:"title"`
-	Description      string             `json:"description"`
-	Status           string             `json:"status"`
-	TotalAmount      float64            `json:"total_amount"`
-	Currency         string             `json:"currency"`
-	SessionDate      *string            `json:"session_date,omitempty"`
-	CreatedAt        string             `json:"created_at"`
-	UpdatedAt        string             `json:"updated_at"`
-	ParticipantCount int                `json:"participant_count"`
-	BillItemCount    int                `json:"bill_item_count"`
-	PaidCount        int                `json:"paid_count"`
-	Participants     []*ParticipantItem `json:"participants"`
-	Bills            []*BillItemItem    `json:"bills"`
+	SessionID         string             `json:"session_id"`
+	Title             string             `json:"title"`
+	Description       string             `json:"description"`
+	Status            string             `json:"status"`
+	TotalAmount       float64            `json:"total_amount"`
+	Currency          string             `json:"currency"`
+	SessionDate       *string            `json:"session_date,omitempty"`
+	BankName          *string            `json:"bank_name,omitempty"`
+	BankAccountNumber *string            `json:"bank_account_number,omitempty"`
+	BankAccountHolder *string            `json:"bank_account_holder,omitempty"`
+	CreatedAt         string             `json:"created_at"`
+	UpdatedAt         string             `json:"updated_at"`
+	ParticipantCount  int                `json:"participant_count"`
+	BillItemCount     int                `json:"bill_item_count"`
+	PaidCount         int                `json:"paid_count"`
+	Participants      []*ParticipantItem `json:"participants"`
+	Bills             []*BillItemItem    `json:"bills"`
 }
 
 // GetSessionDetailUseCase handles retrieving session details
@@ -154,19 +157,22 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, userID, sessionI
 	}
 
 	return &GetSessionDetailResponse{
-		SessionID:        session.SessionID.String(),
-		Title:            session.Title,
-		Description:      session.Description,
-		Status:           session.Status.String(),
-		TotalAmount:      session.TotalAmount,
-		Currency:         session.Currency,
-		SessionDate:      sessionDate,
-		CreatedAt:        session.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
-		UpdatedAt:        session.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
-		ParticipantCount: len(participants),
-		BillItemCount:    len(bills),
-		PaidCount:        paidCount,
-		Participants:     participantItems,
-		Bills:            billItems,
+		SessionID:         session.SessionID.String(),
+		Title:             session.Title,
+		Description:       session.Description,
+		Status:            session.Status.String(),
+		TotalAmount:       session.TotalAmount,
+		Currency:          session.Currency,
+		SessionDate:       sessionDate,
+		BankName:          session.BankName,
+		BankAccountNumber: session.BankAccountNumber,
+		BankAccountHolder: session.BankAccountHolder,
+		CreatedAt:         session.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedAt:         session.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		ParticipantCount:  len(participants),
+		BillItemCount:     len(bills),
+		PaidCount:         paidCount,
+		Participants:      participantItems,
+		Bills:             billItems,
 	}, nil
 }

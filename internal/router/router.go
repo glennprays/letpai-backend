@@ -13,6 +13,7 @@ type Router struct {
 	HealthHandler          *handler.HealthHandler
 	AuthHandler            *handler.AuthHandler
 	AdminHandler           *handler.AdminHandler
+	AdminTemplatesHandler  *handler.AdminTemplatesHandler
 	WhatsAppWebhookHandler *handler.WhatsAppWebhookHandler
 	ContactGroupHandler    *handler.ContactGroupHandler
 	ContactHandler         *handler.ContactHandler
@@ -30,6 +31,7 @@ func NewRouter(
 	healthHandler *handler.HealthHandler,
 	authHandler *handler.AuthHandler,
 	adminHandler *handler.AdminHandler,
+	adminTemplatesHandler *handler.AdminTemplatesHandler,
 	whatsappWebhookHandler *handler.WhatsAppWebhookHandler,
 	contactGroupHandler *handler.ContactGroupHandler,
 	contactHandler *handler.ContactHandler,
@@ -47,6 +49,7 @@ func NewRouter(
 		HealthHandler:          healthHandler,
 		AuthHandler:            authHandler,
 		AdminHandler:           adminHandler,
+		AdminTemplatesHandler:  adminTemplatesHandler,
 		WhatsAppWebhookHandler: whatsappWebhookHandler,
 		ContactGroupHandler:    contactGroupHandler,
 		ContactHandler:         contactHandler,
@@ -198,6 +201,12 @@ func (r *Router) setupAdminRoutes(group fiber.Router) {
 	protectedAdmin.Get("/status", r.AdminHandler.GetStatus)
 	protectedAdmin.Post("/qr-code", r.AdminHandler.GetQRCode)
 	protectedAdmin.Post("/logout", r.AdminHandler.Logout)
+
+	// Admin message-template management (any admin can read; updates
+	// available to anyone in the admin scope — narrowing to super
+	// admin only would be cheap to add later).
+	protectedAdmin.Get("/templates", r.AdminTemplatesHandler.List)
+	protectedAdmin.Put("/templates/:key", r.AdminTemplatesHandler.Update)
 
 	// Admin management routes (super admin only)
 	superAdmin := protectedAdmin.Use(middleware.RequireSuperAdminRole(r.jwtService))

@@ -13,6 +13,7 @@ import (
 	"github.com/glennprays/letpai-backend/internal/router"
 	"github.com/glennprays/letpai-backend/internal/service"
 	"github.com/glennprays/letpai-backend/internal/usecase/admin"
+	"github.com/glennprays/letpai-backend/internal/usecase/admintemplates"
 	"github.com/glennprays/letpai-backend/internal/usecase/auth"
 	"github.com/glennprays/letpai-backend/internal/usecase/billing"
 	"github.com/glennprays/letpai-backend/internal/usecase/contact"
@@ -80,6 +81,10 @@ func InitializeApp() (*App, error) {
 	needsSetupUseCase := admin.NewNeedsSetupUseCase(adminRepository)
 	bootstrapUseCase := admin.NewBootstrapUseCase(adminRepository, passwordService, jwtService)
 	adminHandler := handler.NewAdminHandler(initiateLoginUseCase, adminVerifyOTPUseCase, adminLoginUseCase, getProfileUseCase, adminUpdateProfileUseCase, setupPasswordUseCase, listAdminsUseCase, createAdminUseCase, updateAdminUseCase, deleteAdminUseCase, getStatusUseCase, getQRCodeUseCase, logoutUseCase, needsSetupUseCase, bootstrapUseCase)
+	adminMessageTemplateRepository := repository.NewPostgresMessageTemplateRepository(db)
+	listTemplatesUseCase := admintemplates.NewListTemplatesUseCase(adminMessageTemplateRepository)
+	updateTemplateUseCase := admintemplates.NewUpdateTemplateUseCase(adminMessageTemplateRepository)
+	adminTemplatesHandler := handler.NewAdminTemplatesHandler(listTemplatesUseCase, updateTemplateUseCase)
 	whatsAppWebhookHandler := handler.NewWhatsAppWebhookHandler(configConfig, whatsAppService, whatsAppConfigRepository)
 	contactGroupRepository := repository.NewPostgresContactGroupRepository(db)
 	createGroupUseCase := contactgroup.NewCreateGroupUseCase(contactGroupRepository)
@@ -119,6 +124,8 @@ func InitializeApp() (*App, error) {
 	submitPaymentUseCase := payment.NewSubmitPaymentUseCase(participantRepository, sessionRepository, imageService)
 	approvePaymentUseCase := payment.NewApprovePaymentUseCase(participantRepository, sessionRepository)
 	notificationLogRepository := repository.NewPostgresNotificationLogRepository(db)
+	templateRenderer := service.NewTemplateRenderer(adminMessageTemplateRepository)
+	asyncNotifier := service.NewAsyncNotifier(whatsAppService, notificationLogRepository)
 	rejectPaymentUseCase := payment.NewRejectPaymentUseCase(participantRepository, sessionRepository, contactRepository, whatsAppService, notificationLogRepository)
 	bulkApproveUseCase := payment.NewBulkApproveUseCase(participantRepository, sessionRepository)
 	bulkRejectUseCase := payment.NewBulkRejectUseCase(participantRepository, sessionRepository, contactRepository, whatsAppService, notificationLogRepository)
@@ -126,15 +133,15 @@ func InitializeApp() (*App, error) {
 	getPaymentProofUseCase := payment.NewGetPaymentProofUseCase(participantRepository)
 	markPaidWithoutProofUseCase := payment.NewMarkPaidWithoutProofUseCase(sessionRepository, participantRepository)
 	paymentHandler := handler.NewPaymentHandler(submitPaymentUseCase, approvePaymentUseCase, rejectPaymentUseCase, bulkApproveUseCase, bulkRejectUseCase, getPaymentPageUseCase, getPaymentProofUseCase, markPaidWithoutProofUseCase)
-	sendNotificationsUseCase := notification.NewSendNotificationsUseCase(sessionRepository, participantRepository, contactRepository, billItemRepository, whatsAppService, notificationLogRepository)
+	sendNotificationsUseCase := notification.NewSendNotificationsUseCase(sessionRepository, participantRepository, contactRepository, billItemRepository, asyncNotifier, templateRenderer, configConfig.AppURL)
 	rateLimitService := NewRateLimitService(client)
-	sendReminderUseCase := notification.NewSendReminderUseCase(participantRepository, sessionRepository, contactRepository, whatsAppService, rateLimitService)
-	bulkReminderUseCase := notification.NewBulkReminderUseCase(participantRepository, sessionRepository, contactRepository, whatsAppService, rateLimitService)
+	sendReminderUseCase := notification.NewSendReminderUseCase(participantRepository, sessionRepository, contactRepository, asyncNotifier, templateRenderer, rateLimitService, configConfig.AppURL)
+	bulkReminderUseCase := notification.NewBulkReminderUseCase(participantRepository, sessionRepository, contactRepository, asyncNotifier, templateRenderer, rateLimitService, configConfig.AppURL)
 	notificationHandler := handler.NewNotificationHandler(sendNotificationsUseCase, sendReminderUseCase, bulkReminderUseCase)
 	webhookHandler := handler.NewWebhookHandler(configConfig, notificationLogRepository)
 	getDashboardUseCase := dashboard.NewGetDashboardUseCase(sessionRepository, participantRepository)
 	dashboardHandler := handler.NewDashboardHandler(getDashboardUseCase)
-	routerRouter := router.NewRouter(logLogger, healthHandler, authHandler, adminHandler, whatsAppWebhookHandler, contactGroupHandler, contactHandler, sessionHandler, paymentHandler, notificationHandler, webhookHandler, dashboardHandler, jwtService, rateLimitService)
+	routerRouter := router.NewRouter(logLogger, healthHandler, authHandler, adminHandler, adminTemplatesHandler, whatsAppWebhookHandler, contactGroupHandler, contactHandler, sessionHandler, paymentHandler, notificationHandler, webhookHandler, dashboardHandler, jwtService, rateLimitService)
 	app := &App{
 		Config: configConfig,
 		Logger: logLogger,

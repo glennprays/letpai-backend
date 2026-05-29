@@ -112,9 +112,16 @@ func (uc *CalculateSplitsUseCase) Execute(ctx context.Context, userID, sessionID
 			}
 		}
 
-		perPerson := math.Round((bill.Amount/float64(len(shareIDs)))*100) / 100
+		// IDR is whole-currency; the share_amount column is BIGINT, so
+		// fractional cents (e.g. 50000/3 = 16666.67) would round-trip
+		// through the float math then trip "invalid input syntax for
+		// type bigint" on the BulkUpdateShareAmounts UPDATE. Floor the
+		// per-person share to whole units and push the rounding
+		// remainder onto the last participant so the bill total
+		// reconciles exactly.
+		perPerson := math.Floor(bill.Amount / float64(len(shareIDs)))
 		distributed := perPerson * float64(len(shareIDs))
-		remainder := math.Round((bill.Amount-distributed)*100) / 100
+		remainder := bill.Amount - distributed
 
 		for _, id := range shareIDs {
 			accumulated[id] += perPerson
@@ -130,7 +137,7 @@ func (uc *CalculateSplitsUseCase) Execute(ctx context.Context, userID, sessionID
 	participantSplits := make([]*ParticipantSplit, 0, len(orderedIDs))
 	for _, p := range participants {
 		idStr := p.ParticipantID.String()
-		amount := math.Round(accumulated[idStr]*100) / 100
+		amount := math.Round(accumulated[idStr])
 		p.SetShareAmount(amount)
 		updates[idStr] = amount
 		participantSplits = append(participantSplits, &ParticipantSplit{

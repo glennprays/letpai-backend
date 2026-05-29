@@ -20,14 +20,50 @@ type Session struct {
 	TotalAmount float64                   `json:"total_amount" db:"total_amount"`
 	Currency    string                    `json:"currency" db:"currency"`
 	SessionDate *time.Time                `json:"session_date,omitempty" db:"session_date"`
-	CreatedAt   time.Time                 `json:"created_at" db:"created_at"`
-	UpdatedAt   time.Time                 `json:"updated_at" db:"updated_at"`
-	DeletedAt   *time.Time                `json:"deleted_at,omitempty" db:"deleted_at"`
+
+	// Bank transfer destination the host wants participants to pay to.
+	// Shown on the participant's public payment page. All three are
+	// optional so the host can fill in just what's relevant (e.g.
+	// e-wallet account holder + number without a bank_name).
+	BankName          *string `json:"bank_name,omitempty" db:"bank_name"`
+	BankAccountNumber *string `json:"bank_account_number,omitempty" db:"bank_account_number"`
+	BankAccountHolder *string `json:"bank_account_holder,omitempty" db:"bank_account_holder"`
+
+	CreatedAt time.Time  `json:"created_at" db:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at" db:"updated_at"`
+	DeletedAt *time.Time `json:"deleted_at,omitempty" db:"deleted_at"`
 
 	// Computed fields (not in database)
 	ParticipantCount *int `json:"participant_count,omitempty" db:"participant_count"`
 	BillItemCount    *int `json:"bill_item_count,omitempty" db:"bill_item_count"`
 	PaidCount        *int `json:"paid_count,omitempty" db:"paid_count"`
+}
+
+// SetBankInfo updates the bank transfer destination. Pass nil pointers
+// to leave a field untouched, or a pointer to an empty string to clear
+// it. Empty strings normalize to nil so partial entries round-trip
+// cleanly through the public payment page.
+func (s *Session) SetBankInfo(name, number, holder *string) {
+	if name != nil {
+		s.BankName = normalizeBankField(name)
+	}
+	if number != nil {
+		s.BankAccountNumber = normalizeBankField(number)
+	}
+	if holder != nil {
+		s.BankAccountHolder = normalizeBankField(holder)
+	}
+	s.UpdatedAt = time.Now()
+}
+
+func normalizeBankField(p *string) *string {
+	if p == nil {
+		return nil
+	}
+	if *p == "" {
+		return nil
+	}
+	return p
 }
 
 // NewSession creates a new session

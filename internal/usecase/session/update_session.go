@@ -11,22 +11,28 @@ import (
 
 // UpdateSessionRequest represents the request to update a session
 type UpdateSessionRequest struct {
-	Title       *string    `json:"title" validate:"omitempty,min=1,max=200"`
-	Description *string    `json:"description" validate:"omitempty,max=1000"`
-	Currency    *string    `json:"currency" validate:"omitempty,len=3"`
-	SessionDate *time.Time `json:"session_date,omitempty"`
+	Title             *string    `json:"title" validate:"omitempty,min=1,max=200"`
+	Description       *string    `json:"description" validate:"omitempty,max=1000"`
+	Currency          *string    `json:"currency" validate:"omitempty,len=3"`
+	SessionDate       *time.Time `json:"session_date,omitempty"`
+	BankName          *string    `json:"bank_name,omitempty"`
+	BankAccountNumber *string    `json:"bank_account_number,omitempty"`
+	BankAccountHolder *string    `json:"bank_account_holder,omitempty"`
 }
 
 // UpdateSessionResponse represents the response after updating a session
 type UpdateSessionResponse struct {
-	SessionID   string  `json:"session_id"`
-	Title       string  `json:"title"`
-	Description string  `json:"description"`
-	Status      string  `json:"status"`
-	TotalAmount float64 `json:"total_amount"`
-	Currency    string  `json:"currency"`
-	SessionDate *string `json:"session_date,omitempty"`
-	UpdatedAt   string  `json:"updated_at"`
+	SessionID         string  `json:"session_id"`
+	Title             string  `json:"title"`
+	Description       string  `json:"description"`
+	Status            string  `json:"status"`
+	TotalAmount       float64 `json:"total_amount"`
+	Currency          string  `json:"currency"`
+	SessionDate       *string `json:"session_date,omitempty"`
+	BankName          *string `json:"bank_name,omitempty"`
+	BankAccountNumber *string `json:"bank_account_number,omitempty"`
+	BankAccountHolder *string `json:"bank_account_holder,omitempty"`
+	UpdatedAt         string  `json:"updated_at"`
 }
 
 // UpdateSessionUseCase handles updating a session
@@ -68,6 +74,7 @@ func (uc *UpdateSessionUseCase) Execute(ctx context.Context, userID, sessionID s
 		coalesceString(req.Currency, session.Currency),
 		req.SessionDate,
 	)
+	session.SetBankInfo(req.BankName, req.BankAccountNumber, req.BankAccountHolder)
 
 	if err := uc.sessionRepo.Update(ctx, session); err != nil {
 		return nil, err
@@ -80,14 +87,17 @@ func (uc *UpdateSessionUseCase) Execute(ctx context.Context, userID, sessionID s
 	}
 
 	return &UpdateSessionResponse{
-		SessionID:   session.SessionID.String(),
-		Title:       session.Title,
-		Description: session.Description,
-		Status:      session.Status.String(),
-		TotalAmount: session.TotalAmount,
-		Currency:    session.Currency,
-		SessionDate: sessionDate,
-		UpdatedAt:   session.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		SessionID:         session.SessionID.String(),
+		Title:             session.Title,
+		Description:       session.Description,
+		Status:            session.Status.String(),
+		TotalAmount:       session.TotalAmount,
+		Currency:          session.Currency,
+		SessionDate:       sessionDate,
+		BankName:          session.BankName,
+		BankAccountNumber: session.BankAccountNumber,
+		BankAccountHolder: session.BankAccountHolder,
+		UpdatedAt:         session.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	}, nil
 }
 
