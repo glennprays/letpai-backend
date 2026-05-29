@@ -76,18 +76,15 @@ func (uc *SendReminderUseCase) Execute(ctx context.Context, userID, participantI
 		return nil, domain.NewError(domain.ErrBadRequest, errors.New("participant has already paid"))
 	}
 
-	// Check rate limit
-	canSend, retryAfter, nextResetAt, err := uc.rateLimitSvc.GetReminderStatus(ctx, participantID)
+	// Rate-limit gating lives in the Fiber middleware (ReminderRateLimiter
+	// in internal/middleware/rate_limit.go), which returns the canonical
+	// 429 + Retry-After + next_available_at response. Re-checking here
+	// would double-decrement the limiter and ship a divergent 400 payload
+	// when the use-case ran first under a race. The status helper below
+	// remains for /reminder-status reads.
+	_, _, nextResetAt, err := uc.rateLimitSvc.GetReminderStatus(ctx, participantID)
 	if err != nil {
 		return nil, err
-	}
-
-	if !canSend {
-		return &SendReminderResponse{
-			Message:         fmt.Sprintf("Rate limit exceeded. Wait %s", service.FormatRetryAfter(retryAfter)),
-			NextAvailableAt: nextResetAt.Format("2006-01-02T15:04:05Z07:00"),
-			RetryAfter:      int64(retryAfter.Seconds()),
-		}, domain.NewError(domain.ErrBadRequest, errors.New("rate limit exceeded"))
 	}
 
 	// Get WhatsApp number

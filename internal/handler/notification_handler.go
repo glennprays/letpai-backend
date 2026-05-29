@@ -14,6 +14,7 @@ type NotificationHandler struct {
 	sendNotifications *notification.SendNotificationsUseCase
 	sendReminder      *notification.SendReminderUseCase
 	bulkReminder      *notification.BulkReminderUseCase
+	reminderStatus    *notification.ReminderStatusUseCase
 }
 
 // NewNotificationHandler creates a new notification handler
@@ -21,12 +22,37 @@ func NewNotificationHandler(
 	sendNotifications *notification.SendNotificationsUseCase,
 	sendReminder *notification.SendReminderUseCase,
 	bulkReminder *notification.BulkReminderUseCase,
+	reminderStatus *notification.ReminderStatusUseCase,
 ) *NotificationHandler {
 	return &NotificationHandler{
 		sendNotifications: sendNotifications,
 		sendReminder:      sendReminder,
 		bulkReminder:      bulkReminder,
+		reminderStatus:    reminderStatus,
 	}
+}
+
+// ReminderStatus returns whether the host can fire a reminder right now
+// and, if not, when the cooldown next opens. Lets the FE render the
+// Remind button as disabled + countdown on first paint instead of
+// surfacing the 429 only after the user clicks.
+func (h *NotificationHandler) ReminderStatus(c *fiber.Ctx) error {
+	participantID := c.Params("participant_id")
+	if participantID == "" {
+		apiErr := httperror.FromError(httperror.ErrBadRequest("participant_id is required"))
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+
+	result, err := h.reminderStatus.Execute(c.Context(), participantID)
+	if err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"success": true,
+		"data":    result,
+	})
 }
 
 // SendNotifications sends WhatsApp notifications to all session participants

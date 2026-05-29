@@ -182,12 +182,29 @@ func (r *PostgresSessionRepository) FindAll(ctx context.Context, userID string, 
 		return nil, domain.NewError(domain.ErrInternalFailure, err)
 	}
 
-	// Data query
+	// Data query.
+	//
+	// The LEFT JOIN sub-aggregate hydrates the per-session
+	// participant_count / paid_count counters the dashboard cards
+	// render. Before this, those fields were never populated on the
+	// list path, so every card said "0 of 0 paid" regardless of
+	// actual settlement status. payment_status='paid' is the value
+	// MarkPaidManually writes, so manual marks are included
+	// automatically by the FILTER clause.
 	dataQuery := `
-		SELECT session_id, user_id, title, description, status, total_amount, currency, session_date, bank_name, bank_account_number, bank_account_holder, created_at, updated_at, deleted_at
-		FROM sessions
-		WHERE ` + whereClause + `
-		ORDER BY ` + opts.SortBy + ` ` + strings.ToUpper(opts.SortOrder) + `
+		SELECT s.session_id, s.user_id, s.title, s.description, s.status, s.total_amount, s.currency, s.session_date, s.bank_name, s.bank_account_number, s.bank_account_holder, s.created_at, s.updated_at, s.deleted_at,
+		       COALESCE(sp_agg.participant_count, 0)::int AS participant_count,
+		       COALESCE(sp_agg.paid_count, 0)::int        AS paid_count
+		FROM sessions s
+		LEFT JOIN (
+		    SELECT session_id,
+		           COUNT(*)::int AS participant_count,
+		           COUNT(*) FILTER (WHERE payment_status = 'paid')::int AS paid_count
+		    FROM session_participants
+		    GROUP BY session_id
+		) sp_agg ON sp_agg.session_id = s.session_id
+		WHERE ` + strings.ReplaceAll(whereClause, "user_id", "s.user_id") + `
+		ORDER BY s.` + opts.SortBy + ` ` + strings.ToUpper(opts.SortOrder) + `
 		LIMIT $` + strconv.Itoa(argIndex) + ` OFFSET $` + strconv.Itoa(argIndex+1)
 	args = append(args, opts.Limit, offset)
 
@@ -207,6 +224,7 @@ func (r *PostgresSessionRepository) FindAll(ctx context.Context, userID string, 
 	for rows.Next() {
 		var session entity.Session
 		var statusStr string
+		var participantCount, paidCount int
 		err = rows.Scan(
 			&session.SessionID,
 			&session.UserID,
@@ -222,11 +240,16 @@ func (r *PostgresSessionRepository) FindAll(ctx context.Context, userID string, 
 			&session.CreatedAt,
 			&session.UpdatedAt,
 			&session.DeletedAt,
+			&participantCount,
+			&paidCount,
 		)
 		if err != nil {
 			return nil, domain.NewError(domain.ErrInternalFailure, err)
 		}
 		session.Status = valueobject.SessionStatus(statusStr)
+		pc, pd := participantCount, paidCount
+		session.ParticipantCount = &pc
+		session.PaidCount = &pd
 		sessions = append(sessions, &session)
 	}
 

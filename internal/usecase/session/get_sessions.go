@@ -8,16 +8,25 @@ import (
 	"github.com/glennprays/letpai-backend/domain/valueobject"
 )
 
-// SessionItem represents a session item in the list
+// SessionItem represents a session item in the list.
+//
+// ParticipantCount and PaidCount used to be missing here even though
+// the entity already carried the computed values, so every dashboard
+// card rendered "0 of 0 paid" no matter how many participants had
+// settled up. They're now populated by the FindAll subquery and
+// mapped through here so the per-session progress bar reflects
+// reality.
 type SessionItem struct {
-	SessionID   string  `json:"session_id"`
-	Title       string  `json:"title"`
-	Description string  `json:"description"`
-	Status      string  `json:"status"`
-	TotalAmount float64 `json:"total_amount"`
-	Currency    string  `json:"currency"`
-	SessionDate *string `json:"session_date,omitempty"`
-	CreatedAt   string  `json:"created_at"`
+	SessionID        string  `json:"session_id"`
+	Title            string  `json:"title"`
+	Description      string  `json:"description"`
+	Status           string  `json:"status"`
+	TotalAmount      float64 `json:"total_amount"`
+	Currency         string  `json:"currency"`
+	SessionDate      *string `json:"session_date,omitempty"`
+	ParticipantCount int     `json:"participant_count"`
+	PaidCount        int     `json:"paid_count"`
+	CreatedAt        string  `json:"created_at"`
 }
 
 // GetSessionsRequest represents the request to get sessions
@@ -98,15 +107,26 @@ func (uc *GetSessionsUseCase) Execute(ctx context.Context, userID string, req *G
 			sessionDate = &sd
 		}
 
+		participants := 0
+		if s.ParticipantCount != nil {
+			participants = *s.ParticipantCount
+		}
+		paid := 0
+		if s.PaidCount != nil {
+			paid = *s.PaidCount
+		}
+
 		sessions = append(sessions, &SessionItem{
-			SessionID:   s.SessionID.String(),
-			Title:       s.Title,
-			Description: s.Description,
-			Status:      s.Status.String(),
-			TotalAmount: s.TotalAmount,
-			Currency:    s.Currency,
-			SessionDate: sessionDate,
-			CreatedAt:   s.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+			SessionID:        s.SessionID.String(),
+			Title:            s.Title,
+			Description:      s.Description,
+			Status:           s.Status.String(),
+			TotalAmount:      s.TotalAmount,
+			Currency:         s.Currency,
+			SessionDate:      sessionDate,
+			ParticipantCount: participants,
+			PaidCount:        paid,
+			CreatedAt:        s.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		})
 	}
 

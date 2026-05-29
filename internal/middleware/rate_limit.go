@@ -141,14 +141,17 @@ func ReminderRateLimiter(rateLimitService *service.RateLimitService) fiber.Handl
 			return rateLimitService.CheckReminderRateLimit(ctx, key)
 		},
 		OnRateLimited: func(c *fiber.Ctx, result *service.RateLimitResult) error {
-			c.Set("Retry-After", strconv.Itoa(service.CalculateRetryAfterSeconds(result.RetryAfter)))
+			retryAfterSec := service.CalculateRetryAfterSeconds(result.RetryAfter)
+			c.Set("Retry-After", strconv.Itoa(retryAfterSec))
+			nextAvailableAt := time.Now().Add(result.RetryAfter).UTC().Format("2006-01-02T15:04:05Z07:00")
 			return c.Status(fiber.StatusTooManyRequests).JSON(fiber.Map{
 				"success": false,
 				"error": fiber.Map{
 					"code":    "RATE_LIMIT_002",
-					"message": fmt.Sprintf("Reminder rate limit exceeded. Next reminder available in %s", service.FormatRetryAfter(result.RetryAfter)),
+					"message": fmt.Sprintf("Try again in %s", service.FormatRetryAfter(result.RetryAfter)),
 				},
-				"retry_after": service.CalculateRetryAfterSeconds(result.RetryAfter),
+				"retry_after":       retryAfterSec,
+				"next_available_at": nextAvailableAt,
 			})
 		},
 	})

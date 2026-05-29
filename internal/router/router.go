@@ -176,6 +176,7 @@ func (r *Router) setupNotificationRoutes(group fiber.Router) {
 	group.Post("/sessions/:id/send-notifications", r.NotificationHandler.SendNotifications)
 	group.Post("/sessions/:id/bulk-reminder", r.NotificationHandler.BulkReminder)
 	group.Post("/participants/:participant_id/reminder", middleware.ReminderRateLimiter(r.rateLimitService), r.NotificationHandler.SendReminder)
+	group.Get("/participants/:participant_id/reminder-status", r.NotificationHandler.ReminderStatus)
 }
 
 func (r *Router) setupDashboardRoutes(group fiber.Router) {

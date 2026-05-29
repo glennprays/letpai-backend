@@ -54,4 +54,14 @@ type ParticipantRepository interface {
 
 	// CountBySessionIDAndStatus counts participants by payment status for a session
 	CountBySessionIDAndStatus(ctx context.Context, sessionID string, status string) (int, error)
+
+	// CountByUserIDAndStatus tallies participants across every active
+	// session owned by the host. Used by the dashboard tile.
+	CountByUserIDAndStatus(ctx context.Context, userID string, status string) (int, error)
+
+	// SumPendingShareByUserID sums share_amount across every unpaid
+	// participant in every active session owned by the host (pending +
+	// submitted + rejected statuses). Drives the dashboard's "total
+	// pending" amount.
+	SumPendingShareByUserID(ctx context.Context, userID string) (float64, error)
 }

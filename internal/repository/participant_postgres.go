@@ -435,3 +435,53 @@ func (r *PostgresParticipantRepository) CountBySessionIDAndStatus(ctx context.Co
 
 	return count, nil
 }
+
+// CountByUserIDAndStatus tallies participants for the host across every
+// active session, filtered by payment_status. Powers the dashboard
+// "pending payments" tile, which previously called
+// CountBySessionIDAndStatus with the user_id as the session_id argument
+// — so it always returned 0.
+func (r *PostgresParticipantRepository) CountByUserIDAndStatus(ctx context.Context, userID string, status string) (int, error) {
+	const query = `
+		SELECT COUNT(*)
+		FROM session_participants sp
+		JOIN sessions s ON s.session_id = sp.session_id
+		WHERE s.user_id = $1
+		  AND s.deleted_at IS NULL
+		  AND sp.payment_status = $2
+	`
+
+	var count int
+	err := r.db.QueryRowContext(ctx, query, userID, status).Scan(&count)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, nil
+		}
+		return 0, domain.NewError(domain.ErrInternalFailure, err)
+	}
+	return count, nil
+}
+
+// SumPendingShareByUserID totals the unpaid share_amount across every
+// participant in every active session owned by the host. Drives the
+// dashboard's "total pending" number (previously hardcoded to 0).
+func (r *PostgresParticipantRepository) SumPendingShareByUserID(ctx context.Context, userID string) (float64, error) {
+	const query = `
+		SELECT COALESCE(SUM(sp.share_amount), 0)
+		FROM session_participants sp
+		JOIN sessions s ON s.session_id = sp.session_id
+		WHERE s.user_id = $1
+		  AND s.deleted_at IS NULL
+		  AND sp.payment_status IN ('pending', 'submitted', 'rejected')
+	`
+
+	var total float64
+	err := r.db.QueryRowContext(ctx, query, userID).Scan(&total)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, nil
+		}
+		return 0, domain.NewError(domain.ErrInternalFailure, err)
+	}
+	return total, nil
+}
