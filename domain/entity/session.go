@@ -44,6 +44,13 @@ type Session struct {
 	ParticipantCount *int `json:"participant_count,omitempty" db:"participant_count"`
 	BillItemCount    *int `json:"bill_item_count,omitempty" db:"bill_item_count"`
 	PaidCount        *int `json:"paid_count,omitempty" db:"paid_count"`
+
+	// BankAccounts is the host's per-session 1..N transfer
+	// destinations. Loaded out-of-band by GetSessionDetail /
+	// GetPaymentPage from session_bank_accounts; the legacy
+	// BankName/BankAccountNumber/BankAccountHolder columns above are
+	// kept as a read fallback for one release while clients migrate.
+	BankAccounts []*SessionBankAccount `json:"bank_accounts,omitempty" db:"-"`
 }
 
 // SetBankInfo updates the bank transfer destination. Pass nil pointers

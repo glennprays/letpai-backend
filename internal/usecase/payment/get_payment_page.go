@@ -5,6 +5,7 @@ import (
 	"math"
 	"time"
 
+	"github.com/glennprays/letpai-backend/domain/entity"
 	"github.com/glennprays/letpai-backend/domain/ports"
 )
 
@@ -15,23 +16,33 @@ import (
 // `your_share` on each item is the per-item amount THIS participant
 // pays — useful so the participant sees exactly what they owe and why,
 // not just the bill's total which gets divided across multiple people.
+// PaymentPageBankAccount is a per-account row on the public page.
+// Same shape as BankAccountItem in the session-detail use case but
+// duplicated here to avoid an inter-usecase import.
+type PaymentPageBankAccount struct {
+	BankName      *string `json:"bank_name,omitempty"`
+	AccountNumber *string `json:"account_number,omitempty"`
+	AccountHolder *string `json:"account_holder,omitempty"`
+}
+
 type PaymentPageResponse struct {
-	SessionID         string         `json:"session_id"`
-	ParticipantID     string         `json:"participant_id"`
-	SessionName       string         `json:"session_name"`
-	ParticipantName   string         `json:"participant_name"`
-	TotalAmount       float64        `json:"total_amount"`
-	ShareAmount       float64        `json:"share_amount"`
-	Currency          string         `json:"currency"`
-	BillItems         []BillItemInfo `json:"bill_items"`
-	PaymentStatus     string         `json:"payment_status"`
-	PaymentProofURL   *string        `json:"payment_proof_url,omitempty"`
-	RejectionReason   *string        `json:"rejection_reason,omitempty"`
-	BankName          *string        `json:"bank_name,omitempty"`
-	BankAccountNumber *string        `json:"bank_account_number,omitempty"`
-	BankAccountHolder *string        `json:"bank_account_holder,omitempty"`
-	LinkExpiresAt     string         `json:"link_expires_at"`
-	IsExpired         bool           `json:"is_expired"`
+	SessionID         string                    `json:"session_id"`
+	ParticipantID     string                    `json:"participant_id"`
+	SessionName       string                    `json:"session_name"`
+	ParticipantName   string                    `json:"participant_name"`
+	TotalAmount       float64                   `json:"total_amount"`
+	ShareAmount       float64                   `json:"share_amount"`
+	Currency          string                    `json:"currency"`
+	BillItems         []BillItemInfo            `json:"bill_items"`
+	PaymentStatus     string                    `json:"payment_status"`
+	PaymentProofURL   *string                   `json:"payment_proof_url,omitempty"`
+	RejectionReason   *string                   `json:"rejection_reason,omitempty"`
+	BankName          *string                   `json:"bank_name,omitempty"`
+	BankAccountNumber *string                   `json:"bank_account_number,omitempty"`
+	BankAccountHolder *string                   `json:"bank_account_holder,omitempty"`
+	BankAccounts      []*PaymentPageBankAccount `json:"bank_accounts"`
+	LinkExpiresAt     string                    `json:"link_expires_at"`
+	IsExpired         bool                      `json:"is_expired"`
 }
 
 // BillItemInfo carries both the bill's full amount and THIS
@@ -54,6 +65,7 @@ type GetPaymentPageUseCase struct {
 	sessionRepo     ports.SessionRepository
 	billItemRepo    ports.BillItemRepository
 	contactRepo     ports.ContactRepository
+	bankAccountRepo ports.SessionBankAccountRepository
 }
 
 // NewGetPaymentPageUseCase creates a new get payment page use case
@@ -62,12 +74,14 @@ func NewGetPaymentPageUseCase(
 	sessionRepo ports.SessionRepository,
 	billItemRepo ports.BillItemRepository,
 	contactRepo ports.ContactRepository,
+	bankAccountRepo ports.SessionBankAccountRepository,
 ) *GetPaymentPageUseCase {
 	return &GetPaymentPageUseCase{
 		participantRepo: participantRepo,
 		sessionRepo:     sessionRepo,
 		billItemRepo:    billItemRepo,
 		contactRepo:     contactRepo,
+		bankAccountRepo: bankAccountRepo,
 	}
 }
 
@@ -148,6 +162,27 @@ func (uc *GetPaymentPageUseCase) Execute(ctx context.Context, participantID stri
 		})
 	}
 
+	// Bank accounts — same read-fallback pattern as GetSessionDetail.
+	bankAccounts, _ := uc.bankAccountRepo.FindBySessionID(ctx, participant.SessionID.String())
+	if len(bankAccounts) == 0 {
+		if anyNonNil(session.BankName, session.BankAccountNumber, session.BankAccountHolder) {
+			bankAccounts = []*entity.SessionBankAccount{{
+				Ordinal:       0,
+				BankName:      session.BankName,
+				AccountNumber: session.BankAccountNumber,
+				AccountHolder: session.BankAccountHolder,
+			}}
+		}
+	}
+	bankItems := make([]*PaymentPageBankAccount, 0, len(bankAccounts))
+	for _, a := range bankAccounts {
+		bankItems = append(bankItems, &PaymentPageBankAccount{
+			BankName:      a.BankName,
+			AccountNumber: a.AccountNumber,
+			AccountHolder: a.AccountHolder,
+		})
+	}
+
 	// Calculate link expiry (7 days from session creation or completion)
 	linkExpiresAt := session.CreatedAt.Add(7 * 24 * time.Hour)
 	isExpired := time.Now().After(linkExpiresAt)
@@ -167,7 +202,17 @@ func (uc *GetPaymentPageUseCase) Execute(ctx context.Context, participantID stri
 		BankName:          session.BankName,
 		BankAccountNumber: session.BankAccountNumber,
 		BankAccountHolder: session.BankAccountHolder,
+		BankAccounts:      bankItems,
 		LinkExpiresAt:     linkExpiresAt.Format("2006-01-02T15:04:05Z07:00"),
 		IsExpired:         isExpired,
 	}, nil
+}
+
+func anyNonNil(name, number, holder *string) bool {
+	for _, p := range []*string{name, number, holder} {
+		if p != nil && *p != "" {
+			return true
+		}
+	}
+	return false
 }

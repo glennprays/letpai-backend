@@ -21,10 +21,11 @@ type SessionHandler struct {
 	addParticipants   *participant.AddParticipantsUseCase
 	removeParticipant *participant.RemoveParticipantUseCase
 	updateParticipant *participant.UpdateParticipantUseCase
-	addBillItem       *billing.AddBillItemUseCase
-	updateBillItem    *billing.UpdateBillItemUseCase
-	deleteBillItem    *billing.DeleteBillItemUseCase
-	calculateSplits   *billing.CalculateSplitsUseCase
+	addBillItem         *billing.AddBillItemUseCase
+	updateBillItem      *billing.UpdateBillItemUseCase
+	deleteBillItem      *billing.DeleteBillItemUseCase
+	calculateSplits     *billing.CalculateSplitsUseCase
+	replaceBankAccounts *session.ReplaceBankAccountsUseCase
 }
 
 // NewSessionHandler creates a new session handler
@@ -41,21 +42,50 @@ func NewSessionHandler(
 	updateBillItem *billing.UpdateBillItemUseCase,
 	deleteBillItem *billing.DeleteBillItemUseCase,
 	calculateSplits *billing.CalculateSplitsUseCase,
+	replaceBankAccounts *session.ReplaceBankAccountsUseCase,
 ) *SessionHandler {
 	return &SessionHandler{
-		createSession:     createSession,
-		getSessions:       getSessions,
-		getSessionDetail:  getSessionDetail,
-		updateSession:     updateSession,
-		cancelSession:     cancelSession,
-		addParticipants:   addParticipants,
-		removeParticipant: removeParticipant,
-		updateParticipant: updateParticipant,
-		addBillItem:       addBillItem,
-		updateBillItem:    updateBillItem,
-		deleteBillItem:    deleteBillItem,
-		calculateSplits:   calculateSplits,
+		createSession:       createSession,
+		getSessions:         getSessions,
+		getSessionDetail:    getSessionDetail,
+		updateSession:       updateSession,
+		cancelSession:       cancelSession,
+		addParticipants:     addParticipants,
+		removeParticipant:   removeParticipant,
+		updateParticipant:   updateParticipant,
+		addBillItem:         addBillItem,
+		updateBillItem:      updateBillItem,
+		deleteBillItem:      deleteBillItem,
+		calculateSplits:     calculateSplits,
+		replaceBankAccounts: replaceBankAccounts,
 	}
+}
+
+// ReplaceBankAccounts swaps the host's transfer destinations.
+func (h *SessionHandler) ReplaceBankAccounts(c *fiber.Ctx) error {
+	userID := middleware.GetUserID(c)
+	sessionID := c.Params("id")
+
+	var req session.ReplaceBankAccountsRequest
+	if err := c.BodyParser(&req); err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+	if err := validation.Struct(&req); err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+
+	result, err := h.replaceBankAccounts.Execute(c.Context(), userID, sessionID, &req)
+	if err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+
+	return c.JSON(fiber.Map{
+		"success": true,
+		"data":    result,
+	})
 }
 
 // Create creates a new session

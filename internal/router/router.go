@@ -156,6 +156,10 @@ func (r *Router) setupSessionRoutes(group fiber.Router) {
 	sessions.Put("/:id/bills/:bill_item_id", r.SessionHandler.UpdateBillItem)
 	sessions.Delete("/:id/bills/:bill_item_id", r.SessionHandler.DeleteBillItem)
 	sessions.Put("/:id/calculate-splits", r.SessionHandler.CalculateSplits)
+	// Multi-account bank info. The legacy single-row fields on
+	// PUT /sessions/:id still work during the compat window;
+	// /bank-accounts is the canonical write path going forward.
+	sessions.Put("/:id/bank-accounts", r.SessionHandler.ReplaceBankAccounts)
 }
 
 func (r *Router) setupProtectedPaymentRoutes(group fiber.Router) {

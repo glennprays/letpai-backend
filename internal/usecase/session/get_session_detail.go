@@ -66,6 +66,7 @@ type GetSessionDetailResponse struct {
 	BankName          *string            `json:"bank_name,omitempty"`
 	BankAccountNumber *string            `json:"bank_account_number,omitempty"`
 	BankAccountHolder *string            `json:"bank_account_holder,omitempty"`
+	BankAccounts      []*BankAccountItem `json:"bank_accounts"`
 	LastNotifiedAt    *string            `json:"last_notified_at,omitempty"`
 	IsDirty           bool               `json:"is_dirty"`
 	CreatedAt         string             `json:"created_at"`
@@ -83,6 +84,7 @@ type GetSessionDetailUseCase struct {
 	participantRepo     ports.ParticipantRepository
 	billItemRepo        ports.BillItemRepository
 	notificationLogRepo ports.NotificationLogRepository
+	bankAccountRepo     ports.SessionBankAccountRepository
 }
 
 // NewGetSessionDetailUseCase creates a new get session detail use case
@@ -91,13 +93,28 @@ func NewGetSessionDetailUseCase(
 	participantRepo ports.ParticipantRepository,
 	billItemRepo ports.BillItemRepository,
 	notificationLogRepo ports.NotificationLogRepository,
+	bankAccountRepo ports.SessionBankAccountRepository,
 ) *GetSessionDetailUseCase {
 	return &GetSessionDetailUseCase{
 		sessionRepo:         sessionRepo,
 		participantRepo:     participantRepo,
 		billItemRepo:        billItemRepo,
 		notificationLogRepo: notificationLogRepo,
+		bankAccountRepo:     bankAccountRepo,
 	}
+}
+
+// hasLegacyBank reports whether any of the three legacy
+// sessions.bank_* fields is non-nil and non-blank. Used as the
+// read-fallback predicate when session_bank_accounts has no rows
+// (pre-migration data the backfill missed).
+func hasLegacyBank(name, number, holder *string) bool {
+	for _, p := range []*string{name, number, holder} {
+		if p != nil && *p != "" {
+			return true
+		}
+	}
+	return false
 }
 
 // friendlyNotificationStatus renders the gateway-jargon log status as
@@ -149,6 +166,31 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, userID, sessionI
 	// just leaves last_notification absent on the response (the chip
 	// falls back to "Not sent yet").
 	latestLogs, _ := uc.notificationLogRepo.FindLatestPerParticipantBySessionID(ctx, sessionID)
+
+	// Per-session bank accounts. Read from the new table; if it's
+	// empty AND the legacy single-row columns have any value, fall
+	// back to synthesising a single ordinal=0 entry from the legacy
+	// fields. That handles the "session created pre-migration and
+	// never edited since" tail.
+	bankAccounts, _ := uc.bankAccountRepo.FindBySessionID(ctx, sessionID)
+	if len(bankAccounts) == 0 && hasLegacyBank(session.BankName, session.BankAccountNumber, session.BankAccountHolder) {
+		bankAccounts = []*entity.SessionBankAccount{{
+			Ordinal:       0,
+			BankName:      session.BankName,
+			AccountNumber: session.BankAccountNumber,
+			AccountHolder: session.BankAccountHolder,
+		}}
+	}
+	bankAccountItems := make([]*BankAccountItem, 0, len(bankAccounts))
+	for _, a := range bankAccounts {
+		bankAccountItems = append(bankAccountItems, &BankAccountItem{
+			AccountID:     a.AccountID.String(),
+			Ordinal:       a.Ordinal,
+			BankName:      a.BankName,
+			AccountNumber: a.AccountNumber,
+			AccountHolder: a.AccountHolder,
+		})
+	}
 
 	// Build response
 	var sessionDate *string
@@ -243,6 +285,7 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, userID, sessionI
 		BankName:          session.BankName,
 		BankAccountNumber: session.BankAccountNumber,
 		BankAccountHolder: session.BankAccountHolder,
+		BankAccounts:      bankAccountItems,
 		LastNotifiedAt:    lastNotifiedStr,
 		IsDirty:           session.IsDirtyForNotify(hasUnpaid),
 		CreatedAt:         session.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
