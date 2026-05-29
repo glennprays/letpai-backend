@@ -34,17 +34,33 @@ type SessionParticipant struct {
 	ContactWhatsApp  *string `json:"-" db:"contact_whatsapp"`
 }
 
-// NewParticipantFromContact creates a new participant from a contact
-func NewParticipantFromContact(sessionID, contactID uuid.UUID) *SessionParticipant {
+// NewParticipantFromContact creates a new participant from a contact.
+//
+// name and whatsappNumber are snapshotted from the contact at join
+// time and stored on custom_name / custom_whatsapp. Two reasons:
+//
+//  1. The session_participants table has UNIQUE (session_id,
+//     custom_whatsapp). Leaving custom_whatsapp empty for contact-
+//     linked participants meant the second contact added to the same
+//     session collided on (session_id, "") and the INSERT failed.
+//  2. GetSessionDetail's response reads custom_name directly, so an
+//     empty value renders a blank row in the UI. Snapshotting gives
+//     the FE something to display even if the join to contacts
+//     drifts later (contact renamed or soft-deleted).
+//
+// Matches the pattern NewCustomParticipant already uses below.
+func NewParticipantFromContact(sessionID, contactID uuid.UUID, name, whatsappNumber string) *SessionParticipant {
 	now := time.Now()
 	return &SessionParticipant{
-		ParticipantID: uuid.New(),
-		SessionID:     sessionID,
-		ContactID:     &contactID,
-		ShareAmount:   0,
-		PaymentStatus: valueobject.PaymentStatusPending,
-		JoinedAt:      now,
-		UpdatedAt:     now,
+		ParticipantID:  uuid.New(),
+		SessionID:      sessionID,
+		ContactID:      &contactID,
+		CustomName:     name,
+		CustomWhatsApp: whatsappNumber,
+		ShareAmount:    0,
+		PaymentStatus:  valueobject.PaymentStatusPending,
+		JoinedAt:       now,
+		UpdatedAt:      now,
 	}
 }
 

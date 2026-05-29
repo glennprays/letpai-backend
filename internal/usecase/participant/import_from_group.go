@@ -73,7 +73,10 @@ func (uc *ImportFromGroupUseCase) Execute(ctx context.Context, userID, sessionID
 	// Create participants for each contact
 	importedCount := 0
 	for _, contact := range contacts.Contacts {
-		participant := entity.NewParticipantFromContact(sessionUUID, contact.ContactID)
+		participant := entity.NewParticipantFromContact(
+			sessionUUID, contact.ContactID,
+			contact.Name, contact.WhatsAppNumber,
+		)
 		if err := uc.participantRepo.Create(ctx, participant); err != nil {
 			continue // Log error but continue with others
 		}

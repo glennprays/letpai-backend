@@ -16,20 +16,28 @@ type DeleteBillItemResponse struct {
 	NewTotal float64 `json:"new_total"`
 }
 
-// DeleteBillItemUseCase handles deleting a bill item
+// DeleteBillItemUseCase handles deleting a bill item.
+//
+// After a successful delete the use case re-runs CalculateSplits so
+// the remaining bill amounts are redistributed across participants.
+// Without this, every participant's share_amount would silently
+// reflect a session total that no longer matches reality.
 type DeleteBillItemUseCase struct {
 	billItemRepo ports.BillItemRepository
 	sessionRepo  ports.SessionRepository
+	calcSplits   *CalculateSplitsUseCase
 }
 
 // NewDeleteBillItemUseCase creates a new delete bill item use case
 func NewDeleteBillItemUseCase(
 	billItemRepo ports.BillItemRepository,
 	sessionRepo ports.SessionRepository,
+	calcSplits *CalculateSplitsUseCase,
 ) *DeleteBillItemUseCase {
 	return &DeleteBillItemUseCase{
 		billItemRepo: billItemRepo,
 		sessionRepo:  sessionRepo,
+		calcSplits:   calcSplits,
 	}
 }
 
@@ -73,6 +81,11 @@ func (uc *DeleteBillItemUseCase) Execute(ctx context.Context, userID, sessionID,
 	if err := uc.sessionRepo.Update(ctx, session); err != nil {
 		return nil, err
 	}
+
+	// Best-effort rebalance. CalculateSplits errors out when there
+	// are 0 participants -- treat that as "nothing to rebalance"
+	// rather than failing the delete that's already committed.
+	_, _ = uc.calcSplits.Execute(ctx, userID, sessionID)
 
 	return &DeleteBillItemResponse{
 		Message:  "Bill item deleted successfully",
