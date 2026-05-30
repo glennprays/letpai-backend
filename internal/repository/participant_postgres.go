@@ -9,6 +9,7 @@ import (
 	"github.com/glennprays/letpai-backend/domain/entity"
 	"github.com/glennprays/letpai-backend/domain/ports"
 	"github.com/glennprays/letpai-backend/domain/valueobject"
+	"github.com/glennprays/letpai-backend/pkg/slug"
 	"github.com/jmoiron/sqlx"
 )
 
@@ -22,44 +23,99 @@ func NewPostgresParticipantRepository(db *sqlx.DB) ports.ParticipantRepository {
 	return &PostgresParticipantRepository{db: db}
 }
 
-// Create creates a new participant
+// Create creates a new participant. PublicSlug is generated here +
+// retried on UNIQUE collision (same shape as the session repo).
 func (r *PostgresParticipantRepository) Create(ctx context.Context, participant *entity.SessionParticipant) error {
-	query := `
-		INSERT INTO session_participants (participant_id, session_id, contact_id, custom_name, custom_whatsapp, share_amount, payment_status, payment_proof_url, rejection_count, rejection_reason, notification_count, last_notification_at, paid_manually, joined_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+	const query = `
+		INSERT INTO session_participants (participant_id, public_slug, session_id, contact_id, custom_name, custom_whatsapp, share_amount, payment_status, payment_proof_url, rejection_count, rejection_reason, notification_count, last_notification_at, paid_manually, joined_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 	`
 
-	_, err := r.db.ExecContext(
-		ctx,
-		query,
-		participant.ParticipantID,
-		participant.SessionID,
-		participant.ContactID,
-		participant.CustomName,
-		participant.CustomWhatsApp,
-		participant.ShareAmount,
-		participant.PaymentStatus,
-		participant.PaymentProofURL,
-		participant.RejectionCount,
-		participant.RejectionReason,
-		participant.NotificationCount,
-		participant.LastNotificationAt,
-		participant.PaidManually,
-		participant.JoinedAt,
-		participant.UpdatedAt,
-	)
-
-	if err != nil {
+	const maxTries = 5
+	for tries := 0; tries < maxTries; tries++ {
+		if participant.PublicSlug == "" {
+			s, err := slug.New()
+			if err != nil {
+				return domain.NewError(domain.ErrInternalFailure, err)
+			}
+			participant.PublicSlug = s
+		}
+		_, err := r.db.ExecContext(
+			ctx,
+			query,
+			participant.ParticipantID,
+			participant.PublicSlug,
+			participant.SessionID,
+			participant.ContactID,
+			participant.CustomName,
+			participant.CustomWhatsApp,
+			participant.ShareAmount,
+			participant.PaymentStatus,
+			participant.PaymentProofURL,
+			participant.RejectionCount,
+			participant.RejectionReason,
+			participant.NotificationCount,
+			participant.LastNotificationAt,
+			participant.PaidManually,
+			participant.JoinedAt,
+			participant.UpdatedAt,
+		)
+		if err == nil {
+			return nil
+		}
+		if isUniqueViolationOnSlug(err) {
+			participant.PublicSlug = ""
+			continue
+		}
 		return domain.NewError(domain.ErrInternalFailure, err)
 	}
+	return domain.NewError(domain.ErrInternalFailure, errors.New("public_slug collision after retries"))
+}
 
-	return nil
+// FindBySlug looks up a participant by public_slug. No userID ACL —
+// the slug is the access token for the public payment page; host
+// scopes go through the session_id check upstream.
+func (r *PostgresParticipantRepository) FindBySlug(ctx context.Context, s string) (*entity.SessionParticipant, error) {
+	const query = `
+		SELECT participant_id, public_slug, session_id, contact_id, custom_name, custom_whatsapp, share_amount, payment_status, payment_proof_url, rejection_count, rejection_reason, notification_count, last_notification_at, paid_manually, joined_at, updated_at
+		FROM session_participants
+		WHERE public_slug = $1
+	`
+	row := r.db.QueryRowxContext(ctx, query, s)
+	var participant entity.SessionParticipant
+	var paymentStatusStr string
+	err := row.Scan(
+		&participant.ParticipantID,
+		&participant.PublicSlug,
+		&participant.SessionID,
+		&participant.ContactID,
+		&participant.CustomName,
+		&participant.CustomWhatsApp,
+		&participant.ShareAmount,
+		&paymentStatusStr,
+		&participant.PaymentProofURL,
+		&participant.RejectionCount,
+		&participant.RejectionReason,
+		&participant.NotificationCount,
+		&participant.LastNotificationAt,
+		&participant.PaidManually,
+		&participant.JoinedAt,
+		&participant.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, domain.NewError(domain.ErrNotFound, nil)
+		}
+		return nil, domain.NewError(domain.ErrInternalFailure, err)
+	}
+	participant.PaymentStatus = valueobject.PaymentStatus(paymentStatusStr)
+	return &participant, nil
 }
 
 // FindByID finds a participant by ID
 func (r *PostgresParticipantRepository) FindByID(ctx context.Context, participantID string) (*entity.SessionParticipant, error) {
 	query := `
-		SELECT participant_id, session_id, contact_id, custom_name, custom_whatsapp, share_amount, payment_status, payment_proof_url, rejection_count, rejection_reason, notification_count, last_notification_at, paid_manually, joined_at, updated_at
+		SELECT participant_id, public_slug, session_id, contact_id, custom_name, custom_whatsapp, share_amount, payment_status, payment_proof_url, rejection_count, rejection_reason, notification_count, last_notification_at, paid_manually, joined_at, updated_at
 		FROM session_participants
 		WHERE participant_id = $1
 	`
@@ -76,6 +132,7 @@ func (r *PostgresParticipantRepository) FindByID(ctx context.Context, participan
 	var paymentStatusStr string
 	err := row.Scan(
 		&participant.ParticipantID,
+		&participant.PublicSlug,
 		&participant.SessionID,
 		&participant.ContactID,
 		&participant.CustomName,
@@ -106,7 +163,7 @@ func (r *PostgresParticipantRepository) FindByID(ctx context.Context, participan
 // FindBySessionID finds all participants for a session
 func (r *PostgresParticipantRepository) FindBySessionID(ctx context.Context, sessionID string) ([]*entity.SessionParticipant, error) {
 	query := `
-		SELECT participant_id, session_id, contact_id, custom_name, custom_whatsapp, share_amount, payment_status, payment_proof_url, rejection_count, rejection_reason, notification_count, last_notification_at, paid_manually, joined_at, updated_at
+		SELECT participant_id, public_slug, session_id, contact_id, custom_name, custom_whatsapp, share_amount, payment_status, payment_proof_url, rejection_count, rejection_reason, notification_count, last_notification_at, paid_manually, joined_at, updated_at
 		FROM session_participants
 		WHERE session_id = $1
 		ORDER BY joined_at ASC
@@ -127,6 +184,7 @@ func (r *PostgresParticipantRepository) FindBySessionID(ctx context.Context, ses
 		var paymentStatusStr string
 		err = rows.Scan(
 			&participant.ParticipantID,
+			&participant.PublicSlug,
 			&participant.SessionID,
 			&participant.ContactID,
 			&participant.CustomName,
@@ -165,7 +223,7 @@ func (r *PostgresParticipantRepository) FindBySessionID(ctx context.Context, ses
 // don't need a separate per-participant lookup.
 func (r *PostgresParticipantRepository) FindBySessionIDWithContactInfo(ctx context.Context, sessionID string) ([]*entity.SessionParticipant, error) {
 	query := `
-		SELECT sp.participant_id, sp.session_id, sp.contact_id, sp.custom_name, sp.custom_whatsapp,
+		SELECT sp.participant_id, sp.public_slug, sp.session_id, sp.contact_id, sp.custom_name, sp.custom_whatsapp,
 		       sp.share_amount, sp.payment_status, sp.payment_proof_url, sp.rejection_count, sp.rejection_reason,
 		       sp.notification_count, sp.last_notification_at, sp.paid_manually, sp.joined_at, sp.updated_at,
 		       c.avatar_url as contact_avatar_url,
@@ -192,6 +250,7 @@ func (r *PostgresParticipantRepository) FindBySessionIDWithContactInfo(ctx conte
 		var paymentStatusStr string
 		err = rows.Scan(
 			&participant.ParticipantID,
+			&participant.PublicSlug,
 			&participant.SessionID,
 			&participant.ContactID,
 			&participant.CustomName,

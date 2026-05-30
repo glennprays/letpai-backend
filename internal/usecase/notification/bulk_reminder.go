@@ -120,7 +120,7 @@ func (uc *BulkReminderUseCase) Execute(ctx context.Context, userID, sessionID st
 			ParticipantName: participantName,
 			SessionName:     session.Title,
 			Share:           formatIDR(participant.ShareAmount),
-			URL:             uc.appURL + "/payment/" + participant.ParticipantID.String(),
+			URL:             uc.appURL + "/payment/" + participant.PublicSlug,
 		}
 		message, err := uc.renderer.Render(ctx, "payment_reminder", vars)
 		if err != nil || message == "" {

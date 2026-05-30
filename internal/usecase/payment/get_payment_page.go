@@ -7,6 +7,7 @@ import (
 
 	"github.com/glennprays/letpai-backend/domain/entity"
 	"github.com/glennprays/letpai-backend/domain/ports"
+	"github.com/glennprays/letpai-backend/internal/usecase/idresolve"
 )
 
 // PaymentPageResponse represents the public payment page data.
@@ -27,7 +28,9 @@ type PaymentPageBankAccount struct {
 
 type PaymentPageResponse struct {
 	SessionID         string                    `json:"session_id"`
+	SessionSlug       string                    `json:"session_slug"`
 	ParticipantID     string                    `json:"participant_id"`
+	ParticipantSlug   string                    `json:"participant_slug"`
 	SessionName       string                    `json:"session_name"`
 	ParticipantName   string                    `json:"participant_name"`
 	TotalAmount       float64                   `json:"total_amount"`
@@ -88,7 +91,7 @@ func NewGetPaymentPageUseCase(
 // Execute returns payment page data for a participant (public endpoint, no auth required)
 func (uc *GetPaymentPageUseCase) Execute(ctx context.Context, participantID string) (*PaymentPageResponse, error) {
 	// Get participant
-	participant, err := uc.participantRepo.FindByID(ctx, participantID)
+	participant, err := idresolve.ResolveParticipant(ctx, uc.participantRepo, participantID)
 	if err != nil {
 		return nil, err
 	}
@@ -189,7 +192,9 @@ func (uc *GetPaymentPageUseCase) Execute(ctx context.Context, participantID stri
 
 	return &PaymentPageResponse{
 		SessionID:         session.SessionID.String(),
+		SessionSlug:       session.PublicSlug,
 		ParticipantID:     participant.ParticipantID.String(),
+		ParticipantSlug:   participant.PublicSlug,
 		SessionName:       session.Title,
 		ParticipantName:   participantName,
 		TotalAmount:       session.TotalAmount,

@@ -12,6 +12,7 @@ import (
 	"github.com/glennprays/letpai-backend/domain/entity"
 	"github.com/glennprays/letpai-backend/domain/ports"
 	"github.com/glennprays/letpai-backend/domain/valueobject"
+	"github.com/glennprays/letpai-backend/pkg/slug"
 	"github.com/jmoiron/sqlx"
 )
 
@@ -25,36 +26,82 @@ func NewPostgresSessionRepository(db *sqlx.DB) ports.SessionRepository {
 	return &PostgresSessionRepository{db: db}
 }
 
-// Create creates a new session
+// Create creates a new session.
+//
+// PublicSlug is generated here (and re-rolled on UNIQUE collision)
+// so callers don't have to know about the alphabet, length, or
+// retry policy. The collision probability at our scale is ~1e-7
+// per insert; 5 tries gives effectively zero probability of giving
+// up.
 func (r *PostgresSessionRepository) Create(ctx context.Context, session *entity.Session) error {
-	query := `
-		INSERT INTO sessions (session_id, user_id, title, description, status, total_amount, currency, session_date, bank_name, bank_account_number, bank_account_holder, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+	const query = `
+		INSERT INTO sessions (session_id, public_slug, user_id, title, description, status, total_amount, currency, session_date, bank_name, bank_account_number, bank_account_holder, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 	`
 
-	_, err := r.db.ExecContext(
-		ctx,
-		query,
-		session.SessionID,
-		session.UserID,
-		session.Title,
-		session.Description,
-		session.Status,
-		session.TotalAmount,
-		session.Currency,
-		session.SessionDate,
-		session.BankName,
-		session.BankAccountNumber,
-		session.BankAccountHolder,
-		session.CreatedAt,
-		session.UpdatedAt,
-	)
-
-	if err != nil {
+	const maxTries = 5
+	for tries := 0; tries < maxTries; tries++ {
+		if session.PublicSlug == "" {
+			s, err := slug.New()
+			if err != nil {
+				return domain.NewError(domain.ErrInternalFailure, err)
+			}
+			session.PublicSlug = s
+		}
+		_, err := r.db.ExecContext(
+			ctx,
+			query,
+			session.SessionID,
+			session.PublicSlug,
+			session.UserID,
+			session.Title,
+			session.Description,
+			session.Status,
+			session.TotalAmount,
+			session.Currency,
+			session.SessionDate,
+			session.BankName,
+			session.BankAccountNumber,
+			session.BankAccountHolder,
+			session.CreatedAt,
+			session.UpdatedAt,
+		)
+		if err == nil {
+			return nil
+		}
+		if isUniqueViolationOnSlug(err) {
+			// Re-roll: clear the slug and loop.
+			session.PublicSlug = ""
+			continue
+		}
 		return domain.NewError(domain.ErrInternalFailure, err)
 	}
+	return domain.NewError(domain.ErrInternalFailure, errors.New("public_slug collision after retries"))
+}
 
-	return nil
+// isUniqueViolationOnSlug reports whether err is a Postgres UNIQUE
+// violation on a *_public_slug index. We branch on this for the slug
+// retry loop without rolling back any other unique-violation paths
+// the caller might rely on.
+func isUniqueViolationOnSlug(err error) bool {
+	type sqlState interface{ SQLState() string }
+	if ss, ok := err.(sqlState); ok && ss.SQLState() == "23505" {
+		msg := err.Error()
+		return contains(msg, "public_slug")
+	}
+	// Fallback for drivers that don't expose SQLState — match the
+	// PQ-style error message text.
+	msg := err.Error()
+	return contains(msg, "23505") && contains(msg, "public_slug")
+}
+
+func contains(s, sub string) bool {
+	for i := 0; i+len(sub) <= len(s); i++ {
+		if s[i:i+len(sub)] == sub {
+			return true
+		}
+	}
+	return false
 }
 
 // FindByID finds a session by ID.
@@ -65,7 +112,7 @@ func (r *PostgresSessionRepository) Create(ctx context.Context, session *entity.
 // have the token, so we don't double-gate by host).
 func (r *PostgresSessionRepository) FindByID(ctx context.Context, sessionID string, userID string) (*entity.Session, error) {
 	query := `
-		SELECT session_id, user_id, title, description, status, total_amount, currency, session_date, bank_name, bank_account_number, bank_account_holder, last_notified_at, created_at, updated_at, deleted_at
+		SELECT session_id, public_slug, user_id, title, description, status, total_amount, currency, session_date, bank_name, bank_account_number, bank_account_holder, last_notified_at, created_at, updated_at, deleted_at
 		FROM sessions
 		WHERE session_id = $1 AND deleted_at IS NULL
 	`
@@ -87,6 +134,7 @@ func (r *PostgresSessionRepository) FindByID(ctx context.Context, sessionID stri
 	var statusStr string
 	err := row.Scan(
 		&session.SessionID,
+		&session.PublicSlug,
 		&session.UserID,
 		&session.Title,
 		&session.Description,
@@ -111,6 +159,51 @@ func (r *PostgresSessionRepository) FindByID(ctx context.Context, sessionID stri
 
 	session.Status = valueobject.SessionStatus(statusStr)
 
+	return &session, nil
+}
+
+// FindBySlug looks up a session by its public_slug. Mirrors FindByID's
+// userID semantics — empty string skips the ownership filter.
+func (r *PostgresSessionRepository) FindBySlug(ctx context.Context, slug string, userID string) (*entity.Session, error) {
+	query := `
+		SELECT session_id, public_slug, user_id, title, description, status, total_amount, currency, session_date, bank_name, bank_account_number, bank_account_holder, last_notified_at, created_at, updated_at, deleted_at
+		FROM sessions
+		WHERE public_slug = $1 AND deleted_at IS NULL
+	`
+	args := []any{slug}
+	if userID != "" {
+		query += " AND user_id = $2"
+		args = append(args, userID)
+	}
+
+	row := r.db.QueryRowxContext(ctx, query, args...)
+	var session entity.Session
+	var statusStr string
+	err := row.Scan(
+		&session.SessionID,
+		&session.PublicSlug,
+		&session.UserID,
+		&session.Title,
+		&session.Description,
+		&statusStr,
+		&session.TotalAmount,
+		&session.Currency,
+		&session.SessionDate,
+		&session.BankName,
+		&session.BankAccountNumber,
+		&session.BankAccountHolder,
+		&session.LastNotifiedAt,
+		&session.CreatedAt,
+		&session.UpdatedAt,
+		&session.DeletedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, domain.NewError(domain.ErrNotFound, nil)
+		}
+		return nil, domain.NewError(domain.ErrInternalFailure, err)
+	}
+	session.Status = valueobject.SessionStatus(statusStr)
 	return &session, nil
 }
 
@@ -193,7 +286,7 @@ func (r *PostgresSessionRepository) FindAll(ctx context.Context, userID string, 
 	// MarkPaidManually writes, so manual marks are included
 	// automatically by the FILTER clause.
 	dataQuery := `
-		SELECT s.session_id, s.user_id, s.title, s.description, s.status, s.total_amount, s.currency, s.session_date, s.bank_name, s.bank_account_number, s.bank_account_holder, s.last_notified_at, s.created_at, s.updated_at, s.deleted_at,
+		SELECT s.session_id, s.public_slug, s.user_id, s.title, s.description, s.status, s.total_amount, s.currency, s.session_date, s.bank_name, s.bank_account_number, s.bank_account_holder, s.last_notified_at, s.created_at, s.updated_at, s.deleted_at,
 		       COALESCE(sp_agg.participant_count, 0)::int AS participant_count,
 		       COALESCE(sp_agg.paid_count, 0)::int        AS paid_count
 		FROM sessions s
@@ -228,6 +321,7 @@ func (r *PostgresSessionRepository) FindAll(ctx context.Context, userID string, 
 		var participantCount, paidCount int
 		err = rows.Scan(
 			&session.SessionID,
+			&session.PublicSlug,
 			&session.UserID,
 			&session.Title,
 			&session.Description,

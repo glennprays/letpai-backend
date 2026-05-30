@@ -21,6 +21,9 @@ type ParticipantRepository interface {
 	// FindByID finds a participant by ID. See SECURITY note on the interface.
 	FindByID(ctx context.Context, participantID string) (*entity.SessionParticipant, error)
 
+	// FindBySlug looks up a participant by its public_slug column.
+	FindBySlug(ctx context.Context, slug string) (*entity.SessionParticipant, error)
+
 	// FindBySessionID finds all participants for a session
 	FindBySessionID(ctx context.Context, sessionID string) ([]*entity.SessionParticipant, error)
 

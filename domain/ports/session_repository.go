@@ -32,6 +32,12 @@ type SessionRepository interface {
 	// FindByID finds a session by ID
 	FindByID(ctx context.Context, sessionID string, userID string) (*entity.Session, error)
 
+	// FindBySlug looks up a session by its public_slug column. When
+	// userID is the empty string the ownership filter is skipped —
+	// host views pass their userID for the ACL gate, the public
+	// payment page passes "".
+	FindBySlug(ctx context.Context, slug string, userID string) (*entity.Session, error)
+
 	// FindAll finds sessions for a user with filters and pagination
 	FindAll(ctx context.Context, userID string, opts *SessionFilterOptions) (*SessionListResult, error)
 

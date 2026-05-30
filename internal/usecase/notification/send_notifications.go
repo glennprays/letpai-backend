@@ -167,7 +167,7 @@ func (uc *SendNotificationsUseCase) Execute(ctx context.Context, userID, session
 			SessionName:     session.Title,
 			Total:           formatIDR(totalAmount),
 			Share:           formatIDR(participant.ShareAmount),
-			URL:             uc.appURL + "/payment/" + participant.ParticipantID.String(),
+			URL:             uc.appURL + "/payment/" + participant.PublicSlug,
 		}
 
 		message, err := uc.renderer.Render(ctx, "session_notification", vars)

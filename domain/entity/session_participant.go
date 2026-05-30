@@ -12,7 +12,10 @@ var ErrInvalidPaymentStatusTransitionError = errors.New("invalid payment status 
 
 // SessionParticipant represents a participant in a session
 type SessionParticipant struct {
-	ParticipantID       uuid.UUID                 `json:"participant_id" db:"participant_id"`
+	ParticipantID uuid.UUID `json:"participant_id" db:"participant_id"`
+	// PublicSlug — same shape and rationale as Session.PublicSlug.
+	// This is what /payment/<slug> uses for the WhatsApp shortlink.
+	PublicSlug          string                    `json:"public_slug" db:"public_slug"`
 	SessionID           uuid.UUID                 `json:"session_id" db:"session_id"`
 	ContactID           *uuid.UUID                `json:"contact_id,omitempty" db:"contact_id"`
 	CustomName          string                    `json:"custom_name,omitempty" db:"custom_name"`

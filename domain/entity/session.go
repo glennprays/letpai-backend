@@ -12,7 +12,12 @@ var ErrInvalidStatusTransitionError = errors.New("invalid status transition")
 
 // Session represents a bill splitting session
 type Session struct {
-	SessionID   uuid.UUID                 `json:"session_id" db:"session_id"`
+	SessionID uuid.UUID `json:"session_id" db:"session_id"`
+	// PublicSlug is the short URL-safe handle (10 chars, nanoid
+	// alphabet [A-Za-z0-9_-]). The UUID stays as the internal PK;
+	// the slug is a UNIQUE secondary key that the public URLs use
+	// instead so end users don't have to deal with 36-char UUIDs.
+	PublicSlug  string                    `json:"public_slug" db:"public_slug"`
 	UserID      uuid.UUID                 `json:"user_id" db:"user_id"`
 	Title       string                    `json:"title" db:"title"`
 	Description string                    `json:"description" db:"description"`

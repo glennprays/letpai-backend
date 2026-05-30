@@ -6,6 +6,7 @@ import (
 
 	"github.com/glennprays/letpai-backend/domain/entity"
 	"github.com/glennprays/letpai-backend/domain/ports"
+	"github.com/glennprays/letpai-backend/internal/usecase/idresolve"
 )
 
 // LastNotification mirrors the most recent notification_logs row for
@@ -29,6 +30,7 @@ type LastNotification struct {
 // ago" and derive cooldown state without an extra round trip.
 type ParticipantItem struct {
 	ParticipantID      string            `json:"participant_id"`
+	PublicSlug         string            `json:"public_slug"`
 	ContactID          *string           `json:"contact_id,omitempty"`
 	Name               string            `json:"name"`
 	WhatsAppNumber     string            `json:"whatsapp_number"`
@@ -57,6 +59,7 @@ type BillItemItem struct {
 // GetSessionDetailResponse represents the response for getting session details
 type GetSessionDetailResponse struct {
 	SessionID         string             `json:"session_id"`
+	PublicSlug        string             `json:"public_slug"`
 	Title             string             `json:"title"`
 	Description       string             `json:"description"`
 	Status            string             `json:"status"`
@@ -139,25 +142,29 @@ func friendlyNotificationStatus(status entity.NotificationStatus, age time.Durat
 // Execute retrieves session details with participants and bills
 func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, userID, sessionID string) (*GetSessionDetailResponse, error) {
 	// Fetch session
-	session, err := uc.sessionRepo.FindByID(ctx, sessionID, userID)
+	// Accept either the legacy UUID or the new public_slug; old links
+	// in the wild stay resolvable through the compat window.
+	session, err := idresolve.ResolveSession(ctx, uc.sessionRepo, sessionID, userID)
 	if err != nil {
 		return nil, err
 	}
 
 	// Fetch participants with contact info
-	participants, err := uc.participantRepo.FindBySessionIDWithContactInfo(ctx, sessionID)
+	resolvedSessionID := session.SessionID.String()
+
+	participants, err := uc.participantRepo.FindBySessionIDWithContactInfo(ctx, resolvedSessionID)
 	if err != nil {
 		return nil, err
 	}
 
 	// Fetch bills
-	bills, err := uc.billItemRepo.FindBySessionID(ctx, sessionID)
+	bills, err := uc.billItemRepo.FindBySessionID(ctx, resolvedSessionID)
 	if err != nil {
 		return nil, err
 	}
 
 	// Count paid participants
-	paidCount, err := uc.participantRepo.CountBySessionIDAndStatus(ctx, sessionID, "paid")
+	paidCount, err := uc.participantRepo.CountBySessionIDAndStatus(ctx, resolvedSessionID, "paid")
 	if err != nil {
 		paidCount = 0
 	}
@@ -165,14 +172,14 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, userID, sessionI
 	// Latest notification per participant. Best-effort: a failure here
 	// just leaves last_notification absent on the response (the chip
 	// falls back to "Not sent yet").
-	latestLogs, _ := uc.notificationLogRepo.FindLatestPerParticipantBySessionID(ctx, sessionID)
+	latestLogs, _ := uc.notificationLogRepo.FindLatestPerParticipantBySessionID(ctx, resolvedSessionID)
 
 	// Per-session bank accounts. Read from the new table; if it's
 	// empty AND the legacy single-row columns have any value, fall
 	// back to synthesising a single ordinal=0 entry from the legacy
 	// fields. That handles the "session created pre-migration and
 	// never edited since" tail.
-	bankAccounts, _ := uc.bankAccountRepo.FindBySessionID(ctx, sessionID)
+	bankAccounts, _ := uc.bankAccountRepo.FindBySessionID(ctx, resolvedSessionID)
 	if len(bankAccounts) == 0 && hasLegacyBank(session.BankName, session.BankAccountNumber, session.BankAccountHolder) {
 		bankAccounts = []*entity.SessionBankAccount{{
 			Ordinal:       0,
@@ -227,6 +234,7 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, userID, sessionI
 
 		participantItems = append(participantItems, &ParticipantItem{
 			ParticipantID:      p.ParticipantID.String(),
+			PublicSlug:         p.PublicSlug,
 			ContactID:          contactID,
 			Name:               name,
 			WhatsAppNumber:     whatsappNumber,
@@ -276,6 +284,7 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, userID, sessionI
 
 	return &GetSessionDetailResponse{
 		SessionID:         session.SessionID.String(),
+		PublicSlug:        session.PublicSlug,
 		Title:             session.Title,
 		Description:       session.Description,
 		Status:            session.Status.String(),

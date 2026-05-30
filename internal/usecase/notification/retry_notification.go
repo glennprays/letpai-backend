@@ -127,7 +127,7 @@ func (uc *RetryNotificationUseCase) Execute(ctx context.Context, userID, partici
 		}
 	}
 
-	url := uc.appURL + "/payment/" + participant.ParticipantID.String()
+	url := uc.appURL + "/payment/" + participant.PublicSlug
 	var message string
 	switch notifType {
 	case valueobject.NotificationTypeReminder:
