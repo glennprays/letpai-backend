@@ -79,7 +79,14 @@ func (n *AsyncNotifier) logSync(
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	status := entity.NotificationStatusQueued
+	// Default to `sent` on the success path. The gateway returning a
+	// messageID means it has accepted our message for delivery — that
+	// IS our "sent" state. (Delivered/read confirmations would arrive
+	// via webhook, separately.) Logging `queued` here used to leave
+	// every successful dispatch stuck on the host UI's "Sending…"
+	// chip until the 2-minute "Stuck — tap to retry" threshold,
+	// which made successful sends feel broken.
+	status := entity.NotificationStatusSent
 	var msgIDPtr *string
 	var errMsgPtr *string
 	if errMsg != "" {
