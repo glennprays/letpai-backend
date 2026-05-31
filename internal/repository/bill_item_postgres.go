@@ -38,8 +38,8 @@ func (r *PostgresBillItemRepository) Create(ctx context.Context, item *entity.Bi
 	}()
 
 	const insertItem = `
-		INSERT INTO bill_items (bill_item_id, session_id, description, amount, category, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		INSERT INTO bill_items (bill_item_id, session_id, description, amount, category, includes_service_charge, includes_tax, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 	`
 	if _, err := tx.ExecContext(
 		ctx,
@@ -49,6 +49,8 @@ func (r *PostgresBillItemRepository) Create(ctx context.Context, item *entity.Bi
 		item.Description,
 		item.Amount,
 		item.Category,
+		item.IncludesServiceCharge,
+		item.IncludesTax,
 		item.CreatedAt,
 		item.UpdatedAt,
 	); err != nil {
@@ -68,7 +70,7 @@ func (r *PostgresBillItemRepository) Create(ctx context.Context, item *entity.Bi
 // FindByID finds a bill item by ID and attaches its participant IDs.
 func (r *PostgresBillItemRepository) FindByID(ctx context.Context, billItemID string) (*entity.BillItem, error) {
 	const query = `
-		SELECT bill_item_id, session_id, description, amount, category, created_at, updated_at
+		SELECT bill_item_id, session_id, description, amount, category, includes_service_charge, includes_tax, created_at, updated_at
 		FROM bill_items
 		WHERE bill_item_id = $1
 	`
@@ -81,6 +83,8 @@ func (r *PostgresBillItemRepository) FindByID(ctx context.Context, billItemID st
 		&item.Description,
 		&item.Amount,
 		&item.Category,
+		&item.IncludesServiceCharge,
+		&item.IncludesTax,
 		&item.CreatedAt,
 		&item.UpdatedAt,
 	); err != nil {
@@ -103,7 +107,7 @@ func (r *PostgresBillItemRepository) FindByID(ctx context.Context, billItemID st
 // participant IDs in a single follow-up query.
 func (r *PostgresBillItemRepository) FindBySessionID(ctx context.Context, sessionID string) ([]*entity.BillItem, error) {
 	const query = `
-		SELECT bill_item_id, session_id, description, amount, category, created_at, updated_at
+		SELECT bill_item_id, session_id, description, amount, category, includes_service_charge, includes_tax, created_at, updated_at
 		FROM bill_items
 		WHERE session_id = $1
 		ORDER BY created_at ASC
@@ -128,6 +132,8 @@ func (r *PostgresBillItemRepository) FindBySessionID(ctx context.Context, sessio
 			&item.Description,
 			&item.Amount,
 			&item.Category,
+			&item.IncludesServiceCharge,
+			&item.IncludesTax,
 			&item.CreatedAt,
 			&item.UpdatedAt,
 		); err != nil {
@@ -169,7 +175,7 @@ func (r *PostgresBillItemRepository) Update(ctx context.Context, item *entity.Bi
 
 	const updateItem = `
 		UPDATE bill_items
-		SET description = $2, amount = $3, category = $4, updated_at = $5
+		SET description = $2, amount = $3, category = $4, includes_service_charge = $5, includes_tax = $6, updated_at = $7
 		WHERE bill_item_id = $1
 	`
 	res, err := tx.ExecContext(
@@ -179,6 +185,8 @@ func (r *PostgresBillItemRepository) Update(ctx context.Context, item *entity.Bi
 		item.Description,
 		item.Amount,
 		item.Category,
+		item.IncludesServiceCharge,
+		item.IncludesTax,
 		item.UpdatedAt,
 	)
 	if err != nil {

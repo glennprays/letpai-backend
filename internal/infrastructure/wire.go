@@ -10,7 +10,6 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/glennprays/letpai-backend/config"
-	"github.com/glennprays/letpai-backend/domain/ports"
 	"github.com/glennprays/letpai-backend/internal/handler"
 	"github.com/glennprays/letpai-backend/internal/repository"
 	"github.com/glennprays/letpai-backend/internal/router"
@@ -43,6 +42,7 @@ var RepositorySet = wire.NewSet(
 	repository.NewPostgresSessionRepository,
 	repository.NewPostgresParticipantRepository,
 	repository.NewPostgresBillItemRepository,
+	repository.NewPostgresBillImageRepository,
 	repository.NewPostgresNotificationLogRepository,
 	repository.NewPostgresWhatsAppConfigRepository,
 	repository.NewPostgresAdminRepository,
@@ -110,6 +110,11 @@ var UseCaseSet = wire.NewSet(
 	billing.NewUpdateBillItemUseCase,
 	billing.NewDeleteBillItemUseCase,
 	billing.NewCalculateSplitsUseCase,
+		billing.NewUploadBillImageUseCase,
+		billing.NewGetBillImagesUseCase,
+		billing.NewGetBillImageSignedUrlUseCase,
+		billing.NewDeleteBillImageUseCase,
+		billing.NewUpdateFeeConfigUseCase,
 	// Payment use cases
 	payment.NewSubmitPaymentUseCase,
 	payment.NewApprovePaymentUseCase,

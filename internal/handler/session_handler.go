@@ -13,19 +13,24 @@ import (
 
 // SessionHandler handles session requests
 type SessionHandler struct {
-	createSession     *session.CreateSessionUseCase
-	getSessions       *session.GetSessionsUseCase
-	getSessionDetail  *session.GetSessionDetailUseCase
-	updateSession     *session.UpdateSessionUseCase
-	cancelSession     *session.CancelSessionUseCase
-	addParticipants   *participant.AddParticipantsUseCase
-	removeParticipant *participant.RemoveParticipantUseCase
-	updateParticipant *participant.UpdateParticipantUseCase
-	addBillItem         *billing.AddBillItemUseCase
-	updateBillItem      *billing.UpdateBillItemUseCase
-	deleteBillItem      *billing.DeleteBillItemUseCase
-	calculateSplits     *billing.CalculateSplitsUseCase
-	replaceBankAccounts *session.ReplaceBankAccountsUseCase
+	createSession         *session.CreateSessionUseCase
+	getSessions           *session.GetSessionsUseCase
+	getSessionDetail      *session.GetSessionDetailUseCase
+	updateSession         *session.UpdateSessionUseCase
+	cancelSession         *session.CancelSessionUseCase
+	addParticipants       *participant.AddParticipantsUseCase
+	removeParticipant     *participant.RemoveParticipantUseCase
+	updateParticipant     *participant.UpdateParticipantUseCase
+	addBillItem           *billing.AddBillItemUseCase
+	updateBillItem        *billing.UpdateBillItemUseCase
+	deleteBillItem        *billing.DeleteBillItemUseCase
+	calculateSplits       *billing.CalculateSplitsUseCase
+	replaceBankAccounts   *session.ReplaceBankAccountsUseCase
+	uploadBillImage       *billing.UploadBillImageUseCase
+	getBillImages         *billing.GetBillImagesUseCase
+	getBillImageSignedUrl *billing.GetBillImageSignedUrlUseCase
+	deleteBillImage       *billing.DeleteBillImageUseCase
+	updateFeeConfig       *billing.UpdateFeeConfigUseCase
 }
 
 // NewSessionHandler creates a new session handler
@@ -43,21 +48,31 @@ func NewSessionHandler(
 	deleteBillItem *billing.DeleteBillItemUseCase,
 	calculateSplits *billing.CalculateSplitsUseCase,
 	replaceBankAccounts *session.ReplaceBankAccountsUseCase,
+	uploadBillImage *billing.UploadBillImageUseCase,
+	getBillImages *billing.GetBillImagesUseCase,
+	getBillImageSignedUrl *billing.GetBillImageSignedUrlUseCase,
+	deleteBillImage *billing.DeleteBillImageUseCase,
+	updateFeeConfig *billing.UpdateFeeConfigUseCase,
 ) *SessionHandler {
 	return &SessionHandler{
-		createSession:       createSession,
-		getSessions:         getSessions,
-		getSessionDetail:    getSessionDetail,
-		updateSession:       updateSession,
-		cancelSession:       cancelSession,
-		addParticipants:     addParticipants,
-		removeParticipant:   removeParticipant,
-		updateParticipant:   updateParticipant,
-		addBillItem:         addBillItem,
-		updateBillItem:      updateBillItem,
-		deleteBillItem:      deleteBillItem,
-		calculateSplits:     calculateSplits,
-		replaceBankAccounts: replaceBankAccounts,
+		createSession:         createSession,
+		getSessions:           getSessions,
+		getSessionDetail:      getSessionDetail,
+		updateSession:         updateSession,
+		cancelSession:         cancelSession,
+		addParticipants:       addParticipants,
+		removeParticipant:     removeParticipant,
+		updateParticipant:     updateParticipant,
+		addBillItem:           addBillItem,
+		updateBillItem:        updateBillItem,
+		deleteBillItem:        deleteBillItem,
+		calculateSplits:       calculateSplits,
+		replaceBankAccounts:   replaceBankAccounts,
+		uploadBillImage:       uploadBillImage,
+		getBillImages:         getBillImages,
+		getBillImageSignedUrl: getBillImageSignedUrl,
+		deleteBillImage:       deleteBillImage,
+		updateFeeConfig:       updateFeeConfig,
 	}
 }
 
@@ -352,6 +367,8 @@ func (h *SessionHandler) AddBillItem(c *fiber.Ctx) error {
 		Amount:         req.Amount,
 		Category:       req.Category,
 		ParticipantIDs: req.ParticipantIDs,
+		IncludesServiceCharge: req.IncludesServiceCharge,
+		IncludesTax:           req.IncludesTax,
 	}
 
 	result, err := h.addBillItem.Execute(c.Context(), userID, sessionID, ucReq)
@@ -400,10 +417,12 @@ func (h *SessionHandler) UpdateBillItem(c *fiber.Ctx) error {
 	}
 
 	billingReq := &billing.UpdateBillItemRequest{
-		Description:    req.Description,
-		Amount:         req.Amount,
-		Category:       req.Category,
-		ParticipantIDs: req.ParticipantIDs,
+		Description:           req.Description,
+		Amount:                req.Amount,
+		Category:              req.Category,
+		ParticipantIDs:        req.ParticipantIDs,
+		IncludesServiceCharge: req.IncludesServiceCharge,
+		IncludesTax:           req.IncludesTax,
 	}
 	result, err := h.updateBillItem.Execute(c.Context(), userID, sessionID, billItemID, billingReq)
 	if err != nil {
@@ -424,6 +443,105 @@ func (h *SessionHandler) DeleteBillItem(c *fiber.Ctx) error {
 	billItemID := c.Params("bill_item_id")
 
 	result, err := h.deleteBillItem.Execute(c.Context(), userID, sessionID, billItemID)
+	if err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+
+	return c.JSON(fiber.Map{
+		"success": true,
+		"data":    result,
+	})
+}
+
+// UploadBillImage uploads a bill/receipt image to a session.
+func (h *SessionHandler) UploadBillImage(c *fiber.Ctx) error {
+	userID := middleware.GetUserID(c)
+	sessionID := c.Params("id")
+
+	var req billing.UploadBillImageRequest
+	if err := c.BodyParser(&req); err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+
+	result, err := h.uploadBillImage.Execute(c.Context(), userID, sessionID, &req)
+	if err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
+		"success": true,
+		"data":    result,
+	})
+}
+
+// GetBillImages lists all bill images for a session.
+func (h *SessionHandler) GetBillImages(c *fiber.Ctx) error {
+	userID := middleware.GetUserID(c)
+	sessionID := c.Params("id")
+
+	result, err := h.getBillImages.Execute(c.Context(), userID, sessionID)
+	if err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+
+	return c.JSON(fiber.Map{
+		"success": true,
+		"data":    result,
+	})
+}
+
+// GetBillImageSignedUrl generates a presigned GET URL for a bill image.
+func (h *SessionHandler) GetBillImageSignedUrl(c *fiber.Ctx) error {
+	userID := middleware.GetUserID(c)
+	sessionID := c.Params("id")
+	imageID := c.Params("image_id")
+
+	result, err := h.getBillImageSignedUrl.Execute(c.Context(), userID, sessionID, imageID)
+	if err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+
+	return c.JSON(fiber.Map{
+		"success": true,
+		"data":    result,
+	})
+}
+
+// DeleteBillImage deletes a bill image from a session.
+func (h *SessionHandler) DeleteBillImage(c *fiber.Ctx) error {
+	userID := middleware.GetUserID(c)
+	sessionID := c.Params("id")
+	imageID := c.Params("image_id")
+
+	result, err := h.deleteBillImage.Execute(c.Context(), userID, sessionID, imageID)
+	if err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+
+	return c.JSON(fiber.Map{
+		"success": true,
+		"data":    result,
+	})
+}
+
+// UpdateFeeConfig updates the fee configuration for a session.
+func (h *SessionHandler) UpdateFeeConfig(c *fiber.Ctx) error {
+	userID := middleware.GetUserID(c)
+	sessionID := c.Params("id")
+
+	var req billing.UpdateFeeConfigRequest
+	if err := c.BodyParser(&req); err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+
+	result, err := h.updateFeeConfig.Execute(c.Context(), userID, sessionID, &req)
 	if err != nil {
 		apiErr := httperror.FromError(err)
 		return c.Status(apiErr.Status).JSON(apiErr.Response())

@@ -160,6 +160,13 @@ func (r *Router) setupSessionRoutes(group fiber.Router) {
 	// PUT /sessions/:id still work during the compat window;
 	// /bank-accounts is the canonical write path going forward.
 	sessions.Put("/:id/bank-accounts", r.SessionHandler.ReplaceBankAccounts)
+	// Bill image attachments
+	sessions.Post("/:id/bill-images", r.SessionHandler.UploadBillImage)
+	sessions.Get("/:id/bill-images", r.SessionHandler.GetBillImages)
+	sessions.Get("/:id/bill-images/:image_id", r.SessionHandler.GetBillImageSignedUrl)
+	sessions.Delete("/:id/bill-images/:image_id", r.SessionHandler.DeleteBillImage)
+	// Fee configuration (service charge & tax percentages)
+	sessions.Put("/:id/fee-config", r.SessionHandler.UpdateFeeConfig)
 }
 
 func (r *Router) setupProtectedPaymentRoutes(group fiber.Router) {

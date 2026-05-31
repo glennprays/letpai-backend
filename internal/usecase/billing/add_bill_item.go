@@ -16,19 +16,23 @@ import (
 // across every participant in the session"; a non-empty list scopes the
 // bill to those participants only.
 type AddBillItemRequest struct {
-	Description    string   `json:"description" validate:"required,min=1,max=200"`
-	Amount         float64  `json:"amount" validate:"required,gt=0"`
-	Category       *string  `json:"category,omitempty"`
-	ParticipantIDs []string `json:"participant_ids,omitempty" validate:"omitempty,dive,uuid"`
+	Description            string   `json:"description" validate:"required,min=1,max=200"`
+	Amount                 float64  `json:"amount" validate:"required,gt=0"`
+	Category               *string  `json:"category,omitempty"`
+	ParticipantIDs         []string `json:"participant_ids,omitempty" validate:"omitempty,dive,uuid"`
+	IncludesServiceCharge  *bool    `json:"includes_service_charge,omitempty"`
+	IncludesTax            *bool    `json:"includes_tax,omitempty"`
 }
 
 // BillItemItem represents a bill item in the response
 type BillItemItem struct {
-	BillItemID     string   `json:"bill_item_id"`
-	Description    string   `json:"description"`
-	Amount         float64  `json:"amount"`
-	Category       *string  `json:"category,omitempty"`
-	ParticipantIDs []string `json:"participant_ids"`
+	BillItemID            string   `json:"bill_item_id"`
+	Description           string   `json:"description"`
+	Amount                float64  `json:"amount"`
+	Category              *string  `json:"category,omitempty"`
+	ParticipantIDs        []string `json:"participant_ids"`
+	IncludesServiceCharge bool     `json:"includes_service_charge"`
+	IncludesTax           bool     `json:"includes_tax"`
 }
 
 // AddBillItemResponse represents the response after adding a bill item
@@ -83,6 +87,18 @@ func (uc *AddBillItemUseCase) Execute(ctx context.Context, userID, sessionID str
 	// Create bill item
 	billItem := entity.NewBillItem(sessionUUID, req.Description, req.Amount, req.Category, participantUUIDs)
 
+	// Apply fee flags (default true when omitted)
+	sc := true
+	if req.IncludesServiceCharge != nil {
+		sc = *req.IncludesServiceCharge
+	}
+	taxFlag := true
+	if req.IncludesTax != nil {
+		taxFlag = *req.IncludesTax
+	}
+	billItem.IncludesServiceCharge = sc
+	billItem.IncludesTax = taxFlag
+
 	if err := uc.billItemRepo.Create(ctx, billItem); err != nil {
 		return nil, err
 	}
@@ -101,11 +117,13 @@ func (uc *AddBillItemUseCase) Execute(ctx context.Context, userID, sessionID str
 	return &AddBillItemResponse{
 		Message: "Bill item added successfully",
 		BillItem: &BillItemItem{
-			BillItemID:     billItem.BillItemID.String(),
-			Description:    billItem.Description,
-			Amount:         billItem.Amount,
-			Category:       billItem.Category,
-			ParticipantIDs: pidStrs,
+			BillItemID:            billItem.BillItemID.String(),
+			Description:           billItem.Description,
+			Amount:                billItem.Amount,
+			Category:              billItem.Category,
+			ParticipantIDs:        pidStrs,
+			IncludesServiceCharge: billItem.IncludesServiceCharge,
+			IncludesTax:           billItem.IncludesTax,
 		},
 		TotalAmount: session.TotalAmount,
 	}, nil

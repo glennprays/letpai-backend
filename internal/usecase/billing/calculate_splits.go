@@ -9,6 +9,15 @@ import (
 	"github.com/glennprays/letpai-backend/domain/ports"
 )
 
+// FeeBreakdownItem represents a participant's fee breakdown
+type FeeBreakdownItem struct {
+	ParticipantID      string  `json:"participant_id"`
+	ItemsTotal         float64 `json:"items_total"`
+	ServiceChargeShare float64 `json:"service_charge_share"`
+	TaxShare           float64 `json:"tax_share"`
+	Total              float64 `json:"total"`
+}
+
 // CalculateSplitsResponse represents the response after calculating splits
 type CalculateSplitsResponse struct {
 	Message          string              `json:"message"`
@@ -16,6 +25,7 @@ type CalculateSplitsResponse struct {
 	ParticipantCount int                 `json:"participant_count"`
 	SharePerPerson   float64             `json:"share_per_person"`
 	Participants     []*ParticipantSplit `json:"participants"`
+	FeeBreakdown     []*FeeBreakdownItem `json:"fee_breakdown,omitempty"`
 }
 
 // ParticipantSplit represents a participant's split
@@ -48,11 +58,17 @@ func NewCalculateSplitsUseCase(
 // Execute calculates per-bill splits, accumulates per-participant shares,
 // and writes them back to the session participants.
 //
-// SEMANTICS: each bill is divided among its assigned participants (empty
-// assignment ⇒ everyone in the session). Per-participant shares are
-// rounded to 2 decimals; any rounding remainder is added to the last
-// participant in the bill's iteration order so the bill total matches
-// the original amount exactly.
+// When the session has fee_config (service_charge_percentage / tax_percentage
+// > 0), the calculation is fee-aware:
+//   - Each participant's items_total = sum of their bill item shares
+//   - service_charge_share = sum of shares on items where includes_service_charge=true
+//     × session.service_charge_percentage / 100
+//   - tax_share = sum of shares on items where includes_tax=true
+//     × session.tax_percentage / 100
+//   - share_amount = items_total + service_charge_share + tax_share
+//
+// When no fee_config exists (or both are zero), the calculation is the
+// simple per-bill split as before.
 //
 // CONCURRENCY: NOT transactional. Concurrent AddBillItem / DeleteBillItem
 // / AddParticipants / RemoveParticipant calls between the read and the
@@ -88,9 +104,17 @@ func (uc *CalculateSplitsUseCase) Execute(ctx context.Context, userID, sessionID
 		return nil, err
 	}
 
-	accumulated := make(map[string]float64, len(orderedIDs))
+	hasFees := session.ServiceChargePercentage > 0 || session.TaxPercentage > 0
+
+	// Per-participant accumulators
+	type accum struct {
+		itemsTotal         float64
+		serviceChargeBase  float64 // sum of shares on items where includes_service_charge=true
+		taxBase            float64 // sum of shares on items where includes_tax=true
+	}
+	accumulators := make(map[string]*accum, len(orderedIDs))
 	for _, id := range orderedIDs {
-		accumulated[id] = 0
+		accumulators[id] = &accum{}
 	}
 
 	billTotal := 0.0
@@ -106,28 +130,31 @@ func (uc *CalculateSplitsUseCase) Execute(ctx context.Context, userID, sessionID
 				}
 			}
 			if len(shareIDs) == 0 {
-				// All originally-assigned participants have been removed;
-				// fall back to "everyone" so the bill still contributes.
 				shareIDs = append(shareIDs, orderedIDs...)
 			}
 		}
 
-		// IDR is whole-currency; the share_amount column is BIGINT, so
-		// fractional cents (e.g. 50000/3 = 16666.67) would round-trip
-		// through the float math then trip "invalid input syntax for
-		// type bigint" on the BulkUpdateShareAmounts UPDATE. Floor the
-		// per-person share to whole units and push the rounding
-		// remainder onto the last participant so the bill total
-		// reconciles exactly.
+		// Floor the per-person share to whole units (IDR is whole-currency).
+		// Push the rounding remainder onto the last participant so the bill
+		// total reconciles exactly.
 		perPerson := math.Floor(bill.Amount / float64(len(shareIDs)))
 		distributed := perPerson * float64(len(shareIDs))
 		remainder := bill.Amount - distributed
 
-		for _, id := range shareIDs {
-			accumulated[id] += perPerson
-		}
-		if remainder != 0 {
-			accumulated[shareIDs[len(shareIDs)-1]] += remainder
+		for i, id := range shareIDs {
+			share := perPerson
+			if i == len(shareIDs)-1 {
+				share += remainder
+			}
+			accumulators[id].itemsTotal += share
+			if hasFees {
+				if bill.IncludesServiceCharge {
+					accumulators[id].serviceChargeBase += share
+				}
+				if bill.IncludesTax {
+					accumulators[id].taxBase += share
+				}
+			}
 		}
 
 		billTotal += bill.Amount
@@ -135,15 +162,34 @@ func (uc *CalculateSplitsUseCase) Execute(ctx context.Context, userID, sessionID
 
 	updates := make(map[string]float64, len(orderedIDs))
 	participantSplits := make([]*ParticipantSplit, 0, len(orderedIDs))
+	feeBreakdowns := make([]*FeeBreakdownItem, 0, len(orderedIDs))
+
 	for _, p := range participants {
 		idStr := p.ParticipantID.String()
-		amount := math.Round(accumulated[idStr])
-		p.SetShareAmount(amount)
-		updates[idStr] = amount
+		a := accumulators[idStr]
+
+		var scShare, taxShare, total float64
+		if hasFees {
+			scShare = math.Round(a.serviceChargeBase * session.ServiceChargePercentage / 100)
+			taxShare = math.Round(a.taxBase * session.TaxPercentage / 100)
+			total = math.Round(a.itemsTotal) + scShare + taxShare
+		} else {
+			total = math.Round(a.itemsTotal)
+		}
+
+		p.SetShareAmount(total)
+		updates[idStr] = total
 		participantSplits = append(participantSplits, &ParticipantSplit{
 			ParticipantID: idStr,
-			ShareAmount:   amount,
+			ShareAmount:   total,
 			PaymentStatus: p.PaymentStatus.String(),
+		})
+		feeBreakdowns = append(feeBreakdowns, &FeeBreakdownItem{
+			ParticipantID:      idStr,
+			ItemsTotal:         math.Round(a.itemsTotal),
+			ServiceChargeShare: scShare,
+			TaxShare:           taxShare,
+			Total:              total,
 		})
 	}
 
@@ -156,11 +202,15 @@ func (uc *CalculateSplitsUseCase) Execute(ctx context.Context, userID, sessionID
 		avg = math.Round((billTotal/float64(len(orderedIDs)))*100) / 100
 	}
 
-	return &CalculateSplitsResponse{
+	resp := &CalculateSplitsResponse{
 		Message:          "Splits calculated successfully",
 		TotalAmount:      billTotal,
 		ParticipantCount: len(orderedIDs),
 		SharePerPerson:   avg,
 		Participants:     participantSplits,
-	}, nil
+	}
+	if hasFees {
+		resp.FeeBreakdown = feeBreakdowns
+	}
+	return resp, nil
 }

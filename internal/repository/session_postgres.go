@@ -35,8 +35,8 @@ func NewPostgresSessionRepository(db *sqlx.DB) ports.SessionRepository {
 // up.
 func (r *PostgresSessionRepository) Create(ctx context.Context, session *entity.Session) error {
 	const query = `
-		INSERT INTO sessions (session_id, public_slug, user_id, title, description, status, total_amount, currency, session_date, bank_name, bank_account_number, bank_account_holder, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+		INSERT INTO sessions (session_id, public_slug, user_id, title, description, status, total_amount, currency, session_date, bank_name, bank_account_number, bank_account_holder, service_charge_percentage, tax_percentage, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 	`
 
 	const maxTries = 5
@@ -63,6 +63,8 @@ func (r *PostgresSessionRepository) Create(ctx context.Context, session *entity.
 			session.BankName,
 			session.BankAccountNumber,
 			session.BankAccountHolder,
+			session.ServiceChargePercentage,
+			session.TaxPercentage,
 			session.CreatedAt,
 			session.UpdatedAt,
 		)
@@ -112,7 +114,7 @@ func contains(s, sub string) bool {
 // have the token, so we don't double-gate by host).
 func (r *PostgresSessionRepository) FindByID(ctx context.Context, sessionID string, userID string) (*entity.Session, error) {
 	query := `
-		SELECT session_id, public_slug, user_id, title, description, status, total_amount, currency, session_date, bank_name, bank_account_number, bank_account_holder, last_notified_at, created_at, updated_at, deleted_at
+		SELECT session_id, public_slug, user_id, title, description, status, total_amount, currency, session_date, bank_name, bank_account_number, bank_account_holder, service_charge_percentage, tax_percentage, last_notified_at, created_at, updated_at, deleted_at
 		FROM sessions
 		WHERE session_id = $1 AND deleted_at IS NULL
 	`
@@ -145,6 +147,8 @@ func (r *PostgresSessionRepository) FindByID(ctx context.Context, sessionID stri
 		&session.BankName,
 		&session.BankAccountNumber,
 		&session.BankAccountHolder,
+		&session.ServiceChargePercentage,
+		&session.TaxPercentage,
 		&session.LastNotifiedAt,
 		&session.CreatedAt,
 		&session.UpdatedAt,
@@ -166,7 +170,7 @@ func (r *PostgresSessionRepository) FindByID(ctx context.Context, sessionID stri
 // userID semantics — empty string skips the ownership filter.
 func (r *PostgresSessionRepository) FindBySlug(ctx context.Context, slug string, userID string) (*entity.Session, error) {
 	query := `
-		SELECT session_id, public_slug, user_id, title, description, status, total_amount, currency, session_date, bank_name, bank_account_number, bank_account_holder, last_notified_at, created_at, updated_at, deleted_at
+		SELECT session_id, public_slug, user_id, title, description, status, total_amount, currency, session_date, bank_name, bank_account_number, bank_account_holder, service_charge_percentage, tax_percentage, last_notified_at, created_at, updated_at, deleted_at
 		FROM sessions
 		WHERE public_slug = $1 AND deleted_at IS NULL
 	`
@@ -192,6 +196,8 @@ func (r *PostgresSessionRepository) FindBySlug(ctx context.Context, slug string,
 		&session.BankName,
 		&session.BankAccountNumber,
 		&session.BankAccountHolder,
+		&session.ServiceChargePercentage,
+		&session.TaxPercentage,
 		&session.LastNotifiedAt,
 		&session.CreatedAt,
 		&session.UpdatedAt,
@@ -286,7 +292,7 @@ func (r *PostgresSessionRepository) FindAll(ctx context.Context, userID string, 
 	// MarkPaidManually writes, so manual marks are included
 	// automatically by the FILTER clause.
 	dataQuery := `
-		SELECT s.session_id, s.public_slug, s.user_id, s.title, s.description, s.status, s.total_amount, s.currency, s.session_date, s.bank_name, s.bank_account_number, s.bank_account_holder, s.last_notified_at, s.created_at, s.updated_at, s.deleted_at,
+		SELECT s.session_id, s.public_slug, s.user_id, s.title, s.description, s.status, s.total_amount, s.currency, s.session_date, s.bank_name, s.bank_account_number, s.bank_account_holder, s.service_charge_percentage, s.tax_percentage, s.last_notified_at, s.created_at, s.updated_at, s.deleted_at,
 		       COALESCE(sp_agg.participant_count, 0)::int AS participant_count,
 		       COALESCE(sp_agg.paid_count, 0)::int        AS paid_count
 		FROM sessions s
@@ -332,6 +338,8 @@ func (r *PostgresSessionRepository) FindAll(ctx context.Context, userID string, 
 			&session.BankName,
 			&session.BankAccountNumber,
 			&session.BankAccountHolder,
+			&session.ServiceChargePercentage,
+			&session.TaxPercentage,
 			&session.LastNotifiedAt,
 			&session.CreatedAt,
 			&session.UpdatedAt,
@@ -399,8 +407,8 @@ func (r *PostgresSessionRepository) MarkNotified(ctx context.Context, sessionID 
 func (r *PostgresSessionRepository) Update(ctx context.Context, session *entity.Session) error {
 	query := `
 		UPDATE sessions
-		SET title = $2, description = $3, status = $4, total_amount = $5, currency = $6, session_date = $7, bank_name = $8, bank_account_number = $9, bank_account_holder = $10, updated_at = $11
-		WHERE session_id = $1 AND user_id = $12 AND deleted_at IS NULL
+		SET title = $2, description = $3, status = $4, total_amount = $5, currency = $6, session_date = $7, bank_name = $8, bank_account_number = $9, bank_account_holder = $10, service_charge_percentage = $11, tax_percentage = $12, updated_at = $13
+		WHERE session_id = $1 AND user_id = $14 AND deleted_at IS NULL
 	`
 
 	result, err := r.db.ExecContext(
@@ -416,6 +424,8 @@ func (r *PostgresSessionRepository) Update(ctx context.Context, session *entity.
 		session.BankName,
 		session.BankAccountNumber,
 		session.BankAccountHolder,
+		session.ServiceChargePercentage,
+		session.TaxPercentage,
 		session.UpdatedAt,
 		session.UserID,
 	)

@@ -13,14 +13,16 @@ import (
 // everyone in the session" (legacy behaviour); a non-empty slice means
 // the bill is shared only among the listed participants.
 type BillItem struct {
-	BillItemID     uuid.UUID   `json:"bill_item_id" db:"bill_item_id"`
-	SessionID      uuid.UUID   `json:"session_id" db:"session_id"`
-	Description    string      `json:"description" db:"description"`
-	Amount         float64     `json:"amount" db:"amount"`
-	Category       *string     `json:"category,omitempty" db:"category"`
-	CreatedAt      time.Time   `json:"created_at" db:"created_at"`
-	UpdatedAt      time.Time   `json:"updated_at" db:"updated_at"`
-	ParticipantIDs []uuid.UUID `json:"participant_ids" db:"-"`
+	BillItemID               uuid.UUID   `json:"bill_item_id" db:"bill_item_id"`
+	SessionID                uuid.UUID   `json:"session_id" db:"session_id"`
+	Description              string      `json:"description" db:"description"`
+	Amount                   float64     `json:"amount" db:"amount"`
+	Category                 *string     `json:"category,omitempty" db:"category"`
+	IncludesServiceCharge    bool        `json:"includes_service_charge" db:"includes_service_charge"`
+	IncludesTax              bool        `json:"includes_tax" db:"includes_tax"`
+	CreatedAt                time.Time   `json:"created_at" db:"created_at"`
+	UpdatedAt                time.Time   `json:"updated_at" db:"updated_at"`
+	ParticipantIDs           []uuid.UUID `json:"participant_ids" db:"-"`
 }
 
 // NewBillItem creates a new bill item. participantIDs may be nil/empty to
@@ -47,6 +49,18 @@ func (b *BillItem) Update(description string, amount float64, category *string) 
 	b.Amount = amount
 	if category != nil {
 		b.Category = category
+	}
+	b.UpdatedAt = time.Now()
+}
+
+// SetFeeFlags updates whether service charge and tax apply to this item.
+// nil pointers mean "leave unchanged".
+func (b *BillItem) SetFeeFlags(includesServiceCharge, includesTax *bool) {
+	if includesServiceCharge != nil {
+		b.IncludesServiceCharge = *includesServiceCharge
+	}
+	if includesTax != nil {
+		b.IncludesTax = *includesTax
 	}
 	b.UpdatedAt = time.Now()
 }

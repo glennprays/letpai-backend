@@ -7,6 +7,7 @@ import (
 
 	"github.com/glennprays/letpai-backend/domain/entity"
 	"github.com/glennprays/letpai-backend/domain/ports"
+	"github.com/glennprays/letpai-backend/internal/service"
 	"github.com/glennprays/letpai-backend/internal/usecase/idresolve"
 )
 
@@ -24,6 +25,22 @@ type PaymentPageBankAccount struct {
 	BankName      *string `json:"bank_name,omitempty"`
 	AccountNumber *string `json:"account_number,omitempty"`
 	AccountHolder *string `json:"account_holder,omitempty"`
+}
+
+// PaymentPageFeeBreakdown shows this participant's fee breakdown.
+type PaymentPageFeeBreakdown struct {
+	ItemsTotal         float64 `json:"items_total"`
+	ServiceChargeShare float64 `json:"service_charge_share"`
+	TaxShare           float64 `json:"tax_share"`
+	Total              float64 `json:"total"`
+}
+
+// PaymentPageBillImage is a simplified bill image for the public page.
+type PaymentPageBillImage struct {
+	BillImageID  string  `json:"bill_image_id"`
+	ImageURL     string  `json:"image_url"`
+	ThumbnailURL *string `json:"thumbnail_url,omitempty"`
+	FileName     string  `json:"file_name"`
 }
 
 type PaymentPageResponse struct {
@@ -46,6 +63,8 @@ type PaymentPageResponse struct {
 	BankAccounts      []*PaymentPageBankAccount `json:"bank_accounts"`
 	LinkExpiresAt     string                    `json:"link_expires_at"`
 	IsExpired         bool                      `json:"is_expired"`
+	BillImages        []*PaymentPageBillImage   `json:"bill_images,omitempty"`
+	FeeBreakdown      *PaymentPageFeeBreakdown  `json:"fee_breakdown,omitempty"`
 }
 
 // BillItemInfo carries both the bill's full amount and THIS
@@ -69,6 +88,8 @@ type GetPaymentPageUseCase struct {
 	billItemRepo    ports.BillItemRepository
 	contactRepo     ports.ContactRepository
 	bankAccountRepo ports.SessionBankAccountRepository
+	billImageRepo   ports.BillImageRepository
+	imageService    *service.ImageService
 }
 
 // NewGetPaymentPageUseCase creates a new get payment page use case
@@ -78,6 +99,8 @@ func NewGetPaymentPageUseCase(
 	billItemRepo ports.BillItemRepository,
 	contactRepo ports.ContactRepository,
 	bankAccountRepo ports.SessionBankAccountRepository,
+	billImageRepo ports.BillImageRepository,
+	imageService *service.ImageService,
 ) *GetPaymentPageUseCase {
 	return &GetPaymentPageUseCase{
 		participantRepo: participantRepo,
@@ -85,6 +108,8 @@ func NewGetPaymentPageUseCase(
 		billItemRepo:    billItemRepo,
 		contactRepo:     contactRepo,
 		bankAccountRepo: bankAccountRepo,
+		billImageRepo:   billImageRepo,
+		imageService:    imageService,
 	}
 }
 
@@ -133,6 +158,13 @@ func (uc *GetPaymentPageUseCase) Execute(ctx context.Context, participantID stri
 
 	pidStr := participant.ParticipantID.String()
 	billItemInfos := make([]BillItemInfo, 0, len(billItems))
+
+	// Fee-aware accumulators for this participant
+	itemsTotal := 0.0
+	serviceChargeBase := 0.0
+	taxBase := 0.0
+	hasFees := session.ServiceChargePercentage > 0 || session.TaxPercentage > 0
+
 	for _, bill := range billItems {
 		// Decide whether this bill applies to this participant and how
 		// many people it's split across. An empty ParticipantIDs list
@@ -163,6 +195,51 @@ func (uc *GetPaymentPageUseCase) Execute(ctx context.Context, participantID stri
 			YourShare:   yourShare,
 			SharedWith:  sharedWith,
 		})
+
+		itemsTotal += yourShare
+		if hasFees {
+			if bill.IncludesServiceCharge {
+				serviceChargeBase += yourShare
+			}
+			if bill.IncludesTax {
+				taxBase += yourShare
+			}
+		}
+	}
+
+	// Compute fee breakdown if session has fees
+	var feeBreakdown *PaymentPageFeeBreakdown
+	if hasFees {
+		scShare := math.Round(serviceChargeBase * session.ServiceChargePercentage / 100)
+		taxShare := math.Round(taxBase * session.TaxPercentage / 100)
+		feeBreakdown = &PaymentPageFeeBreakdown{
+			ItemsTotal:         math.Round(itemsTotal),
+			ServiceChargeShare: scShare,
+			TaxShare:           taxShare,
+			Total:              math.Round(itemsTotal) + scShare + taxShare,
+		}
+	}
+
+	// Bill images (best-effort)
+	var billImageItems []*PaymentPageBillImage
+	if uc.billImageRepo != nil && uc.imageService != nil {
+		billImages, imgErr := uc.billImageRepo.FindBySessionID(ctx, participant.SessionID.String())
+		if imgErr == nil && len(billImages) > 0 {
+			billImageItems = make([]*PaymentPageBillImage, 0, len(billImages))
+			for _, img := range billImages {
+				s3Key := "bill-images/" + img.ImageURL
+				signedURL, _ := uc.imageService.GetPresignedGetURL(ctx, s3Key, 15*time.Minute)
+				if signedURL == "" {
+					signedURL = img.ImageURL // fallback to raw key
+				}
+				billImageItems = append(billImageItems, &PaymentPageBillImage{
+					BillImageID:  img.BillImageID.String(),
+					ImageURL:     signedURL,
+					ThumbnailURL: img.ThumbnailURL,
+					FileName:     img.FileName,
+				})
+			}
+		}
 	}
 
 	// Bank accounts — same read-fallback pattern as GetSessionDetail.
@@ -210,6 +287,8 @@ func (uc *GetPaymentPageUseCase) Execute(ctx context.Context, participantID stri
 		BankAccounts:      bankItems,
 		LinkExpiresAt:     linkExpiresAt.Format("2006-01-02T15:04:05Z07:00"),
 		IsExpired:         isExpired,
+		BillImages:        billImageItems,
+		FeeBreakdown:      feeBreakdown,
 	}, nil
 }
 

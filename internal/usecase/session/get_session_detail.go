@@ -2,10 +2,12 @@ package session
 
 import (
 	"context"
+	"math"
 	"time"
 
 	"github.com/glennprays/letpai-backend/domain/entity"
 	"github.com/glennprays/letpai-backend/domain/ports"
+	"github.com/glennprays/letpai-backend/internal/service"
 	"github.com/glennprays/letpai-backend/internal/usecase/idresolve"
 )
 
@@ -41,7 +43,8 @@ type ParticipantItem struct {
 	PaidManually       bool              `json:"paid_manually"`
 	NotificationCount  int               `json:"notification_count"`
 	LastNotificationAt *time.Time        `json:"last_notification_at,omitempty"`
-	LastNotification   *LastNotification `json:"last_notification,omitempty"`
+	LastNotification   *LastNotification        `json:"last_notification,omitempty"`
+	FeeBreakdown       *ParticipantFeeBreakdown `json:"fee_breakdown,omitempty"`
 }
 
 // BillItemItem represents a bill item in session detail.
@@ -49,36 +52,67 @@ type ParticipantItem struct {
 // ParticipantIDs is the per-bill participant assignment; an empty slice
 // means "applies to everyone in the session" (legacy default).
 type BillItemItem struct {
-	BillItemID     string   `json:"bill_item_id"`
-	Description    string   `json:"description"`
-	Amount         float64  `json:"amount"`
-	Category       *string  `json:"category,omitempty"`
-	ParticipantIDs []string `json:"participant_ids"`
+	BillItemID            string   `json:"bill_item_id"`
+	Description           string   `json:"description"`
+	Amount                float64  `json:"amount"`
+	Category              *string  `json:"category,omitempty"`
+	ParticipantIDs        []string `json:"participant_ids"`
+	IncludesServiceCharge bool     `json:"includes_service_charge"`
+	IncludesTax           bool     `json:"includes_tax"`
+}
+
+// BillImageDetailItem represents a bill image in session detail.
+type BillImageDetailItem struct {
+	BillImageID  string  `json:"bill_image_id"`
+	SessionID    string  `json:"session_id"`
+	ImageURL     string  `json:"image_url"`
+	ThumbnailURL *string `json:"thumbnail_url,omitempty"`
+	FileName     string  `json:"file_name"`
+	FileFormat   string  `json:"file_format"`
+	FileSize     int64   `json:"file_size"`
+	UploadedAt   string  `json:"uploaded_at"`
+	Ordinal      int     `json:"ordinal"`
+}
+
+// ParticipantFeeBreakdown shows the fee breakdown for a participant.
+type ParticipantFeeBreakdown struct {
+	ItemsTotal         float64 `json:"items_total"`
+	ServiceChargeShare float64 `json:"service_charge_share"`
+	TaxShare           float64 `json:"tax_share"`
+	Total              float64 `json:"total"`
+}
+
+// FeeConfigItem represents the fee configuration for a session.
+type FeeConfigItem struct {
+	ServiceChargePercentage float64 `json:"service_charge_percentage"`
+	TaxPercentage           float64 `json:"tax_percentage"`
 }
 
 // GetSessionDetailResponse represents the response for getting session details
 type GetSessionDetailResponse struct {
-	SessionID         string             `json:"session_id"`
-	PublicSlug        string             `json:"public_slug"`
-	Title             string             `json:"title"`
-	Description       string             `json:"description"`
-	Status            string             `json:"status"`
-	TotalAmount       float64            `json:"total_amount"`
-	Currency          string             `json:"currency"`
-	SessionDate       *string            `json:"session_date,omitempty"`
-	BankName          *string            `json:"bank_name,omitempty"`
-	BankAccountNumber *string            `json:"bank_account_number,omitempty"`
-	BankAccountHolder *string            `json:"bank_account_holder,omitempty"`
-	BankAccounts      []*BankAccountItem `json:"bank_accounts"`
-	LastNotifiedAt    *string            `json:"last_notified_at,omitempty"`
-	IsDirty           bool               `json:"is_dirty"`
-	CreatedAt         string             `json:"created_at"`
-	UpdatedAt         string             `json:"updated_at"`
-	ParticipantCount  int                `json:"participant_count"`
-	BillItemCount     int                `json:"bill_item_count"`
-	PaidCount         int                `json:"paid_count"`
-	Participants      []*ParticipantItem `json:"participants"`
-	Bills             []*BillItemItem    `json:"bills"`
+	SessionID         string                 `json:"session_id"`
+	PublicSlug        string                 `json:"public_slug"`
+	Title             string                 `json:"title"`
+	Description       string                 `json:"description"`
+	Status            string                 `json:"status"`
+	TotalAmount       float64                `json:"total_amount"`
+	Currency          string                 `json:"currency"`
+	SessionDate       *string                `json:"session_date,omitempty"`
+	BankName          *string                `json:"bank_name,omitempty"`
+	BankAccountNumber *string                `json:"bank_account_number,omitempty"`
+	BankAccountHolder *string                `json:"bank_account_holder,omitempty"`
+	BankAccounts      []*BankAccountItem     `json:"bank_accounts"`
+	LastNotifiedAt    *string                `json:"last_notified_at,omitempty"`
+	IsDirty           bool                   `json:"is_dirty"`
+	CreatedAt         string                 `json:"created_at"`
+	UpdatedAt         string                 `json:"updated_at"`
+	ParticipantCount  int                    `json:"participant_count"`
+	BillItemCount     int                    `json:"bill_item_count"`
+	PaidCount         int                    `json:"paid_count"`
+	Participants      []*ParticipantItem     `json:"participants"`
+	Bills             []*BillItemItem        `json:"bills"`
+	BillImages        []*BillImageDetailItem `json:"bill_images"`
+	FeeConfig         *FeeConfigItem         `json:"fee_config,omitempty"`
 }
 
 // GetSessionDetailUseCase handles retrieving session details
@@ -88,6 +122,8 @@ type GetSessionDetailUseCase struct {
 	billItemRepo        ports.BillItemRepository
 	notificationLogRepo ports.NotificationLogRepository
 	bankAccountRepo     ports.SessionBankAccountRepository
+	billImageRepo       ports.BillImageRepository
+	imageService        *service.ImageService
 }
 
 // NewGetSessionDetailUseCase creates a new get session detail use case
@@ -97,6 +133,8 @@ func NewGetSessionDetailUseCase(
 	billItemRepo ports.BillItemRepository,
 	notificationLogRepo ports.NotificationLogRepository,
 	bankAccountRepo ports.SessionBankAccountRepository,
+	billImageRepo ports.BillImageRepository,
+	imageService *service.ImageService,
 ) *GetSessionDetailUseCase {
 	return &GetSessionDetailUseCase{
 		sessionRepo:         sessionRepo,
@@ -104,6 +142,8 @@ func NewGetSessionDetailUseCase(
 		billItemRepo:        billItemRepo,
 		notificationLogRepo: notificationLogRepo,
 		bankAccountRepo:     bankAccountRepo,
+		billImageRepo:       billImageRepo,
+		imageService:        imageService,
 	}
 }
 
@@ -199,6 +239,42 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, userID, sessionI
 		})
 	}
 
+	// Bill images (best-effort — don't fail the whole request if this errors)
+	var billImageItems []*BillImageDetailItem
+	billImages, imgErr := uc.billImageRepo.FindBySessionID(ctx, resolvedSessionID)
+	if imgErr == nil && len(billImages) > 0 {
+		billImageItems = make([]*BillImageDetailItem, 0, len(billImages))
+		for _, img := range billImages {
+			// Resolve a presigned GET URL so the frontend can display the image
+			s3Key := "bill-images/" + img.ImageURL
+			signedURL, _ := uc.imageService.GetPresignedGetURL(ctx, s3Key, 15*time.Minute)
+			item := &BillImageDetailItem{
+				BillImageID:  img.BillImageID.String(),
+				SessionID:    img.SessionID.String(),
+				ImageURL:     signedURL, // presigned URL (or empty if signing failed)
+				ThumbnailURL: img.ThumbnailURL,
+				FileName:     img.FileName,
+				FileFormat:   img.FileFormat,
+				FileSize:     img.FileSize,
+				UploadedAt:   img.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+				Ordinal:      img.Ordinal,
+			}
+			if signedURL == "" {
+				item.ImageURL = img.ImageURL // fallback to raw key
+			}
+			billImageItems = append(billImageItems, item)
+		}
+	}
+
+	// Fee config — only include when at least one percentage is non-zero
+	var feeConfig *FeeConfigItem
+	if session.ServiceChargePercentage > 0 || session.TaxPercentage > 0 {
+		feeConfig = &FeeConfigItem{
+			ServiceChargePercentage: session.ServiceChargePercentage,
+			TaxPercentage:           session.TaxPercentage,
+		}
+	}
+
 	// Build response
 	var sessionDate *string
 	if session.SessionDate != nil {
@@ -232,6 +308,49 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, userID, sessionI
 			}
 		}
 
+		// Compute fee breakdown for this participant when session has fees
+		var feeBreakdown *ParticipantFeeBreakdown
+		if session.ServiceChargePercentage > 0 || session.TaxPercentage > 0 {
+			pidUUID := p.ParticipantID.String()
+			itemsTotal := 0.0
+			scBase := 0.0
+			taxBase := 0.0
+			for _, bill := range bills {
+				isMine := false
+				sharedWith := 0
+				if len(bill.ParticipantIDs) == 0 {
+					isMine = true
+					sharedWith = len(participants)
+				} else {
+					for _, pid := range bill.ParticipantIDs {
+						if pid.String() == pidUUID {
+							isMine = true
+						}
+					}
+					sharedWith = len(bill.ParticipantIDs)
+				}
+				if !isMine || sharedWith == 0 {
+					continue
+				}
+				share := math.Floor(bill.Amount / float64(sharedWith))
+				itemsTotal += share
+				if bill.IncludesServiceCharge {
+					scBase += share
+				}
+				if bill.IncludesTax {
+					taxBase += share
+				}
+			}
+			scShare := math.Round(scBase * session.ServiceChargePercentage / 100)
+			taxShare := math.Round(taxBase * session.TaxPercentage / 100)
+			feeBreakdown = &ParticipantFeeBreakdown{
+				ItemsTotal:         math.Round(itemsTotal),
+				ServiceChargeShare: scShare,
+				TaxShare:           taxShare,
+				Total:              math.Round(itemsTotal) + scShare + taxShare,
+			}
+		}
+
 		participantItems = append(participantItems, &ParticipantItem{
 			ParticipantID:      p.ParticipantID.String(),
 			PublicSlug:         p.PublicSlug,
@@ -246,6 +365,7 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, userID, sessionI
 			NotificationCount:  p.NotificationCount,
 			LastNotificationAt: p.LastNotificationAt,
 			LastNotification:   lastNotif,
+			FeeBreakdown:       feeBreakdown,
 		})
 	}
 
@@ -304,5 +424,7 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, userID, sessionI
 		PaidCount:         paidCount,
 		Participants:      participantItems,
 		Bills:             billItems,
+		BillImages:        billImageItems,
+		FeeConfig:         feeConfig,
 	}, nil
 }

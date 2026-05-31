@@ -41,6 +41,11 @@ type Session struct {
 	// host is allowed to fire a fresh batch.
 	LastNotifiedAt *time.Time `json:"last_notified_at,omitempty" db:"last_notified_at"`
 
+	// Fee configuration: service charge and tax percentages.
+	// Zero values mean "no fee". Set via the /fee-config endpoint.
+	ServiceChargePercentage float64 `json:"service_charge_percentage" db:"service_charge_percentage"`
+	TaxPercentage           float64 `json:"tax_percentage" db:"tax_percentage"`
+
 	CreatedAt time.Time  `json:"created_at" db:"created_at"`
 	UpdatedAt time.Time  `json:"updated_at" db:"updated_at"`
 	DeletedAt *time.Time `json:"deleted_at,omitempty" db:"deleted_at"`
@@ -125,6 +130,13 @@ func (s *Session) UpdateStatus(newStatus valueobject.SessionStatus) error {
 	s.Status = newStatus
 	s.UpdatedAt = time.Now()
 	return nil
+}
+
+// SetFeeConfig updates the service charge and tax percentages.
+func (s *Session) SetFeeConfig(serviceCharge, tax float64) {
+	s.ServiceChargePercentage = serviceCharge
+	s.TaxPercentage = tax
+	s.UpdatedAt = time.Now()
 }
 
 // AddToTotal adds an amount to the total

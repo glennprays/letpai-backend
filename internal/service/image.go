@@ -13,10 +13,11 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
-	"path/filepath"
+	"net/url"
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
@@ -159,15 +160,15 @@ func (s *ImageService) UploadFromMultipart(ctx context.Context, fileHeader *mult
 	return s.processAndUpload(ctx, imageData, fileFormat, fileHeader.Filename)
 }
 
-// processAndUpload processes the image (convert if needed) and uploads to S3
+// processAndUpload processes the image (convert if needed) and uploads to S3.
+// The fileName parameter is the user's original name (kept for metadata only);
+// a random UUID-based name is used for the S3 key.
 func (s *ImageService) processAndUpload(ctx context.Context, imageData []byte, fileFormat, fileName string) (*UploadResult, error) {
-	// Decode image to get dimensions
 	img, _, err := image.Decode(bytes.NewReader(imageData))
 	if err != nil {
 		return nil, fmt.Errorf("invalid image: %w", err)
 	}
 
-	// Get image dimensions
 	bounds := img.Bounds()
 	width := bounds.Dx()
 	height := bounds.Dy()
@@ -175,31 +176,20 @@ func (s *ImageService) processAndUpload(ctx context.Context, imageData []byte, f
 	processedData := imageData
 	outputFormat := s.formatFromMime(fileFormat)
 
-	// Note: WebP conversion disabled - keeping original format for simplicity and no C dependency
-	// If WebP conversion is needed in the future, use github.com/chai2010/webp
+	// Generate random UUID-based filename (never use user-supplied names for storage)
+	s3Key := uuid.New().String() + s.extensionFromFormat(outputFormat)
+	_ = fileName // original name preserved by caller
 
-	// Generate unique filename
-	if fileName == "" {
-		fileName = fmt.Sprintf("proof_%d%s", time.Now().Unix(), s.extensionFromFormat(outputFormat))
-	} else {
-		// Clean filename and add extension
-		fileName = strings.TrimSpace(fileName)
-		fileName = strings.TrimSuffix(fileName, filepath.Ext(fileName))
-		fileName = fmt.Sprintf("%s_%d%s", sanitizeFilename(fileName), time.Now().Unix(), s.extensionFromFormat(outputFormat))
-	}
-
-	// Upload to S3
-	etag, url, err := s.uploadToS3(ctx, processedData, fileName, s.contentTypeFromFormat(outputFormat))
+	etag, s3url, err := s.uploadToS3(ctx, processedData, s3Key, s.contentTypeFromFormat(outputFormat))
 	if err != nil {
 		return nil, fmt.Errorf("failed to upload to S3: %w", err)
 	}
 
-	// Get public URL
-	publicURL := s.getPublicURL(fileName)
+	publicURL := s.getPublicURL(s3Key)
 
 	return &UploadResult{
-		URL:        url,
-		FileName:   fileName,
+		URL:        s3url,
+		FileName:   s3Key,
 		FileFormat: s.mimeFromFormat(outputFormat),
 		Size:       int64(len(processedData)),
 		Width:      width,
@@ -214,20 +204,15 @@ func (s *ImageService) processAndUpload(ctx context.Context, imageData []byte, f
 func (s *ImageService) uploadToS3(ctx context.Context, imageData []byte, fileName, contentType string) (string, string, error) {
 	key := fmt.Sprintf("payments/%s", fileName)
 
-	// Upload using MinIO
 	uploadInfo, err := s.s3Client.PutObject(ctx, s.bucketName, key, bytes.NewReader(imageData), int64(len(imageData)), minio.PutObjectOptions{
 		ContentType: contentType,
-		// Note: MinIO doesn't support ACL like AWS S3
-		// Public access should be configured via bucket policy
 	})
 	if err != nil {
 		return "", "", fmt.Errorf("failed to upload object: %w", err)
 	}
 
-	url := fmt.Sprintf("s3://%s/%s", s.bucketName, key)
-	etag := uploadInfo.ETag
-
-	return etag, url, nil
+	s3url := fmt.Sprintf("s3://%s/%s", s.bucketName, key)
+	return uploadInfo.ETag, s3url, nil
 }
 
 // getPublicURL returns the public URL for uploaded image
@@ -235,7 +220,6 @@ func (s *ImageService) getPublicURL(fileName string) string {
 	if s.cdnURL != "" {
 		return fmt.Sprintf("%s/payments/%s", strings.TrimSuffix(s.cdnURL, "/"), fileName)
 	}
-	// Default S3 public URL format
 	return fmt.Sprintf("https://%s.s3.amazonaws.com/payments/%s", s.bucketName, fileName)
 }
 
@@ -249,25 +233,20 @@ func (s *ImageService) extractAndValidateImage(base64Data string) ([]byte, strin
 	var fileFormat string
 
 	if strings.HasPrefix(base64Data, "data:") {
-		// Extract mime type and data
 		parts := strings.SplitN(base64Data, ",", 2)
 		if len(parts) != 2 {
 			return nil, "", errors.New("invalid base64 format")
 		}
-
-		// Extract mime type
 		mimePart := strings.TrimPrefix(parts[0], "data:")
 		mimePart = strings.TrimSuffix(mimePart, ";base64")
 		fileFormat = mimePart
 
-		// Decode base64
 		var err error
 		imageData, err = base64.StdEncoding.DecodeString(parts[1])
 		if err != nil {
 			return nil, "", fmt.Errorf("failed to decode base64: %w", err)
 		}
 	} else {
-		// Raw base64 data
 		var err error
 		imageData, err = base64.StdEncoding.DecodeString(base64Data)
 		if err != nil {
@@ -276,12 +255,10 @@ func (s *ImageService) extractAndValidateImage(base64Data string) ([]byte, strin
 		fileFormat = http.DetectContentType(imageData)
 	}
 
-	// Validate image type
 	if !s.isValidImageFormat(fileFormat) {
 		return nil, "", errors.New("invalid image format, only JPEG, PNG, WEBP, and GIF are supported")
 	}
 
-	// Validate image size
 	if int64(len(imageData)) > s.maxFileSize {
 		return nil, "", fmt.Errorf("image size %d exceeds limit %d", len(imageData), s.maxFileSize)
 	}
@@ -375,29 +352,130 @@ func (s *ImageService) Delete(ctx context.Context, fileName string) error {
 	return nil
 }
 
-// sanitizeFilename removes or replaces unsafe characters from filename
-func sanitizeFilename(fileName string) string {
-	// Replace spaces with underscores
-	fileName = strings.ReplaceAll(fileName, " ", "_")
-	// Remove any characters that aren't alphanumeric, underscore, hyphen, or dot
-	var result strings.Builder
-	for _, r := range fileName {
-		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' || r == '-' || r == '.' {
-			result.WriteRune(r)
-		}
-	}
-	return result.String()
-}
-
 // GetPresignedURL generates a presigned URL for direct upload (useful for client-side uploads)
 func (s *ImageService) GetPresignedURL(ctx context.Context, fileName, contentType string, expiresIn time.Duration) (string, error) {
 	key := fmt.Sprintf("payments/%s", fileName)
 
-	// Generate presigned PUT URL for client-side upload
 	presignedURL, err := s.s3Client.PresignedPutObject(ctx, s.bucketName, key, expiresIn)
 	if err != nil {
 		return "", fmt.Errorf("failed to presign URL: %w", err)
 	}
 
 	return presignedURL.String(), nil
+}
+
+// UploadFromBase64WithPrefix uploads an image from base64 data using a
+// configurable S3 key prefix (e.g. "bill-images/"). The default
+// UploadFromBase64 hardcodes "payments/"; this variant avoids breaking
+// existing callers.
+func (s *ImageService) UploadFromBase64WithPrefix(ctx context.Context, base64Data, fileName, prefix string) (*UploadResult, error) {
+	imageData, fileFormat, err := s.extractAndValidateImage(base64Data)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.processAndUploadWithPrefix(ctx, imageData, fileFormat, fileName, prefix)
+}
+
+// processAndUploadWithPrefix is the same as processAndUpload but uses a
+// configurable S3 key prefix instead of the hardcoded "payments/".
+// The fileName parameter is the user's original name (kept for metadata only);
+// a random UUID-based name is used for the S3 key.
+func (s *ImageService) processAndUploadWithPrefix(ctx context.Context, imageData []byte, fileFormat, fileName, prefix string) (*UploadResult, error) {
+	img, _, err := image.Decode(bytes.NewReader(imageData))
+	if err != nil {
+		return nil, fmt.Errorf("invalid image: %w", err)
+	}
+
+	bounds := img.Bounds()
+	width := bounds.Dx()
+	height := bounds.Dy()
+
+	processedData := imageData
+	outputFormat := s.formatFromMime(fileFormat)
+
+	// Generate random UUID-based filename (never use user-supplied names for storage)
+	s3Key := uuid.New().String() + s.extensionFromFormat(outputFormat)
+	_ = fileName // original name preserved by caller
+
+	etag, s3url, err := s.uploadToS3WithPrefix(ctx, processedData, s3Key, s.contentTypeFromFormat(outputFormat), prefix)
+	if err != nil {
+		return nil, fmt.Errorf("failed to upload to S3: %w", err)
+	}
+
+	publicURL := s.getPublicURLWithPrefix(s3Key, prefix)
+
+	return &UploadResult{
+		URL:        s3url,
+		FileName:   s3Key,
+		FileFormat: s.mimeFromFormat(outputFormat),
+		Size:       int64(len(processedData)),
+		Width:      width,
+		Height:     height,
+		UploadedAt: time.Now(),
+		PublicURL:  publicURL,
+		Etag:       etag,
+	}, nil
+}
+
+// uploadToS3WithPrefix uploads image data to S3 with a configurable key prefix.
+func (s *ImageService) uploadToS3WithPrefix(ctx context.Context, imageData []byte, fileName, contentType, prefix string) (string, string, error) {
+	if prefix == "" {
+		prefix = "payments/"
+	}
+	if !strings.HasSuffix(prefix, "/") {
+		prefix += "/"
+	}
+	key := fmt.Sprintf("%s%s", prefix, fileName)
+
+	uploadInfo, err := s.s3Client.PutObject(ctx, s.bucketName, key, bytes.NewReader(imageData), int64(len(imageData)), minio.PutObjectOptions{
+		ContentType: contentType,
+	})
+	if err != nil {
+		return "", "", fmt.Errorf("failed to upload object: %w", err)
+	}
+
+	s3url := fmt.Sprintf("s3://%s/%s", s.bucketName, key)
+	return uploadInfo.ETag, s3url, nil
+}
+
+// getPublicURLWithPrefix returns the public URL using a configurable prefix.
+func (s *ImageService) getPublicURLWithPrefix(fileName, prefix string) string {
+	if prefix == "" {
+		prefix = "payments/"
+	}
+	if !strings.HasSuffix(prefix, "/") {
+		prefix += "/"
+	}
+	if s.cdnURL != "" {
+		return fmt.Sprintf("%s/%s%s", strings.TrimSuffix(s.cdnURL, "/"), prefix, fileName)
+	}
+	return fmt.Sprintf("https://%s.s3.amazonaws.com/%s%s", s.bucketName, prefix, fileName)
+}
+
+// GetPresignedGetURL generates a presigned GET URL for reading an object.
+// Used to give temporary read access to private S3 objects (e.g. bill images).
+func (s *ImageService) GetPresignedGetURL(ctx context.Context, s3Key string, expiresIn time.Duration) (string, error) {
+	reqParams := make(url.Values)
+	presignedURL, err := s.s3Client.PresignedGetObject(ctx, s.bucketName, s3Key, expiresIn, reqParams)
+	if err != nil {
+		return "", fmt.Errorf("failed to presign GET URL: %w", err)
+	}
+	return presignedURL.String(), nil
+}
+
+// DeleteWithPrefix deletes an object from S3 using a configurable prefix.
+func (s *ImageService) DeleteWithPrefix(ctx context.Context, fileName, prefix string) error {
+	if prefix == "" {
+		prefix = "payments/"
+	}
+	if !strings.HasSuffix(prefix, "/") {
+		prefix += "/"
+	}
+	key := fmt.Sprintf("%s%s", prefix, fileName)
+	err := s.s3Client.RemoveObject(ctx, s.bucketName, key, minio.RemoveObjectOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to delete object: %w", err)
+	}
+	return nil
 }

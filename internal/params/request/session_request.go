@@ -67,10 +67,12 @@ type UpdateParticipantRequest struct {
 // per-participant assignment was silently dropped at the handler
 // boundary and every bill was treated as everyone's.
 type AddBillItemRequest struct {
-	Description    string   `json:"description" validate:"required,min=1,max=200"`
-	Amount         float64  `json:"amount" validate:"required,gt=0"`
-	Category       *string  `json:"category,omitempty"`
-	ParticipantIDs []string `json:"participant_ids,omitempty" validate:"omitempty,dive,uuid"`
+	Description            string   `json:"description" validate:"required,min=1,max=200"`
+	Amount                 float64  `json:"amount" validate:"required,gt=0"`
+	Category               *string  `json:"category,omitempty"`
+	ParticipantIDs         []string `json:"participant_ids,omitempty" validate:"omitempty,dive,uuid"`
+	IncludesServiceCharge  *bool    `json:"includes_service_charge,omitempty"`
+	IncludesTax            *bool    `json:"includes_tax,omitempty"`
 }
 
 // UpdateBillItemRequest represents a request to update a bill item.
@@ -79,8 +81,10 @@ type AddBillItemRequest struct {
 // "absent (don't touch assignments)" and "explicit empty array
 // (reset to everyone)". Same drop-at-boundary bug applied here.
 type UpdateBillItemRequest struct {
-	Description    string    `json:"description" validate:"omitempty,min=1,max=500"`
-	Amount         float64   `json:"amount" validate:"omitempty,gt=0"`
-	Category       string    `json:"category,omitempty"`
-	ParticipantIDs *[]string `json:"participant_ids,omitempty" validate:"omitempty,dive,uuid"`
+	Description            string    `json:"description" validate:"omitempty,min=1,max=500"`
+	Amount                 float64   `json:"amount" validate:"omitempty,gt=0"`
+	Category               string    `json:"category,omitempty"`
+	ParticipantIDs         *[]string `json:"participant_ids,omitempty" validate:"omitempty,dive,uuid"`
+	IncludesServiceCharge  *bool     `json:"includes_service_charge,omitempty"`
+	IncludesTax            *bool     `json:"includes_tax,omitempty"`
 }

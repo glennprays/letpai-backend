@@ -16,20 +16,24 @@ import (
 //   - non-nil, empty slice    → clear assignments (apply to everyone)
 //   - non-nil, populated      → replace assignments with the given list
 type UpdateBillItemRequest struct {
-	Description    string    `json:"description" validate:"omitempty,min=1,max=500"`
-	Amount         float64   `json:"amount" validate:"omitempty,gt=0"`
-	Category       string    `json:"category,omitempty"`
-	ParticipantIDs *[]string `json:"participant_ids,omitempty" validate:"omitempty,dive,uuid"`
+	Description            string    `json:"description" validate:"omitempty,min=1,max=500"`
+	Amount                 float64   `json:"amount" validate:"omitempty,gt=0"`
+	Category               string    `json:"category,omitempty"`
+	ParticipantIDs         *[]string `json:"participant_ids,omitempty" validate:"omitempty,dive,uuid"`
+	IncludesServiceCharge  *bool     `json:"includes_service_charge,omitempty"`
+	IncludesTax            *bool     `json:"includes_tax,omitempty"`
 }
 
 // UpdateBillItemResponse represents response after updating a bill item
 type UpdateBillItemResponse struct {
-	BillItemID     string   `json:"bill_item_id"`
-	Description    string   `json:"description"`
-	Amount         float64  `json:"amount"`
-	Category       *string  `json:"category,omitempty"`
-	ParticipantIDs []string `json:"participant_ids"`
-	UpdatedAt      string   `json:"updated_at"`
+	BillItemID            string   `json:"bill_item_id"`
+	Description           string   `json:"description"`
+	Amount                float64  `json:"amount"`
+	Category              *string  `json:"category,omitempty"`
+	ParticipantIDs        []string `json:"participant_ids"`
+	IncludesServiceCharge bool     `json:"includes_service_charge"`
+	IncludesTax           bool     `json:"includes_tax"`
+	UpdatedAt             string   `json:"updated_at"`
 }
 
 // UpdateBillItemUseCase handles updating a bill item
@@ -92,6 +96,14 @@ func (uc *UpdateBillItemUseCase) Execute(ctx context.Context, userID, sessionID,
 		billItem.ParticipantIDs = resolved
 	}
 
+	// Fee flags: nil means "leave unchanged" (same pointer semantics).
+	if req.IncludesServiceCharge != nil {
+		billItem.IncludesServiceCharge = *req.IncludesServiceCharge
+	}
+	if req.IncludesTax != nil {
+		billItem.IncludesTax = *req.IncludesTax
+	}
+
 	if err := uc.billItemRepo.Update(ctx, billItem); err != nil {
 		return nil, err
 	}
@@ -119,12 +131,14 @@ func (uc *UpdateBillItemUseCase) Execute(ctx context.Context, userID, sessionID,
 	}
 
 	return &UpdateBillItemResponse{
-		BillItemID:     billItem.BillItemID.String(),
-		Description:    billItem.Description,
-		Amount:         billItem.Amount,
-		Category:       billItem.Category,
-		ParticipantIDs: pidStrs,
-		UpdatedAt:      billItem.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		BillItemID:            billItem.BillItemID.String(),
+		Description:           billItem.Description,
+		Amount:                billItem.Amount,
+		Category:              billItem.Category,
+		ParticipantIDs:        pidStrs,
+		IncludesServiceCharge: billItem.IncludesServiceCharge,
+		IncludesTax:           billItem.IncludesTax,
+		UpdatedAt:             billItem.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	}, nil
 }
 
