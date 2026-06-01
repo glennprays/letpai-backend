@@ -197,6 +197,23 @@ func (uc *CalculateSplitsUseCase) Execute(ctx context.Context, userID, sessionID
 		return nil, err
 	}
 
+	// Update session total_amount to include fees so the frontend
+	// shows a consistent grand total everywhere (dashboard, session
+	// detail, participant pages).
+	if hasFees {
+		totalSc := 0.0
+		totalTax := 0.0
+		for _, fb := range feeBreakdowns {
+			totalSc += fb.ServiceChargeShare
+			totalTax += fb.TaxShare
+		}
+		grandTotal := billTotal + totalSc + totalTax
+		session.SetTotal(grandTotal)
+		if err := uc.sessionRepo.Update(ctx, session); err != nil {
+			return nil, err
+		}
+	}
+
 	avg := 0.0
 	if len(orderedIDs) > 0 {
 		avg = math.Round((billTotal/float64(len(orderedIDs)))*100) / 100
