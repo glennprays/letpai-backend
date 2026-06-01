@@ -12,18 +12,26 @@ func NewHTTPLogger(log *log.Logger) fiber.Handler {
 		requestID := GetTraceID(c)
 		start := time.Now()
 
-		// Process request
 		err := c.Next()
 
 		latency := time.Since(start)
 
-		log.Info(requestID, "http request", map[string]any{
-			"status":  c.Response().StatusCode(),
-			"method":  c.Method(),
-			"path":    c.Path(),
-			"ip":      c.IP(),
-			"latency": latency.String(),
-		})
+		fields := map[string]any{
+			"status":     c.Response().StatusCode(),
+			"method":     c.Method(),
+			"path":       c.Path(),
+			"ip":         c.IP(),
+			"latency":    latency.String(),
+			"req_bytes":  len(c.Request().Body()),
+			"resp_bytes": len(c.Response().Body()),
+		}
+		// User ID lands here after the auth middleware runs; absent for
+		// unauthenticated routes, which is fine.
+		if uid := c.Locals("user_id"); uid != nil {
+			fields["user_id"] = uid
+		}
+
+		log.Info(requestID, "http request", fields)
 
 		return err
 	}

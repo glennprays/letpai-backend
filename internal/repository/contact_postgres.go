@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"strconv"
 
 	"github.com/glennprays/letpai-backend/domain"
 	"github.com/glennprays/letpai-backend/domain/entity"
@@ -207,19 +208,19 @@ func (r *PostgresContactRepository) FindAll(ctx context.Context, userID string, 
 	argIndex := 2
 
 	if opts.GroupID != nil {
-		whereConditions = append(whereConditions, "c.group_id = $"+string(rune('0'+argIndex)))
+		whereConditions = append(whereConditions, "c.group_id = $"+strconv.Itoa(argIndex))
 		args = append(args, *opts.GroupID)
 		argIndex++
 	}
 
 	if opts.IsFavorite != nil {
-		whereConditions = append(whereConditions, "c.is_favorite = $"+string(rune('0'+argIndex)))
+		whereConditions = append(whereConditions, "c.is_favorite = $"+strconv.Itoa(argIndex))
 		args = append(args, *opts.IsFavorite)
 		argIndex++
 	}
 
 	if opts.Search != nil && *opts.Search != "" {
-		whereConditions = append(whereConditions, "(c.name ILIKE $"+string(rune('0'+argIndex))+" OR c.whatsapp_number ILIKE $"+string(rune('0'+argIndex+1))+")")
+		whereConditions = append(whereConditions, "(c.name ILIKE $"+strconv.Itoa(argIndex)+" OR c.whatsapp_number ILIKE $"+strconv.Itoa(argIndex+1)+")")
 		searchPattern := "%" + *opts.Search + "%"
 		args = append(args, searchPattern, searchPattern)
 		argIndex += 2
@@ -265,7 +266,7 @@ func (r *PostgresContactRepository) FindAll(ctx context.Context, userID string, 
 		LEFT JOIN contact_groups g ON c.group_id = g.group_id AND g.deleted_at IS NULL
 		WHERE ` + whereClause + `
 		ORDER BY c.` + opts.SortBy + ` ` + strings.ToUpper(opts.SortOrder) + `
-		LIMIT $` + string(rune('0'+argIndex)) + ` OFFSET $` + string(rune('0'+argIndex+1))
+		LIMIT $` + strconv.Itoa(argIndex) + ` OFFSET $` + strconv.Itoa(argIndex+1)
 	args = append(args, opts.Limit, offset)
 
 	rows, err := r.db.QueryContext(ctx, dataQuery, args...)
@@ -413,7 +414,10 @@ func (r *PostgresContactRepository) BulkDelete(ctx context.Context, contactIDs [
 	return nil
 }
 
-// BulkAddToGroup adds multiple contacts to a group
+// BulkAddToGroup adds multiple contacts to a group.
+// Scoped by both contact ownership (user_id) and group ownership (the EXISTS
+// subquery) — otherwise a user could move their contacts into another user's
+// group by guessing the group UUID.
 func (r *PostgresContactRepository) BulkAddToGroup(ctx context.Context, contactIDs []string, groupID string, userID string) error {
 	if len(contactIDs) == 0 {
 		return nil
@@ -423,6 +427,10 @@ func (r *PostgresContactRepository) BulkAddToGroup(ctx context.Context, contactI
 		UPDATE contacts
 		SET group_id = $1, updated_at = NOW()
 		WHERE contact_id = ANY($2) AND user_id = $3 AND deleted_at IS NULL
+		  AND EXISTS (
+		    SELECT 1 FROM contact_groups
+		    WHERE group_id = $1 AND user_id = $3 AND deleted_at IS NULL
+		  )
 	`
 
 	result, err := r.db.ExecContext(ctx, query, groupID, contactIDs, userID)

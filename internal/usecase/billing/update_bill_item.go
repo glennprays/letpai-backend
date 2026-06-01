@@ -6,38 +6,53 @@ import (
 
 	"github.com/glennprays/letpai-backend/domain"
 	"github.com/glennprays/letpai-backend/domain/ports"
+	"github.com/google/uuid"
 )
 
-// UpdateBillItemRequest represents a request to update a bill item
+// UpdateBillItemRequest represents a request to update a bill item.
+//
+// ParticipantIDs is a nullable pointer:
+//   - nil (absent from JSON)  → keep existing assignments untouched
+//   - non-nil, empty slice    → clear assignments (apply to everyone)
+//   - non-nil, populated      → replace assignments with the given list
 type UpdateBillItemRequest struct {
-	Description string  `json:"description" validate:"omitempty,min=1,max=500"`
-	Amount      float64 `json:"amount" validate:"omitempty,gt=0"`
-	Category    string  `json:"category,omitempty"`
+	Description            string    `json:"description" validate:"omitempty,min=1,max=500"`
+	Amount                 float64   `json:"amount" validate:"omitempty,gt=0"`
+	Category               string    `json:"category,omitempty"`
+	ParticipantIDs         *[]string `json:"participant_ids,omitempty" validate:"omitempty,dive,uuid"`
+	IncludesServiceCharge  *bool     `json:"includes_service_charge,omitempty"`
+	IncludesTax            *bool     `json:"includes_tax,omitempty"`
 }
 
 // UpdateBillItemResponse represents response after updating a bill item
 type UpdateBillItemResponse struct {
-	BillItemID  string  `json:"bill_item_id"`
-	Description string  `json:"description"`
-	Amount      float64 `json:"amount"`
-	Category    *string `json:"category,omitempty"`
-	UpdatedAt   string  `json:"updated_at"`
+	BillItemID            string   `json:"bill_item_id"`
+	Description           string   `json:"description"`
+	Amount                float64  `json:"amount"`
+	Category              *string  `json:"category,omitempty"`
+	ParticipantIDs        []string `json:"participant_ids"`
+	IncludesServiceCharge bool     `json:"includes_service_charge"`
+	IncludesTax           bool     `json:"includes_tax"`
+	UpdatedAt             string   `json:"updated_at"`
 }
 
 // UpdateBillItemUseCase handles updating a bill item
 type UpdateBillItemUseCase struct {
-	billItemRepo ports.BillItemRepository
-	sessionRepo  ports.SessionRepository
+	billItemRepo    ports.BillItemRepository
+	sessionRepo     ports.SessionRepository
+	participantRepo ports.ParticipantRepository
 }
 
 // NewUpdateBillItemUseCase creates a new update bill item use case
 func NewUpdateBillItemUseCase(
 	billItemRepo ports.BillItemRepository,
 	sessionRepo ports.SessionRepository,
+	participantRepo ports.ParticipantRepository,
 ) *UpdateBillItemUseCase {
 	return &UpdateBillItemUseCase{
-		billItemRepo: billItemRepo,
-		sessionRepo:  sessionRepo,
+		billItemRepo:    billItemRepo,
+		sessionRepo:     sessionRepo,
+		participantRepo: participantRepo,
 	}
 }
 
@@ -71,6 +86,24 @@ func (uc *UpdateBillItemUseCase) Execute(ctx context.Context, userID, sessionID,
 		billItem.Category = &req.Category
 	}
 
+	// ParticipantIDs is intentionally a pointer: nil means "untouched",
+	// non-nil empty means "reset to everyone".
+	if req.ParticipantIDs != nil {
+		resolved, err := uc.resolveParticipants(ctx, sessionID, *req.ParticipantIDs)
+		if err != nil {
+			return nil, err
+		}
+		billItem.ParticipantIDs = resolved
+	}
+
+	// Fee flags: nil means "leave unchanged" (same pointer semantics).
+	if req.IncludesServiceCharge != nil {
+		billItem.IncludesServiceCharge = *req.IncludesServiceCharge
+	}
+	if req.IncludesTax != nil {
+		billItem.IncludesTax = *req.IncludesTax
+	}
+
 	if err := uc.billItemRepo.Update(ctx, billItem); err != nil {
 		return nil, err
 	}
@@ -92,11 +125,48 @@ func (uc *UpdateBillItemUseCase) Execute(ctx context.Context, userID, sessionID,
 		return nil, err
 	}
 
+	pidStrs := make([]string, 0, len(billItem.ParticipantIDs))
+	for _, id := range billItem.ParticipantIDs {
+		pidStrs = append(pidStrs, id.String())
+	}
+
 	return &UpdateBillItemResponse{
-		BillItemID:  billItem.BillItemID.String(),
-		Description: billItem.Description,
-		Amount:      billItem.Amount,
-		Category:    billItem.Category,
-		UpdatedAt:   billItem.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		BillItemID:            billItem.BillItemID.String(),
+		Description:           billItem.Description,
+		Amount:                billItem.Amount,
+		Category:              billItem.Category,
+		ParticipantIDs:        pidStrs,
+		IncludesServiceCharge: billItem.IncludesServiceCharge,
+		IncludesTax:           billItem.IncludesTax,
+		UpdatedAt:             billItem.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	}, nil
+}
+
+// resolveParticipants validates the incoming list of participant_ids
+// against the session's actual participants. Empty input is allowed and
+// represents the legacy "everyone" assignment.
+func (uc *UpdateBillItemUseCase) resolveParticipants(ctx context.Context, sessionID string, ids []string) ([]uuid.UUID, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	participants, err := uc.participantRepo.FindBySessionID(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	valid := make(map[string]bool, len(participants))
+	for _, p := range participants {
+		valid[p.ParticipantID.String()] = true
+	}
+	out := make([]uuid.UUID, 0, len(ids))
+	for _, id := range ids {
+		if !valid[id] {
+			return nil, domain.NewError(domain.ErrBadRequest, errors.New("participant_id does not belong to this session"))
+		}
+		u, err := uuid.Parse(id)
+		if err != nil {
+			return nil, domain.NewError(domain.ErrBadRequest, errors.New("invalid participant_id"))
+		}
+		out = append(out, u)
+	}
+	return out, nil
 }

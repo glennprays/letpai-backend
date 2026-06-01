@@ -45,9 +45,6 @@ RUN apt-get update && apt-get install -y \
 # Copy the compiled Go binary from the build stage
 COPY --from=builder /app/main /main
 
-# Copy the template directory from the context to the final image
-COPY template /template
-
 # Copy CA certificates from the certs-tzdata stage
 COPY --from=certs-tzdata /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 

@@ -8,12 +8,12 @@ package infrastructure
 
 import (
 	"github.com/glennprays/letpai-backend/config"
-	"github.com/glennprays/letpai-backend/domain/ports"
 	"github.com/glennprays/letpai-backend/internal/handler"
 	"github.com/glennprays/letpai-backend/internal/repository"
 	"github.com/glennprays/letpai-backend/internal/router"
 	"github.com/glennprays/letpai-backend/internal/service"
 	"github.com/glennprays/letpai-backend/internal/usecase/admin"
+	"github.com/glennprays/letpai-backend/internal/usecase/admintemplates"
 	"github.com/glennprays/letpai-backend/internal/usecase/auth"
 	"github.com/glennprays/letpai-backend/internal/usecase/billing"
 	"github.com/glennprays/letpai-backend/internal/usecase/contact"
@@ -47,33 +47,47 @@ func InitializeApp() (*App, error) {
 	}
 	healthHandler := handler.NewHealthHandler()
 	userRepository := repository.NewPostgresUserRepository(db)
-	otpRepository := repository.NewPostgresOTPRepository(db)
+	client, err := NewRedisConnection(configConfig)
+	if err != nil {
+		return nil, err
+	}
+	otpRepository := repository.NewRedisOTPRepository(client)
 	passwordService := NewPasswordService()
 	otpService := NewOTPService(configConfig)
-	whatsAppConfigRepository := repository.NewPostgresWhatsAppConfigRepository(db)
-	whatsAppService := NewWhatsAppService(configConfig, whatsAppConfigRepository)
+	whatsAppService := NewWhatsAppService(configConfig)
 	registerUserUseCase := auth.NewRegisterUserUseCase(userRepository, otpRepository, passwordService, otpService, whatsAppService)
 	jwtService := NewJWTService(configConfig)
 	verifyOTPUseCase := auth.NewVerifyOTPUseCase(userRepository, otpRepository, jwtService, otpService)
 	loginUserUseCase := auth.NewLoginUserUseCase(userRepository, passwordService, jwtService)
 	logoutUserUseCase := auth.NewLogoutUserUseCase(jwtService)
 	updateProfileUseCase := auth.NewUpdateProfileUseCase(userRepository)
-	authHandler := handler.NewAuthHandler(registerUserUseCase, verifyOTPUseCase, loginUserUseCase, logoutUserUseCase, updateProfileUseCase)
+	forgotPasswordUseCase := auth.NewForgotPasswordUseCase(userRepository, otpRepository, otpService, whatsAppService)
+	authHandler := handler.NewAuthHandler(registerUserUseCase, verifyOTPUseCase, loginUserUseCase, logoutUserUseCase, updateProfileUseCase, forgotPasswordUseCase)
 	adminRepository := repository.NewPostgresAdminRepository(db)
-	initiateLoginUseCase := admin.NewInitiateLoginUseCase(adminRepository, otpRepository, otpService)
+	initiateLoginUseCase := admin.NewInitiateLoginUseCase(adminRepository, otpRepository, otpService, whatsAppService)
 	adminVerifyOTPUseCase := admin.NewVerifyOTPUseCase(adminRepository, otpRepository, jwtService)
+	loginUseCase := admin.NewLoginUseCase(adminRepository, passwordService, jwtService)
 	getProfileUseCase := admin.NewGetProfileUseCase(adminRepository)
+	adminUpdateProfileUseCase := admin.NewUpdateProfileUseCase(adminRepository)
 	setupPasswordUseCase := admin.NewSetupPasswordUseCase(adminRepository, passwordService)
 	listAdminsUseCase := admin.NewListAdminsUseCase(adminRepository)
-	createAdminUseCase := admin.NewCreateAdminUseCase(adminRepository)
+	createAdminUseCase := admin.NewCreateAdminUseCase(adminRepository, passwordService)
 	updateAdminUseCase := admin.NewUpdateAdminUseCase(adminRepository)
 	deleteAdminUseCase := admin.NewDeleteAdminUseCase(adminRepository)
-	getStatusUseCase := admin.NewGetStatusUseCase(whatsAppConfigRepository)
+	getStatusUseCase := admin.NewGetStatusUseCase(whatsAppService)
 	getQRCodeUseCase := admin.NewGetQRCodeUseCase(whatsAppService)
 	logoutUseCase := admin.NewLogoutUseCase(adminRepository)
-	updateConfigUseCase := admin.NewUpdateConfigUseCase(whatsAppConfigRepository)
-	adminHandler := handler.NewAdminHandler(initiateLoginUseCase, adminVerifyOTPUseCase, getProfileUseCase, setupPasswordUseCase, listAdminsUseCase, createAdminUseCase, updateAdminUseCase, deleteAdminUseCase, getStatusUseCase, getQRCodeUseCase, logoutUseCase, updateConfigUseCase)
-	whatsAppWebhookHandler := handler.NewWhatsAppWebhookHandler(whatsAppService)
+	needsSetupUseCase := admin.NewNeedsSetupUseCase(adminRepository)
+	bootstrapUseCase := admin.NewBootstrapUseCase(adminRepository, passwordService, jwtService)
+	adminHandler := handler.NewAdminHandler(initiateLoginUseCase, adminVerifyOTPUseCase, loginUseCase, getProfileUseCase, adminUpdateProfileUseCase, setupPasswordUseCase, listAdminsUseCase, createAdminUseCase, updateAdminUseCase, deleteAdminUseCase, getStatusUseCase, getQRCodeUseCase, logoutUseCase, needsSetupUseCase, bootstrapUseCase)
+	messageTemplateRepository := repository.NewPostgresMessageTemplateRepository(db)
+	listTemplatesUseCase := admintemplates.NewListTemplatesUseCase(messageTemplateRepository)
+	updateTemplateUseCase := admintemplates.NewUpdateTemplateUseCase(messageTemplateRepository)
+	templateRenderer := service.NewTemplateRenderer(messageTemplateRepository)
+	testSendUseCase := admintemplates.NewTestSendUseCase(messageTemplateRepository, templateRenderer, whatsAppService)
+	adminTemplatesHandler := handler.NewAdminTemplatesHandler(listTemplatesUseCase, updateTemplateUseCase, testSendUseCase)
+	whatsAppConfigRepository := repository.NewPostgresWhatsAppConfigRepository(db)
+	whatsAppWebhookHandler := handler.NewWhatsAppWebhookHandler(configConfig, whatsAppService, whatsAppConfigRepository)
 	contactGroupRepository := repository.NewPostgresContactGroupRepository(db)
 	createGroupUseCase := contactgroup.NewCreateGroupUseCase(contactGroupRepository)
 	getGroupsUseCase := contactgroup.NewGetGroupsUseCase(contactGroupRepository)
@@ -94,43 +108,52 @@ func InitializeApp() (*App, error) {
 	getSessionsUseCase := session.NewGetSessionsUseCase(sessionRepository)
 	participantRepository := repository.NewPostgresParticipantRepository(db)
 	billItemRepository := repository.NewPostgresBillItemRepository(db)
-	getSessionDetailUseCase := session.NewGetSessionDetailUseCase(sessionRepository, participantRepository, billItemRepository)
-	updateSessionUseCase := session.NewUpdateSessionUseCase(sessionRepository)
-	cancelSessionUseCase := session.NewCancelSessionUseCase(sessionRepository)
-	addParticipantsUseCase := participant.NewAddParticipantsUseCase(sessionRepository, participantRepository, contactRepository)
-	removeParticipantUseCase := participant.NewRemoveParticipantUseCase(sessionRepository, participantRepository)
-	updateParticipantUseCase := participant.NewUpdateParticipantUseCase(sessionRepository, participantRepository)
-	addBillItemUseCase := billing.NewAddBillItemUseCase(sessionRepository, billItemRepository)
-	updateBillItemUseCase := billing.NewUpdateBillItemUseCase(billItemRepository, sessionRepository)
-	deleteBillItemUseCase := billing.NewDeleteBillItemUseCase(billItemRepository, sessionRepository)
-	calculateSplitsUseCase := billing.NewCalculateSplitsUseCase(sessionRepository, participantRepository, billItemRepository)
-	sessionHandler := handler.NewSessionHandler(createSessionUseCase, getSessionsUseCase, getSessionDetailUseCase, updateSessionUseCase, cancelSessionUseCase, addParticipantsUseCase, removeParticipantUseCase, updateParticipantUseCase, addBillItemUseCase, updateBillItemUseCase, deleteBillItemUseCase, calculateSplitsUseCase)
+	notificationLogRepository := repository.NewPostgresNotificationLogRepository(db)
+	sessionBankAccountRepository := repository.NewPostgresSessionBankAccountRepository(db)
+	billImageRepository := repository.NewPostgresBillImageRepository(db)
 	imageService, err := NewImageServiceProvider(configConfig)
 	if err != nil {
 		return nil, err
 	}
+	getSessionDetailUseCase := session.NewGetSessionDetailUseCase(sessionRepository, participantRepository, billItemRepository, notificationLogRepository, sessionBankAccountRepository, billImageRepository, imageService)
+	updateSessionUseCase := session.NewUpdateSessionUseCase(sessionRepository)
+	cancelSessionUseCase := session.NewCancelSessionUseCase(sessionRepository)
+	calculateSplitsUseCase := billing.NewCalculateSplitsUseCase(sessionRepository, participantRepository, billItemRepository)
+	addParticipantsUseCase := participant.NewAddParticipantsUseCase(sessionRepository, participantRepository, contactRepository, billItemRepository, calculateSplitsUseCase)
+	removeParticipantUseCase := participant.NewRemoveParticipantUseCase(sessionRepository, participantRepository, calculateSplitsUseCase)
+	updateParticipantUseCase := participant.NewUpdateParticipantUseCase(sessionRepository, participantRepository)
+	addBillItemUseCase := billing.NewAddBillItemUseCase(sessionRepository, billItemRepository, participantRepository)
+	updateBillItemUseCase := billing.NewUpdateBillItemUseCase(billItemRepository, sessionRepository, participantRepository)
+	deleteBillItemUseCase := billing.NewDeleteBillItemUseCase(billItemRepository, sessionRepository, calculateSplitsUseCase)
+	replaceBankAccountsUseCase := session.NewReplaceBankAccountsUseCase(sessionRepository, sessionBankAccountRepository)
+	uploadBillImageUseCase := billing.NewUploadBillImageUseCase(sessionRepository, billImageRepository, imageService)
+	getBillImagesUseCase := billing.NewGetBillImagesUseCase(sessionRepository, billImageRepository)
+	getBillImageSignedUrlUseCase := billing.NewGetBillImageSignedUrlUseCase(sessionRepository, billImageRepository, imageService)
+	deleteBillImageUseCase := billing.NewDeleteBillImageUseCase(sessionRepository, billImageRepository, imageService)
+	updateFeeConfigUseCase := billing.NewUpdateFeeConfigUseCase(sessionRepository)
+	sessionHandler := handler.NewSessionHandler(createSessionUseCase, getSessionsUseCase, getSessionDetailUseCase, updateSessionUseCase, cancelSessionUseCase, addParticipantsUseCase, removeParticipantUseCase, updateParticipantUseCase, addBillItemUseCase, updateBillItemUseCase, deleteBillItemUseCase, calculateSplitsUseCase, replaceBankAccountsUseCase, uploadBillImageUseCase, getBillImagesUseCase, getBillImageSignedUrlUseCase, deleteBillImageUseCase, updateFeeConfigUseCase)
 	submitPaymentUseCase := payment.NewSubmitPaymentUseCase(participantRepository, sessionRepository, imageService)
 	approvePaymentUseCase := payment.NewApprovePaymentUseCase(participantRepository, sessionRepository)
-	notificationLogRepository := repository.NewPostgresNotificationLogRepository(db)
 	rejectPaymentUseCase := payment.NewRejectPaymentUseCase(participantRepository, sessionRepository, contactRepository, whatsAppService, notificationLogRepository)
 	bulkApproveUseCase := payment.NewBulkApproveUseCase(participantRepository, sessionRepository)
 	bulkRejectUseCase := payment.NewBulkRejectUseCase(participantRepository, sessionRepository, contactRepository, whatsAppService, notificationLogRepository)
-	getPaymentPageUseCase := payment.NewGetPaymentPageUseCase(participantRepository, sessionRepository, billItemRepository, contactRepository)
+	getPaymentPageUseCase := payment.NewGetPaymentPageUseCase(participantRepository, sessionRepository, billItemRepository, contactRepository, sessionBankAccountRepository, billImageRepository, imageService)
 	getPaymentProofUseCase := payment.NewGetPaymentProofUseCase(participantRepository)
-	paymentHandler := handler.NewPaymentHandler(submitPaymentUseCase, approvePaymentUseCase, rejectPaymentUseCase, bulkApproveUseCase, bulkRejectUseCase, getPaymentPageUseCase, getPaymentProofUseCase)
-	sendNotificationsUseCase := notification.NewSendNotificationsUseCase(sessionRepository, participantRepository, contactRepository, billItemRepository, whatsAppService, notificationLogRepository)
-	client, err := NewRedisConnection(configConfig)
-	if err != nil {
-		return nil, err
-	}
+	markPaidWithoutProofUseCase := payment.NewMarkPaidWithoutProofUseCase(sessionRepository, participantRepository)
+	paymentHandler := handler.NewPaymentHandler(submitPaymentUseCase, approvePaymentUseCase, rejectPaymentUseCase, bulkApproveUseCase, bulkRejectUseCase, getPaymentPageUseCase, getPaymentProofUseCase, markPaidWithoutProofUseCase)
+	asyncNotifier := service.NewAsyncNotifier(whatsAppService, notificationLogRepository)
+	string2 := NewAppURL(configConfig)
+	sendNotificationsUseCase := notification.NewSendNotificationsUseCase(sessionRepository, participantRepository, contactRepository, billItemRepository, userRepository, asyncNotifier, templateRenderer, string2)
 	rateLimitService := NewRateLimitService(client)
-	sendReminderUseCase := notification.NewSendReminderUseCase(participantRepository, sessionRepository, contactRepository, whatsAppService, rateLimitService)
-	bulkReminderUseCase := notification.NewBulkReminderUseCase(participantRepository, sessionRepository, contactRepository, whatsAppService, rateLimitService)
-	notificationHandler := handler.NewNotificationHandler(sendNotificationsUseCase, sendReminderUseCase, bulkReminderUseCase)
+	sendReminderUseCase := notification.NewSendReminderUseCase(participantRepository, sessionRepository, contactRepository, userRepository, asyncNotifier, templateRenderer, rateLimitService, string2)
+	bulkReminderUseCase := notification.NewBulkReminderUseCase(participantRepository, sessionRepository, contactRepository, userRepository, asyncNotifier, templateRenderer, rateLimitService, string2)
+	reminderStatusUseCase := notification.NewReminderStatusUseCase(rateLimitService)
+	retryNotificationUseCase := notification.NewRetryNotificationUseCase(participantRepository, sessionRepository, contactRepository, billItemRepository, notificationLogRepository, userRepository, asyncNotifier, templateRenderer, rateLimitService, string2)
+	notificationHandler := handler.NewNotificationHandler(sendNotificationsUseCase, sendReminderUseCase, bulkReminderUseCase, reminderStatusUseCase, retryNotificationUseCase)
 	webhookHandler := handler.NewWebhookHandler(configConfig, notificationLogRepository)
 	getDashboardUseCase := dashboard.NewGetDashboardUseCase(sessionRepository, participantRepository)
 	dashboardHandler := handler.NewDashboardHandler(getDashboardUseCase)
-	routerRouter := router.NewRouter(logLogger, healthHandler, authHandler, adminHandler, whatsAppWebhookHandler, contactGroupHandler, contactHandler, sessionHandler, paymentHandler, notificationHandler, webhookHandler, dashboardHandler, jwtService, rateLimitService)
+	routerRouter := router.NewRouter(logLogger, healthHandler, authHandler, adminHandler, adminTemplatesHandler, whatsAppWebhookHandler, contactGroupHandler, contactHandler, sessionHandler, paymentHandler, notificationHandler, webhookHandler, dashboardHandler, jwtService, rateLimitService)
 	app := &App{
 		Config: configConfig,
 		Logger: logLogger,
@@ -146,7 +169,7 @@ var CoreSet = wire.NewSet(config.Load, logger.ProviderLogger, NewPostgresConnect
 	NewRedisConnection,
 )
 
-var RepositorySet = wire.NewSet(repository.NewPostgresUserRepository, repository.NewPostgresOTPRepository, repository.NewPostgresContactGroupRepository, repository.NewPostgresContactRepository, repository.NewPostgresSessionRepository, repository.NewPostgresParticipantRepository, repository.NewPostgresBillItemRepository, repository.NewPostgresNotificationLogRepository, repository.NewPostgresWhatsAppConfigRepository, repository.NewPostgresAdminRepository, repository.NewPostgresAdminOTPVerificationRepository)
+var RepositorySet = wire.NewSet(repository.NewPostgresUserRepository, repository.NewRedisOTPRepository, repository.NewPostgresContactGroupRepository, repository.NewPostgresContactRepository, repository.NewPostgresSessionRepository, repository.NewPostgresParticipantRepository, repository.NewPostgresBillItemRepository, repository.NewPostgresBillImageRepository, repository.NewPostgresNotificationLogRepository, repository.NewPostgresWhatsAppConfigRepository, repository.NewPostgresAdminRepository, repository.NewPostgresMessageTemplateRepository, repository.NewPostgresSessionBankAccountRepository)
 
 var ServiceSet = wire.NewSet(
 	NewJWTService,
@@ -154,12 +177,12 @@ var ServiceSet = wire.NewSet(
 	NewPasswordService,
 	NewWhatsAppService,
 	NewImageServiceProvider,
-	NewRateLimitService,
+	NewRateLimitService, service.NewTemplateRenderer, service.NewAsyncNotifier,
 )
 
-var UseCaseSet = wire.NewSet(auth.NewRegisterUserUseCase, auth.NewVerifyOTPUseCase, auth.NewLoginUserUseCase, auth.NewLogoutUserUseCase, auth.NewUpdateProfileUseCase, admin.NewInitiateLoginUseCase, admin.NewVerifyOTPUseCase, admin.NewGetProfileUseCase, admin.NewSetupPasswordUseCase, admin.NewListAdminsUseCase, admin.NewCreateAdminUseCase, admin.NewUpdateAdminUseCase, admin.NewDeleteAdminUseCase, admin.NewGetStatusUseCase, admin.NewGetQRCodeUseCase, admin.NewLogoutUseCase, admin.NewUpdateConfigUseCase, contact.NewCreateContactUseCase, contact.NewGetContactsUseCase, contact.NewGetContactByIDUseCase, contact.NewUpdateContactUseCase, contact.NewDeleteContactUseCase, contact.NewBulkOperationsUseCase, contact.NewImportContactsUseCase, contactgroup.NewCreateGroupUseCase, contactgroup.NewGetGroupsUseCase, contactgroup.NewUpdateGroupUseCase, contactgroup.NewDeleteGroupUseCase, session.NewCreateSessionUseCase, session.NewGetSessionsUseCase, session.NewGetSessionDetailUseCase, session.NewUpdateSessionUseCase, session.NewCancelSessionUseCase, participant.NewAddParticipantsUseCase, participant.NewRemoveParticipantUseCase, participant.NewUpdateParticipantUseCase, participant.NewImportFromGroupUseCase, billing.NewAddBillItemUseCase, billing.NewUpdateBillItemUseCase, billing.NewDeleteBillItemUseCase, billing.NewCalculateSplitsUseCase, payment.NewSubmitPaymentUseCase, payment.NewApprovePaymentUseCase, payment.NewRejectPaymentUseCase, payment.NewBulkApproveUseCase, payment.NewBulkRejectUseCase, payment.NewGetPaymentPageUseCase, payment.NewGetPaymentProofUseCase, notification.NewSendNotificationsUseCase, notification.NewSendReminderUseCase, notification.NewBulkReminderUseCase, dashboard.NewGetDashboardUseCase)
+var UseCaseSet = wire.NewSet(auth.NewRegisterUserUseCase, auth.NewVerifyOTPUseCase, auth.NewLoginUserUseCase, auth.NewLogoutUserUseCase, auth.NewUpdateProfileUseCase, auth.NewForgotPasswordUseCase, admin.NewInitiateLoginUseCase, admin.NewVerifyOTPUseCase, admin.NewLoginUseCase, admin.NewGetProfileUseCase, admin.NewUpdateProfileUseCase, admin.NewSetupPasswordUseCase, admin.NewNeedsSetupUseCase, admin.NewBootstrapUseCase, admin.NewListAdminsUseCase, admin.NewCreateAdminUseCase, admin.NewUpdateAdminUseCase, admin.NewDeleteAdminUseCase, admin.NewGetStatusUseCase, admin.NewGetQRCodeUseCase, admin.NewLogoutUseCase, contact.NewCreateContactUseCase, contact.NewGetContactsUseCase, contact.NewGetContactByIDUseCase, contact.NewUpdateContactUseCase, contact.NewDeleteContactUseCase, contact.NewBulkOperationsUseCase, contact.NewImportContactsUseCase, contactgroup.NewCreateGroupUseCase, contactgroup.NewGetGroupsUseCase, contactgroup.NewUpdateGroupUseCase, contactgroup.NewDeleteGroupUseCase, session.NewCreateSessionUseCase, session.NewGetSessionsUseCase, session.NewGetSessionDetailUseCase, session.NewUpdateSessionUseCase, session.NewCancelSessionUseCase, session.NewReplaceBankAccountsUseCase, participant.NewAddParticipantsUseCase, participant.NewRemoveParticipantUseCase, participant.NewUpdateParticipantUseCase, participant.NewImportFromGroupUseCase, billing.NewAddBillItemUseCase, billing.NewUpdateBillItemUseCase, billing.NewDeleteBillItemUseCase, billing.NewCalculateSplitsUseCase, billing.NewUploadBillImageUseCase, billing.NewGetBillImagesUseCase, billing.NewGetBillImageSignedUrlUseCase, billing.NewDeleteBillImageUseCase, billing.NewUpdateFeeConfigUseCase, payment.NewSubmitPaymentUseCase, payment.NewApprovePaymentUseCase, payment.NewRejectPaymentUseCase, payment.NewBulkApproveUseCase, payment.NewBulkRejectUseCase, payment.NewGetPaymentPageUseCase, payment.NewGetPaymentProofUseCase, payment.NewMarkPaidWithoutProofUseCase, notification.NewSendNotificationsUseCase, notification.NewSendReminderUseCase, notification.NewBulkReminderUseCase, notification.NewReminderStatusUseCase, notification.NewRetryNotificationUseCase, admintemplates.NewListTemplatesUseCase, admintemplates.NewUpdateTemplateUseCase, admintemplates.NewTestSendUseCase, dashboard.NewGetDashboardUseCase)
 
-var HandlerSet = wire.NewSet(handler.NewHealthHandler, handler.NewAuthHandler, handler.NewAdminHandler, handler.NewWhatsAppWebhookHandler, handler.NewContactGroupHandler, handler.NewContactHandler, handler.NewSessionHandler, handler.NewPaymentHandler, handler.NewNotificationHandler, handler.NewWebhookHandler, handler.NewDashboardHandler)
+var HandlerSet = wire.NewSet(handler.NewHealthHandler, handler.NewAuthHandler, handler.NewAdminHandler, handler.NewAdminTemplatesHandler, handler.NewWhatsAppWebhookHandler, handler.NewContactGroupHandler, handler.NewContactHandler, handler.NewSessionHandler, handler.NewPaymentHandler, handler.NewNotificationHandler, handler.NewWebhookHandler, handler.NewDashboardHandler)
 
 var ApiSet = wire.NewSet(
 	HandlerSet, router.NewRouter,
@@ -185,12 +208,13 @@ func NewPasswordService() *service.PasswordService {
 	return service.NewPasswordService(12)
 }
 
-// NewWhatsAppService creates a new WhatsApp service with config values
-func NewWhatsAppService(cfg *config.Config, configRepo ports.WhatsAppConfigRepository) *service.WhatsAppService {
+// NewWhatsAppService creates a new WhatsApp service with config values.
+// No DB dependency: the service is a pass-through to the WAGA SDK and
+// stores no state locally.
+func NewWhatsAppService(cfg *config.Config) *service.WhatsAppService {
 	return service.NewWhatsAppService(
 		cfg.WhatsAppGatewayURL,
 		cfg.WhatsAppAPIKey,
-		configRepo,
 	)
 }
 
@@ -218,4 +242,10 @@ func NewRateLimitService(redisClient *redis.Client) *service.RateLimitService {
 // NewImageServiceProvider creates a new image service provider that handles initialization errors
 func NewImageServiceProvider(cfg *config.Config) (*service.ImageService, error) {
 	return NewImageService(cfg)
+}
+
+// NewAppURL provides the application URL string from config. Wire needs a
+// named provider because multiple constructors take a plain `string` param.
+func NewAppURL(cfg *config.Config) string {
+	return cfg.AppURL
 }

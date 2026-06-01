@@ -5,6 +5,7 @@ import (
 	"github.com/glennprays/letpai-backend/internal/middleware"
 	"github.com/glennprays/letpai-backend/internal/params/request"
 	"github.com/glennprays/letpai-backend/internal/params/response"
+	"github.com/glennprays/letpai-backend/internal/validation"
 	"github.com/glennprays/letpai-backend/internal/usecase/contactgroup"
 	"github.com/gofiber/fiber/v2"
 )
@@ -38,6 +39,10 @@ func (h *ContactGroupHandler) Create(c *fiber.Ctx) error {
 
 	var req request.CreateContactGroupRequest
 	if err := c.BodyParser(&req); err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+	if err := validation.Struct(&req); err != nil {
 		apiErr := httperror.FromError(err)
 		return c.Status(apiErr.Status).JSON(apiErr.Response())
 	}
@@ -100,6 +105,10 @@ func (h *ContactGroupHandler) Update(c *fiber.Ctx) error {
 
 	var req request.UpdateContactGroupRequest
 	if err := c.BodyParser(&req); err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+	if err := validation.Struct(&req); err != nil {
 		apiErr := httperror.FromError(err)
 		return c.Status(apiErr.Status).JSON(apiErr.Response())
 	}

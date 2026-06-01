@@ -28,6 +28,10 @@ type Config struct {
 	JWTExpiryHours   int    `mapstructure:"JWT_EXPIRY_HOURS" default:"168"` // 7 days
 	OTPExpiryMinutes int    `mapstructure:"OTP_EXPIRY_MINUTES" default:"5"`
 
+	// Public FE origin used to render the per-participant payment URL
+	// embedded in WhatsApp notifications. Without a trailing slash.
+	AppURL string `mapstructure:"APP_URL" default:"http://localhost:4001"`
+
 	WhatsAppGatewayURL    string `mapstructure:"WHATSAPP_GATEWAY_URL" default:"http://localhost:8080"`
 	WhatsAppAPIKey        string `mapstructure:"WHATSAPP_API_KEY" default:""`
 	WhatsAppWebhookSecret string `mapstructure:"WHATSAPP_WEBHOOK_SECRET" default:""`

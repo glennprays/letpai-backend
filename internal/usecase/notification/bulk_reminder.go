@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/glennprays/letpai-backend/domain"
 	"github.com/glennprays/letpai-backend/domain/ports"
+	"github.com/glennprays/letpai-backend/domain/valueobject"
 	"github.com/glennprays/letpai-backend/internal/service"
 )
 
@@ -17,7 +19,7 @@ type BulkReminderSkipped struct {
 	Reason        string `json:"reason"`
 }
 
-// BulkReminderResponse represents the response after bulk sending reminders
+// BulkReminderResponse represents the response after bulk-queueing reminders
 type BulkReminderResponse struct {
 	Message       string                `json:"message"`
 	SentCount     int                   `json:"sent_count"`
@@ -25,41 +27,46 @@ type BulkReminderResponse struct {
 	Notifications []NotificationItem    `json:"notifications,omitempty"`
 }
 
-// BulkReminderUseCase handles sending bulk reminders to unpaid participants
+// BulkReminderUseCase handles bulk-queueing reminders to unpaid participants
 type BulkReminderUseCase struct {
 	participantRepo ports.ParticipantRepository
 	sessionRepo     ports.SessionRepository
 	contactRepo     ports.ContactRepository
-	whatsappSvc     *service.WhatsAppService
+	userRepo        ports.UserRepository
+	notifier        *service.AsyncNotifier
+	renderer        *service.TemplateRenderer
 	rateLimitSvc    *service.RateLimitService
+	appURL          string
 }
 
-// NewBulkReminderUseCase creates a new bulk reminder use case
 func NewBulkReminderUseCase(
 	participantRepo ports.ParticipantRepository,
 	sessionRepo ports.SessionRepository,
 	contactRepo ports.ContactRepository,
-	whatsappSvc *service.WhatsAppService,
+	userRepo ports.UserRepository,
+	notifier *service.AsyncNotifier,
+	renderer *service.TemplateRenderer,
 	rateLimitSvc *service.RateLimitService,
+	appURL string,
 ) *BulkReminderUseCase {
 	return &BulkReminderUseCase{
 		participantRepo: participantRepo,
 		sessionRepo:     sessionRepo,
 		contactRepo:     contactRepo,
-		whatsappSvc:     whatsappSvc,
+		userRepo:        userRepo,
+		notifier:        notifier,
+		renderer:        renderer,
 		rateLimitSvc:    rateLimitSvc,
+		appURL:          strings.TrimRight(appURL, "/"),
 	}
 }
 
-// Execute sends reminders to all unpaid participants in a session
 func (uc *BulkReminderUseCase) Execute(ctx context.Context, userID, sessionID string) (*BulkReminderResponse, error) {
-	// Verify session exists and belongs to user
 	session, err := uc.sessionRepo.FindByID(ctx, sessionID, userID)
 	if err != nil {
 		return nil, err
 	}
 
-	// Get all participants for the session
 	participants, err := uc.participantRepo.FindBySessionID(ctx, sessionID)
 	if err != nil {
 		return nil, err
@@ -69,12 +76,17 @@ func (uc *BulkReminderUseCase) Execute(ctx context.Context, userID, sessionID st
 		return nil, domain.NewError(domain.ErrBadRequest, errors.New("no participants found in this session"))
 	}
 
+	// Resolve the session host's display name for MakerName.
+	makerName := "the host"
+	if host, err := uc.userRepo.FindByID(ctx, session.UserID.String()); err == nil && host.FullName != "" {
+		makerName = host.FullName
+	}
+
 	sentCount := 0
 	skipped := make([]BulkReminderSkipped, 0)
 	notifications := make([]NotificationItem, 0)
 
 	for _, participant := range participants {
-		// Skip paid participants
 		if participant.IsPaid() {
 			skipped = append(skipped, BulkReminderSkipped{
 				ParticipantID: participant.ParticipantID.String(),
@@ -83,7 +95,6 @@ func (uc *BulkReminderUseCase) Execute(ctx context.Context, userID, sessionID st
 			continue
 		}
 
-		// Check rate limit
 		canSend, retryAfter, _, _ := uc.rateLimitSvc.GetReminderStatus(ctx, participant.ParticipantID.String())
 		if !canSend {
 			skipped = append(skipped, BulkReminderSkipped{
@@ -93,7 +104,6 @@ func (uc *BulkReminderUseCase) Execute(ctx context.Context, userID, sessionID st
 			continue
 		}
 
-		// Get WhatsApp number
 		whatsappNumber := ""
 		participantName := ""
 		if participant.ContactID != nil {
@@ -115,46 +125,34 @@ func (uc *BulkReminderUseCase) Execute(ctx context.Context, userID, sessionID st
 			continue
 		}
 
-		// Format reminder message
-		message := uc.formatReminderMessage(session.Title, participantName, participant.ShareAmount)
-
-		// Send reminder and get message ID
-		messageID, err := uc.whatsappSvc.SendNotification(ctx, whatsappNumber, message)
-		if err != nil {
-			skipped = append(skipped, BulkReminderSkipped{
-				ParticipantID: participant.ParticipantID.String(),
-				Reason:        "Failed to send",
-			})
-			continue
+		vars := reminderVars{
+			ParticipantName: participantName,
+			SessionName:     session.Title,
+			MakerName:       makerName,
+			Share:           formatIDR(participant.ShareAmount),
+			URL:             uc.appURL + "/payment/" + participant.PublicSlug,
+		}
+		message, err := uc.renderer.Render(ctx, "payment_reminder", vars)
+		if err != nil || message == "" {
+			message = fallbackReminder(vars)
 		}
 
-		// Record reminder for rate limiting
+		uc.notifier.Dispatch(participant.ParticipantID, valueobject.NotificationTypeReminder, whatsappNumber, message)
 		_ = uc.rateLimitSvc.RecordReminder(ctx, participant.ParticipantID.String())
 
 		notifications = append(notifications, NotificationItem{
-			ParticipantID:     participant.ParticipantID.String(),
-			WhatsAppMessageID: messageID,
-			SentAt:            time.Now(),
+			ParticipantID: participant.ParticipantID.String(),
+			Status:        "queued",
+			QueuedAt:      time.Now(),
 		})
 
 		sentCount++
 	}
 
 	return &BulkReminderResponse{
-		Message:       fmt.Sprintf("%d reminders sent", sentCount),
+		Message:       fmt.Sprintf("%d reminders queued", sentCount),
 		SentCount:     sentCount,
 		Skipped:       skipped,
 		Notifications: notifications,
 	}, nil
-}
-
-// formatReminderMessage formats a reminder message
-func (uc *BulkReminderUseCase) formatReminderMessage(sessionName, participantName string, shareAmount float64) string {
-	return fmt.Sprintf("*Letpai - Payment Reminder*\n\n"+
-		"Hi %s!\n\n"+
-		"This is a friendly reminder about your pending payment for: *%s*\n\n"+
-		"Amount Due: *Rp%.0f*\n\n"+
-		"Please submit your payment proof at your earliest convenience.\n\n"+
-		"Thank you for using Letpai!",
-		participantName, sessionName, shareAmount)
 }

@@ -45,31 +45,39 @@ func NewSubmitPaymentUseCase(
 	}
 }
 
-// Execute submits payment proof for a participant
+// Execute submits payment proof for a participant.
+//
+// Concurrency: two simultaneous submits both pass the initial pending-check
+// and both upload an image, but only one wins the atomic
+// MarkSubmittedWithProof DB update. The loser's image is orphaned in object
+// storage — acceptable trade-off; a periodic cleanup job can collect URLs
+// not referenced by any participant.
 func (uc *SubmitPaymentUseCase) Execute(ctx context.Context, participantID string, req *SubmitPaymentRequest) (*SubmitPaymentResponse, error) {
-	// Get participant
 	participant, err := uc.participantRepo.FindByID(ctx, participantID)
 	if err != nil {
 		return nil, err
 	}
 
-	// Check if payment is still pending
+	// A host-driven "Mark as paid" closes the participant out before a
+	// proof is uploaded. Subsequent uploads should fail with a clear
+	// message rather than silently overwriting the manual closure.
+	if participant.IsPaid() && participant.PaidManually {
+		return nil, domain.NewError(domain.ErrConflict, errors.New("your host already marked this payment as complete"))
+	}
+
 	if !participant.HasPendingPayment() {
 		return nil, domain.NewError(domain.ErrBadRequest, errors.New("payment has already been submitted"))
 	}
 
-	// Get session to check expiry
 	session, err := uc.sessionRepo.FindByID(ctx, participant.SessionID.String(), "")
 	if err != nil {
 		return nil, err
 	}
 
-	// Check if session has expired
 	if session.SessionDate != nil && session.SessionDate.Before(time.Now()) {
 		return nil, domain.NewError(domain.ErrBadRequest, errors.New("this session has expired and no longer accepts payments"))
 	}
 
-	// Validate and upload image
 	if err := uc.imageService.ValidateBase64(req.ProofImage); err != nil {
 		return nil, domain.NewError(domain.ErrBadRequest, err)
 	}
@@ -79,20 +87,23 @@ func (uc *SubmitPaymentUseCase) Execute(ctx context.Context, participantID strin
 		return nil, domain.NewError(domain.ErrInternalFailure, err)
 	}
 
-	// Submit payment
-	if err := participant.SubmitPayment(uploadResult.URL); err != nil {
-		return nil, domain.NewError(domain.ErrInvalidPaymentStatusTransition, err)
-	}
-
-	// Update participant
-	if err := uc.participantRepo.Update(ctx, participant); err != nil {
+	// UploadResult.URL is the raw object reference (s3://bucket/key) — not
+	// browser-resolvable. UploadResult.PublicURL honours CDN_URL and produces
+	// the https URL we actually want stored and returned. Reading the wrong
+	// field here was leaking s3:// URIs into payment_proof_url, which then
+	// broke every <img> render on the FE.
+	claimed, err := uc.participantRepo.MarkSubmittedWithProof(ctx, participantID, uploadResult.PublicURL)
+	if err != nil {
 		return nil, err
+	}
+	if !claimed {
+		return nil, domain.NewError(domain.ErrBadRequest, errors.New("payment has already been submitted"))
 	}
 
 	return &SubmitPaymentResponse{
-		ProofID:    participant.ParticipantID.String(),
-		Status:     participant.PaymentStatus.String(),
+		ProofID:    participantID,
+		Status:     "submitted",
 		UploadedAt: uploadResult.UploadedAt.Format("2006-01-02T15:04:05Z07:00"),
-		ProofURL:   uploadResult.URL,
+		ProofURL:   uploadResult.PublicURL,
 	}, nil
 }

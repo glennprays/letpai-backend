@@ -51,20 +51,26 @@ func (s *RateLimitService) CheckReminderRateLimit(ctx context.Context, participa
 	return s.checkRateLimit(ctx, "reminder", participantID, 1, 24*time.Hour)
 }
 
-// checkRateLimit performs the actual rate limit check using Redis
+// checkRateLimit performs the actual rate limit check using Redis.
+//
+// redis_rate's `Limit` treats `Rate` as "events allowed per Period",
+// not "events per second". The previous code divided limit by
+// window.Seconds() and truncated to int — for a 1-per-24h reminder
+// that collapses to Rate=0, which the Lua-script underlying
+// redis_rate refuses, returning an error on every call. Because the
+// surrounding middleware fail-opens on errors, the limiter has been
+// effectively a no-op in staging while still emitting a 500 from
+// any direct (non-middleware) caller — which is what surfaced when
+// the new /reminder-status read started hitting the same path.
+//
+// The correct call is to pass the limit value through as the rate
+// over the given Period — `1 per 24h` becomes
+// `Limit{Rate: 1, Burst: 1, Period: 24h}`.
 func (s *RateLimitService) checkRateLimit(ctx context.Context, operation, identifier string, limit int, window time.Duration) (*RateLimitResult, error) {
 	key := fmt.Sprintf("ratelimit:%s:%s", operation, identifier)
 
-	// Calculate rate per second for the window
-	// rate = limit / window_seconds
-	ratePerSecond := float64(limit) / float64(window.Seconds())
-
-	// Create Limit with:
-	// - Rate: operations per second
-	// - Burst: max operations allowed at once (usually equals the limit for our use case)
-	// - Period: time window for rate calculation
 	rateLimit := redis_rate.Limit{
-		Rate:   int(ratePerSecond),
+		Rate:   limit,
 		Burst:  limit,
 		Period: window,
 	}
@@ -225,15 +231,32 @@ func (s *RateLimitService) GetRateLimitHeaders(result *RateLimitResult) RateLimi
 	return headers
 }
 
-// GetReminderStatus checks if a reminder can be sent and returns status info
+// GetReminderStatus checks if a reminder can be sent and returns status info.
+//
+// This is a READ — it must not consume a token, otherwise the FE's
+// page-load status fetch would itself eat the participant's single
+// allowed reminder for the next 24h. The underlying redis_rate Lua
+// script treats `AllowN(..., n=0)` as a peek (cost=0 → no-op SET),
+// returning the current `Remaining` and `RetryAfter` without
+// decrementing. The send path (POST /reminder) still goes through
+// the normal `Allow` (cost=1) via the middleware.
 func (s *RateLimitService) GetReminderStatus(ctx context.Context, participantID string) (bool, time.Duration, time.Time, error) {
-	result, err := s.CheckReminderRateLimit(ctx, participantID)
+	key := fmt.Sprintf("ratelimit:%s:%s", "reminder", participantID)
+	limit := 1
+	window := 24 * time.Hour
+	rateLimit := redis_rate.Limit{Rate: limit, Burst: limit, Period: window}
+
+	res, err := s.limiter.AllowN(ctx, key, rateLimit, 0)
 	if err != nil {
-		return false, 0, time.Time{}, err
+		return false, 0, time.Time{}, fmt.Errorf("failed to peek rate limit: %w", err)
 	}
 
-	nextResetAt := time.Now().Add(result.ResetAfter)
-	return result.Allowed, result.RetryAfter, nextResetAt, nil
+	canSend := res.Remaining > 0
+	if canSend {
+		return true, 0, time.Time{}, nil
+	}
+	nextResetAt := time.Now().Add(res.ResetAfter)
+	return false, res.ResetAfter, nextResetAt, nil
 }
 
 // RecordReminder records that a reminder was sent for rate limiting tracking

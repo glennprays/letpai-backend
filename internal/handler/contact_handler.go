@@ -3,6 +3,7 @@ package handler
 import (
 	"github.com/glennprays/letpai-backend/internal/httperror"
 	"github.com/glennprays/letpai-backend/internal/middleware"
+	"github.com/glennprays/letpai-backend/internal/validation"
 	"github.com/glennprays/letpai-backend/internal/params/request"
 	"github.com/glennprays/letpai-backend/internal/usecase/contact"
 	"github.com/gofiber/fiber/v2"
@@ -46,6 +47,10 @@ func (h *ContactHandler) Create(c *fiber.Ctx) error {
 
 	var req request.CreateContactRequest
 	if err := c.BodyParser(&req); err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+	if err := validation.Struct(&req); err != nil {
 		apiErr := httperror.FromError(err)
 		return c.Status(apiErr.Status).JSON(apiErr.Response())
 	}
@@ -143,6 +148,10 @@ func (h *ContactHandler) Update(c *fiber.Ctx) error {
 		apiErr := httperror.FromError(err)
 		return c.Status(apiErr.Status).JSON(apiErr.Response())
 	}
+	if err := validation.Struct(&req); err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
 
 	ucReq := &contact.UpdateContactRequest{
 		Name:           req.Name,
@@ -191,6 +200,10 @@ func (h *ContactHandler) BulkOperations(c *fiber.Ctx) error {
 		apiErr := httperror.FromError(err)
 		return c.Status(apiErr.Status).JSON(apiErr.Response())
 	}
+	if err := validation.Struct(&req); err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
 
 	ucReq := &contact.BulkOperationsRequest{
 		Operation:  req.Operation,
@@ -216,6 +229,10 @@ func (h *ContactHandler) ImportContacts(c *fiber.Ctx) error {
 
 	var req contact.ImportContactsRequest
 	if err := c.BodyParser(&req); err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+	if err := validation.Struct(&req); err != nil {
 		apiErr := httperror.FromError(err)
 		return c.Status(apiErr.Status).JSON(apiErr.Response())
 	}

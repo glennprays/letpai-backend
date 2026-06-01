@@ -45,3 +45,11 @@ func (e Error) ServiceError() error {
 func (e Error) AppError() error {
 	return e.appErr
 }
+
+// Unwrap so `errors.As` / `errors.Is` can dig into the embedded
+// application error. Without this, typed-error checks at the
+// handler layer (e.g. `errors.As(err, &NotDirtyError)`) silently
+// fall through.
+func (e Error) Unwrap() error {
+	return e.appErr
+}

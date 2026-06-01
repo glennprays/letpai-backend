@@ -3,6 +3,7 @@ package handler
 import (
 	"github.com/glennprays/letpai-backend/internal/httperror"
 	"github.com/glennprays/letpai-backend/internal/middleware"
+	"github.com/glennprays/letpai-backend/internal/validation"
 	adminuc "github.com/glennprays/letpai-backend/internal/usecase/admin"
 	"github.com/gofiber/fiber/v2"
 )
@@ -11,7 +12,9 @@ import (
 type AdminHandler struct {
 	initiateLoginUseCase *adminuc.InitiateLoginUseCase
 	verifyOTPUseCase     *adminuc.VerifyOTPUseCase
+	loginUseCase         *adminuc.LoginUseCase
 	getProfileUseCase    *adminuc.GetProfileUseCase
+	updateProfileUseCase *adminuc.UpdateProfileUseCase
 	setupPasswordUseCase *adminuc.SetupPasswordUseCase
 	listAdminsUseCase    *adminuc.ListAdminsUseCase
 	createAdminUseCase   *adminuc.CreateAdminUseCase
@@ -20,14 +23,17 @@ type AdminHandler struct {
 	getStatusUseCase     *adminuc.GetStatusUseCase
 	getQRCodeUseCase     *adminuc.GetQRCodeUseCase
 	logoutUseCase        *adminuc.LogoutUseCase
-	updateConfigUseCase  *adminuc.UpdateConfigUseCase
+	needsSetupUseCase    *adminuc.NeedsSetupUseCase
+	bootstrapUseCase     *adminuc.BootstrapUseCase
 }
 
 // NewAdminHandler creates a new admin handler
 func NewAdminHandler(
 	initiateLoginUseCase *adminuc.InitiateLoginUseCase,
 	verifyOTPUseCase *adminuc.VerifyOTPUseCase,
+	loginUseCase *adminuc.LoginUseCase,
 	getProfileUseCase *adminuc.GetProfileUseCase,
+	updateProfileUseCase *adminuc.UpdateProfileUseCase,
 	setupPasswordUseCase *adminuc.SetupPasswordUseCase,
 	listAdminsUseCase *adminuc.ListAdminsUseCase,
 	createAdminUseCase *adminuc.CreateAdminUseCase,
@@ -36,12 +42,15 @@ func NewAdminHandler(
 	getStatusUseCase *adminuc.GetStatusUseCase,
 	getQRCodeUseCase *adminuc.GetQRCodeUseCase,
 	logoutUseCase *adminuc.LogoutUseCase,
-	updateConfigUseCase *adminuc.UpdateConfigUseCase,
+	needsSetupUseCase *adminuc.NeedsSetupUseCase,
+	bootstrapUseCase *adminuc.BootstrapUseCase,
 ) *AdminHandler {
 	return &AdminHandler{
 		initiateLoginUseCase: initiateLoginUseCase,
 		verifyOTPUseCase:     verifyOTPUseCase,
+		loginUseCase:         loginUseCase,
 		getProfileUseCase:    getProfileUseCase,
+		updateProfileUseCase: updateProfileUseCase,
 		setupPasswordUseCase: setupPasswordUseCase,
 		listAdminsUseCase:    listAdminsUseCase,
 		createAdminUseCase:   createAdminUseCase,
@@ -50,14 +59,55 @@ func NewAdminHandler(
 		getStatusUseCase:     getStatusUseCase,
 		getQRCodeUseCase:     getQRCodeUseCase,
 		logoutUseCase:        logoutUseCase,
-		updateConfigUseCase:  updateConfigUseCase,
+		needsSetupUseCase:    needsSetupUseCase,
+		bootstrapUseCase:     bootstrapUseCase,
 	}
+}
+
+// NeedsSetup tells the FE whether the first-boot wizard at
+// /admin/setup should be reachable. Public, unauthenticated — the
+// wizard needs it to decide where to route an unauthenticated user
+// landing on /admin/login.
+func (h *AdminHandler) NeedsSetup(c *fiber.Ctx) error {
+	result, err := h.needsSetupUseCase.Execute(c.Context())
+	if err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+	return c.Status(fiber.StatusOK).JSON(result)
+}
+
+// Bootstrap claims the first-super-admin slot. Public, unauthenticated;
+// the use case + repository reject the request once any real super
+// admin already exists, so this endpoint can't be used to escalate
+// privileges on a live deployment.
+func (h *AdminHandler) Bootstrap(c *fiber.Ctx) error {
+	var req adminuc.BootstrapRequest
+	if err := c.BodyParser(&req); err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+	if err := validation.Struct(&req); err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+
+	result, err := h.bootstrapUseCase.Execute(c.Context(), &req, true)
+	if err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+	return c.Status(fiber.StatusOK).JSON(result)
 }
 
 // InitiateLogin initiates admin login flow
 func (h *AdminHandler) InitiateLogin(c *fiber.Ctx) error {
 	var req adminuc.InitiateLoginRequest
 	if err := c.BodyParser(&req); err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+	if err := validation.Struct(&req); err != nil {
 		apiErr := httperror.FromError(err)
 		return c.Status(apiErr.Status).JSON(apiErr.Response())
 	}
@@ -78,19 +128,61 @@ func (h *AdminHandler) Login(c *fiber.Ctx) error {
 		apiErr := httperror.FromError(err)
 		return c.Status(apiErr.Status).JSON(apiErr.Response())
 	}
+	if err := validation.Struct(&req); err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
 
-	// TODO: Implement password-based login
-	// For now, this is essentially a no-op as login is done via OTP
-	return c.Status(fiber.StatusNotImplemented).JSON(fiber.Map{
-		"success": false,
-		"error":   "Password login not implemented yet. Please use OTP login.",
-	})
+	result, err := h.loginUseCase.Execute(c.Context(), &req)
+	if err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+	return c.Status(fiber.StatusOK).JSON(result)
 }
+
+// UpdateProfile lets the calling admin rename themselves. The path
+// has no admin_id — adminID is sourced from the bearer token's
+// claims via middleware.GetUserID so a caller can only edit their
+// own row.
+func (h *AdminHandler) UpdateProfile(c *fiber.Ctx) error {
+	adminID := middleware.GetUserID(c)
+	if adminID == "" {
+		apiErr := httperror.FromError(httperror.ErrUnauthorized("not authenticated"))
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+
+	var req adminuc.UpdateProfileRequest
+	if err := c.BodyParser(&req); err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+	if err := validation.Struct(&req); err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+
+	result, err := h.updateProfileUseCase.Execute(c.Context(), adminID, &req)
+	if err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+	return c.Status(fiber.StatusOK).JSON(result)
+}
+
+// DisconnectDevice and UpdateConfig were removed along with their use
+// cases. WAGA's SDK has no gateway-side logout, so "disconnect" was
+// only ever flipping a column we no longer read; token rotation now
+// happens via WHATSAPP_API_KEY in .env + a restart.
 
 // VerifyOTP handles OTP verification
 func (h *AdminHandler) VerifyOTP(c *fiber.Ctx) error {
 	var req adminuc.VerifyOTPRequest
 	if err := c.BodyParser(&req); err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+	if err := validation.Struct(&req); err != nil {
 		apiErr := httperror.FromError(err)
 		return c.Status(apiErr.Status).JSON(apiErr.Response())
 	}
@@ -126,6 +218,10 @@ func (h *AdminHandler) SetupPassword(c *fiber.Ctx) error {
 		apiErr := httperror.FromError(err)
 		return c.Status(apiErr.Status).JSON(apiErr.Response())
 	}
+	if err := validation.Struct(&req); err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
 
 	err := h.setupPasswordUseCase.Execute(c.Context(), userID, &req)
 	if err != nil {
@@ -156,6 +252,10 @@ func (h *AdminHandler) CreateAdmin(c *fiber.Ctx) error {
 		apiErr := httperror.FromError(err)
 		return c.Status(apiErr.Status).JSON(apiErr.Response())
 	}
+	if err := validation.Struct(&req); err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
 
 	result, err := h.createAdminUseCase.Execute(c.Context(), &req)
 	if err != nil {
@@ -175,8 +275,13 @@ func (h *AdminHandler) UpdateAdmin(c *fiber.Ctx) error {
 		apiErr := httperror.FromError(err)
 		return c.Status(apiErr.Status).JSON(apiErr.Response())
 	}
+	if err := validation.Struct(&req); err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
 
-	result, err := h.updateAdminUseCase.Execute(c.Context(), adminID, &req)
+	callerID := middleware.GetUserID(c)
+	result, err := h.updateAdminUseCase.Execute(c.Context(), callerID, adminID, &req)
 	if err != nil {
 		apiErr := httperror.FromError(err)
 		return c.Status(apiErr.Status).JSON(apiErr.Response())
@@ -189,7 +294,8 @@ func (h *AdminHandler) UpdateAdmin(c *fiber.Ctx) error {
 func (h *AdminHandler) DeleteAdmin(c *fiber.Ctx) error {
 	adminID := c.Params("id")
 
-	err := h.deleteAdminUseCase.Execute(c.Context(), adminID)
+	callerID := middleware.GetUserID(c)
+	err := h.deleteAdminUseCase.Execute(c.Context(), callerID, adminID)
 	if err != nil {
 		apiErr := httperror.FromError(err)
 		return c.Status(apiErr.Status).JSON(apiErr.Response())
@@ -219,6 +325,10 @@ func (h *AdminHandler) GetQRCode(c *fiber.Ctx) error {
 		apiErr := httperror.FromError(err)
 		return c.Status(apiErr.Status).JSON(apiErr.Response())
 	}
+	if err := validation.Struct(&req); err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
 
 	result, err := h.getQRCodeUseCase.Execute(c.Context(), &req)
 	if err != nil {
@@ -244,21 +354,3 @@ func (h *AdminHandler) Logout(c *fiber.Ctx) error {
 	})
 }
 
-// UpdateConfig updates WhatsApp API configuration
-func (h *AdminHandler) UpdateConfig(c *fiber.Ctx) error {
-	var req adminuc.UpdateConfigRequest
-	if err := c.BodyParser(&req); err != nil {
-		apiErr := httperror.FromError(err)
-		return c.Status(apiErr.Status).JSON(apiErr.Response())
-	}
-
-	err := h.updateConfigUseCase.Execute(c.Context(), &req)
-	if err != nil {
-		apiErr := httperror.FromError(err)
-		return c.Status(apiErr.Status).JSON(apiErr.Response())
-	}
-
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"success": true,
-	})
-}

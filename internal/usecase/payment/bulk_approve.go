@@ -12,11 +12,19 @@ type BulkApproveRequest struct {
 	ProofIDs []string `json:"proof_ids" validate:"required,min=1"`
 }
 
+// BulkApproveFailure explains why a single ID couldn't be approved so the
+// caller can act on the result instead of just seeing a skipped count.
+type BulkApproveFailure struct {
+	ProofID string `json:"proof_id"`
+	Reason  string `json:"reason"`
+}
+
 // BulkApproveResponse represents the response after bulk approving payments
 type BulkApproveResponse struct {
-	ApprovedCount    int  `json:"approved_count"`
-	SkippedCount     int  `json:"skipped_count"`
-	SessionCompleted bool `json:"session_completed"`
+	ApprovedCount    int                  `json:"approved_count"`
+	SkippedCount     int                  `json:"skipped_count"`
+	Failed           []BulkApproveFailure `json:"failed,omitempty"`
+	SessionCompleted bool                 `json:"session_completed"`
 }
 
 // BulkApproveUseCase handles bulk approving payment proofs
@@ -36,48 +44,50 @@ func NewBulkApproveUseCase(
 	}
 }
 
-// Execute bulk approves payment proofs
+// Execute bulk approves payment proofs.
+// Per-ID failures are returned in the response so the caller can show "12
+// approved, 2 failed (participant not found)" instead of just a skipped count.
 func (uc *BulkApproveUseCase) Execute(ctx context.Context, userID string, req *BulkApproveRequest) (*BulkApproveResponse, error) {
 	approvedCount := 0
 	skippedCount := 0
+	failures := make([]BulkApproveFailure, 0)
 	sessionIDs := make(map[string]bool)
 
+	skip := func(proofID, reason string) {
+		skippedCount++
+		failures = append(failures, BulkApproveFailure{ProofID: proofID, Reason: reason})
+	}
+
 	for _, proofID := range req.ProofIDs {
-		// Get participant
 		participant, err := uc.participantRepo.FindByID(ctx, proofID)
 		if err != nil {
-			skippedCount++
+			skip(proofID, "participant not found")
 			continue
 		}
 
-		// Get session to verify ownership
 		session, err := uc.sessionRepo.FindByID(ctx, participant.SessionID.String(), userID)
 		if err != nil {
-			skippedCount++
+			skip(proofID, "session not found or not yours")
 			continue
 		}
 
-		// Verify session belongs to user
 		if session.UserID.String() != userID {
-			skippedCount++
+			skip(proofID, "session belongs to another user")
 			continue
 		}
 
-		// Check if payment is in submitted status
 		if participant.PaymentStatus != valueobject.PaymentStatusSubmitted {
-			skippedCount++
+			skip(proofID, "payment is not in submitted state")
 			continue
 		}
 
-		// Approve payment
 		if err := participant.ApprovePayment(); err != nil {
-			skippedCount++
+			skip(proofID, "invalid state transition")
 			continue
 		}
 
-		// Update participant
 		if err := uc.participantRepo.Update(ctx, participant); err != nil {
-			skippedCount++
+			skip(proofID, "database update failed")
 			continue
 		}
 
@@ -103,6 +113,7 @@ func (uc *BulkApproveUseCase) Execute(ctx context.Context, userID string, req *B
 	return &BulkApproveResponse{
 		ApprovedCount:    approvedCount,
 		SkippedCount:     skippedCount,
+		Failed:           failures,
 		SessionCompleted: sessionCompleted,
 	}, nil
 }

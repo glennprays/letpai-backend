@@ -6,25 +6,26 @@ import (
 	"time"
 
 	"github.com/glennprays/letpai-backend/domain"
-	"github.com/glennprays/letpai-backend/domain/entity"
-	"github.com/glennprays/letpai-backend/domain/ports"
 	waga "github.com/glennprays/whatsapp-gateway-sdk-go"
 )
 
+// WhatsAppService is a thin pass-through to the WAGA gateway SDK.
+//
+// We deliberately don't persist gateway state. The JWT is configured
+// once at startup via WHATSAPP_API_KEY; the SDK derives the phone
+// from it on every call. Connection status is fetched live from the
+// gateway. No DB read or write happens on the OTP / notification /
+// QR / status paths.
 type WhatsAppService struct {
-	client     *waga.Client
-	configRepo ports.WhatsAppConfigRepository
+	client *waga.Client
 }
 
-func NewWhatsAppService(baseURL, apiKey string, configRepo ports.WhatsAppConfigRepository) *WhatsAppService {
+func NewWhatsAppService(baseURL, apiKey string) *WhatsAppService {
 	client := waga.NewClient(
 		waga.WithBaseURL(baseURL),
 		waga.WithToken(apiKey),
 	)
-	return &WhatsAppService{
-		client:     client,
-		configRepo: configRepo,
-	}
+	return &WhatsAppService{client: client}
 }
 
 type SendResult struct {
@@ -54,25 +55,18 @@ func (s *WhatsAppService) SendNotification(ctx context.Context, phoneNumber, mes
 	return resp.MessageId, nil
 }
 
-func (s *WhatsAppService) RegisterPhone(ctx context.Context, phoneNumber string) (string, error) {
-	resp, err := s.client.Register(ctx, "6281234567890", phoneNumber)
-	if err != nil {
-		return "", domain.NewError(domain.ErrInternalFailure, fmt.Errorf("failed to register phone: %w", err))
-	}
-
-	config := &entity.WhatsAppConfig{
-		PhoneNumber: phoneNumber,
-	}
-	config.GatewayToken = resp.Token
-
-	err = s.configRepo.CreateOrUpdate(ctx, config)
-	if err != nil {
-		return "", domain.NewError(domain.ErrInternalFailure, fmt.Errorf("failed to store config: %w", err))
-	}
-
-	return resp.Token, nil
-}
-
+// GetQRCode pulls a pairing QR from the gateway.
+//
+// WAGA's JWT (set via WHATSAPP_API_KEY -> waga.WithToken) is bound to
+// the phone that called POST /register on the gateway. Every
+// subsequent SDK call -- GetQRCode, GetLoginStatus, SendText -- is
+// implicitly scoped to that phone.
+//
+// We deliberately don't cache the QR locally. Each call is cheap, the
+// QR has a short TTL, and storing it in the DB just creates a
+// secondary source of truth that drifts from the gateway. The gateway
+// is the authority for "current QR" and "current connection status";
+// we just pass that through.
 func (s *WhatsAppService) GetQRCode(ctx context.Context) (string, time.Time, error) {
 	resp, err := s.client.GetQRCode(ctx, "json")
 	if err != nil {
@@ -80,78 +74,22 @@ func (s *WhatsAppService) GetQRCode(ctx context.Context) (string, time.Time, err
 	}
 
 	qrExpires := time.Now().Add(time.Duration(resp.ExpiresIn) * time.Second)
-
-	err = s.configRepo.UpdateQRCode(ctx, "", resp.QrCode, qrExpires)
-	if err != nil {
-		return "", time.Time{}, domain.NewError(domain.ErrInternalFailure, fmt.Errorf("failed to update QR code: %w", err))
-	}
-
 	return resp.QrCode, qrExpires, nil
 }
 
+// GetLoginStatus calls the gateway and returns whether the device is
+// currently paired. No DB read or write — the gateway is the source
+// of truth.
 func (s *WhatsAppService) GetLoginStatus(ctx context.Context) (bool, string, error) {
-	config, err := s.configRepo.Get(ctx)
-	if err != nil {
-		return false, "", domain.NewError(domain.ErrInternalFailure, fmt.Errorf("failed to get config: %w", err))
-	}
-
-	if config == nil || config.GatewayToken == "" {
-		return false, "No gateway token configured", nil
-	}
-
 	status, err := s.client.GetLoginStatus(ctx)
 	if err != nil {
 		return false, "", domain.NewError(domain.ErrInternalFailure, fmt.Errorf("failed to get login status: %w", err))
 	}
-
-	if status.Authenticated {
-		err = s.configRepo.UpdateConnectionStatus(ctx, config.PhoneNumber, entity.ConnectionStatusConnected)
-		if err != nil {
-			return false, "", domain.NewError(domain.ErrInternalFailure, fmt.Errorf("failed to update connection status: %w", err))
-		}
-	}
-
 	return status.Authenticated, "", nil
 }
 
-func (s *WhatsAppService) Logout(ctx context.Context) error {
-	config, err := s.configRepo.Get(ctx)
-	if err != nil {
-		return domain.NewError(domain.ErrInternalFailure, fmt.Errorf("failed to get config: %w", err))
-	}
-
-	if config == nil {
-		return nil
-	}
-
-	err = s.configRepo.UpdateConnectionStatus(ctx, config.PhoneNumber, entity.ConnectionStatusDisconnected)
-	if err != nil {
-		return domain.NewError(domain.ErrInternalFailure, fmt.Errorf("failed to update status on logout: %w", err))
-	}
-
-	return nil
-}
-
-func (s *WhatsAppService) SetToken(ctx context.Context, phoneNumber, token string) error {
-	config, err := s.configRepo.Get(ctx)
-	if err != nil {
-		return domain.NewError(domain.ErrInternalFailure, fmt.Errorf("failed to get config: %w", err))
-	}
-
-	var newConfig *entity.WhatsAppConfig
-	if config == nil || config.PhoneNumber != phoneNumber {
-		newConfig = &entity.WhatsAppConfig{
-			PhoneNumber: phoneNumber,
-		}
-	} else {
-		newConfig = config
-	}
-	newConfig.GatewayToken = token
-
-	err = s.configRepo.CreateOrUpdate(ctx, newConfig)
-	if err != nil {
-		return domain.NewError(domain.ErrInternalFailure, fmt.Errorf("failed to set gateway token: %w", err))
-	}
-
-	return nil
-}
+// Logout, SetToken, RegisterPhone were removed when the local
+// whatsapp_configs persistence layer was dropped. WAGA's SDK doesn't
+// expose a gateway-level logout, so "disconnect" was a UI-only label
+// flipping a column we never read; token rotation now happens via
+// editing WHATSAPP_API_KEY in .env and restarting the backend.

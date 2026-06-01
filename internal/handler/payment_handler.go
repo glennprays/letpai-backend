@@ -3,19 +3,21 @@ package handler
 import (
 	"github.com/glennprays/letpai-backend/internal/httperror"
 	"github.com/glennprays/letpai-backend/internal/middleware"
+	"github.com/glennprays/letpai-backend/internal/validation"
 	"github.com/glennprays/letpai-backend/internal/usecase/payment"
 	"github.com/gofiber/fiber/v2"
 )
 
 // PaymentHandler handles payment requests
 type PaymentHandler struct {
-	submitPayment   *payment.SubmitPaymentUseCase
-	approvePayment  *payment.ApprovePaymentUseCase
-	rejectPayment   *payment.RejectPaymentUseCase
-	bulkApprove     *payment.BulkApproveUseCase
-	bulkReject      *payment.BulkRejectUseCase
-	getPaymentPage  *payment.GetPaymentPageUseCase
-	getPaymentProof *payment.GetPaymentProofUseCase
+	submitPayment        *payment.SubmitPaymentUseCase
+	approvePayment       *payment.ApprovePaymentUseCase
+	rejectPayment        *payment.RejectPaymentUseCase
+	bulkApprove          *payment.BulkApproveUseCase
+	bulkReject           *payment.BulkRejectUseCase
+	getPaymentPage       *payment.GetPaymentPageUseCase
+	getPaymentProof      *payment.GetPaymentProofUseCase
+	markPaidWithoutProof *payment.MarkPaidWithoutProofUseCase
 }
 
 // NewPaymentHandler creates a new payment handler
@@ -27,16 +29,41 @@ func NewPaymentHandler(
 	bulkReject *payment.BulkRejectUseCase,
 	getPaymentPage *payment.GetPaymentPageUseCase,
 	getPaymentProof *payment.GetPaymentProofUseCase,
+	markPaidWithoutProof *payment.MarkPaidWithoutProofUseCase,
 ) *PaymentHandler {
 	return &PaymentHandler{
-		submitPayment:   submitPayment,
-		approvePayment:  approvePayment,
-		rejectPayment:   rejectPayment,
-		bulkApprove:     bulkApprove,
-		bulkReject:      bulkReject,
-		getPaymentPage:  getPaymentPage,
-		getPaymentProof: getPaymentProof,
+		submitPayment:        submitPayment,
+		approvePayment:       approvePayment,
+		rejectPayment:        rejectPayment,
+		bulkApprove:          bulkApprove,
+		bulkReject:           bulkReject,
+		getPaymentPage:       getPaymentPage,
+		getPaymentProof:      getPaymentProof,
+		markPaidWithoutProof: markPaidWithoutProof,
 	}
+}
+
+// MarkPaidWithoutProof lets a host mark a participant as paid even when no
+// proof has been uploaded (cash payments, manual transfers already
+// confirmed offline, etc.). Returns 409 if the participant is already
+// paid.
+func (h *PaymentHandler) MarkPaidWithoutProof(c *fiber.Ctx) error {
+	userID := middleware.GetUserID(c)
+	participantID := c.Params("participant_id")
+	if participantID == "" {
+		apiErr := httperror.FromError(httperror.ErrBadRequest("participant_id is required"))
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+
+	result, err := h.markPaidWithoutProof.Execute(c.Context(), userID, participantID)
+	if err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"success": true,
+		"data":    result,
+	})
 }
 
 // SubmitPayment handles payment proof submission (public endpoint, no auth required)
@@ -49,6 +76,10 @@ func (h *PaymentHandler) SubmitPayment(c *fiber.Ctx) error {
 
 	var req payment.SubmitPaymentRequest
 	if err := c.BodyParser(&req); err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+	if err := validation.Struct(&req); err != nil {
 		apiErr := httperror.FromError(err)
 		return c.Status(apiErr.Status).JSON(apiErr.Response())
 	}
@@ -81,6 +112,10 @@ func (h *PaymentHandler) ApprovePayment(c *fiber.Ctx) error {
 		// Default to empty request if body is empty
 		req = payment.ApprovePaymentRequest{}
 	}
+	if err := validation.Struct(&req); err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
 
 	// Execute use case
 	result, err := h.approvePayment.Execute(c.Context(), userID, participantID, &req)
@@ -110,6 +145,10 @@ func (h *PaymentHandler) RejectPayment(c *fiber.Ctx) error {
 		apiErr := httperror.FromError(err)
 		return c.Status(apiErr.Status).JSON(apiErr.Response())
 	}
+	if err := validation.Struct(&req); err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
 
 	// Execute use case
 	result, err := h.rejectPayment.Execute(c.Context(), userID, participantID, &req)
@@ -134,6 +173,10 @@ func (h *PaymentHandler) BulkApprove(c *fiber.Ctx) error {
 		apiErr := httperror.FromError(err)
 		return c.Status(apiErr.Status).JSON(apiErr.Response())
 	}
+	if err := validation.Struct(&req); err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
 
 	// Execute use case
 	result, err := h.bulkApprove.Execute(c.Context(), userID, &req)
@@ -155,6 +198,10 @@ func (h *PaymentHandler) BulkReject(c *fiber.Ctx) error {
 
 	var req payment.BulkRejectRequest
 	if err := c.BodyParser(&req); err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+	if err := validation.Struct(&req); err != nil {
 		apiErr := httperror.FromError(err)
 		return c.Status(apiErr.Status).JSON(apiErr.Response())
 	}

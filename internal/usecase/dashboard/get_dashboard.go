@@ -55,7 +55,16 @@ func (uc *GetDashboardUseCase) Execute(ctx context.Context, userID string) (*Das
 		return nil, err
 	}
 
-	pendingCount, err := uc.participantRepo.CountBySessionIDAndStatus(ctx, userID, "pending")
+	// Tally pending participants across every active session the host
+	// owns — previously this called CountBySessionIDAndStatus passing
+	// the userID as the sessionID, which always returned 0 because no
+	// participant row has session_id == user_id.
+	pendingCount, err := uc.participantRepo.CountByUserIDAndStatus(ctx, userID, "pending")
+	if err != nil {
+		return nil, err
+	}
+
+	totalPending, err := uc.participantRepo.SumPendingShareByUserID(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -64,6 +73,6 @@ func (uc *GetDashboardUseCase) Execute(ctx context.Context, userID string) (*Das
 		ActiveSessions:    len(activeResult.Sessions),
 		CompletedSessions: len(completedResult.Sessions),
 		PendingPayments:   pendingCount,
-		TotalPending:      0,
+		TotalPending:      totalPending,
 	}, nil
 }

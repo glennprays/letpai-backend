@@ -10,12 +10,12 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/glennprays/letpai-backend/config"
-	"github.com/glennprays/letpai-backend/domain/ports"
 	"github.com/glennprays/letpai-backend/internal/handler"
 	"github.com/glennprays/letpai-backend/internal/repository"
 	"github.com/glennprays/letpai-backend/internal/router"
 	"github.com/glennprays/letpai-backend/internal/service"
 	"github.com/glennprays/letpai-backend/internal/usecase/admin"
+	"github.com/glennprays/letpai-backend/internal/usecase/admintemplates"
 	"github.com/glennprays/letpai-backend/internal/usecase/auth"
 	"github.com/glennprays/letpai-backend/internal/usecase/billing"
 	"github.com/glennprays/letpai-backend/internal/usecase/contact"
@@ -37,16 +37,18 @@ var CoreSet = wire.NewSet(
 
 var RepositorySet = wire.NewSet(
 	repository.NewPostgresUserRepository,
-	repository.NewPostgresOTPRepository,
+	repository.NewRedisOTPRepository,
 	repository.NewPostgresContactGroupRepository,
 	repository.NewPostgresContactRepository,
 	repository.NewPostgresSessionRepository,
 	repository.NewPostgresParticipantRepository,
 	repository.NewPostgresBillItemRepository,
+	repository.NewPostgresBillImageRepository,
 	repository.NewPostgresNotificationLogRepository,
 	repository.NewPostgresWhatsAppConfigRepository,
 	repository.NewPostgresAdminRepository,
-	repository.NewPostgresAdminOTPVerificationRepository,
+	repository.NewPostgresMessageTemplateRepository,
+	repository.NewPostgresSessionBankAccountRepository,
 )
 
 var ServiceSet = wire.NewSet(
@@ -56,6 +58,8 @@ var ServiceSet = wire.NewSet(
 	NewWhatsAppService,
 	NewImageServiceProvider,
 	NewRateLimitService,
+	service.NewTemplateRenderer,
+	service.NewAsyncNotifier,
 )
 
 var UseCaseSet = wire.NewSet(
@@ -65,11 +69,16 @@ var UseCaseSet = wire.NewSet(
 	auth.NewLoginUserUseCase,
 	auth.NewLogoutUserUseCase,
 	auth.NewUpdateProfileUseCase,
+	auth.NewForgotPasswordUseCase,
 	// Admin use cases
 	admin.NewInitiateLoginUseCase,
 	admin.NewVerifyOTPUseCase,
+	admin.NewLoginUseCase,
 	admin.NewGetProfileUseCase,
+	admin.NewUpdateProfileUseCase,
 	admin.NewSetupPasswordUseCase,
+	admin.NewNeedsSetupUseCase,
+	admin.NewBootstrapUseCase,
 	admin.NewListAdminsUseCase,
 	admin.NewCreateAdminUseCase,
 	admin.NewUpdateAdminUseCase,
@@ -77,7 +86,6 @@ var UseCaseSet = wire.NewSet(
 	admin.NewGetStatusUseCase,
 	admin.NewGetQRCodeUseCase,
 	admin.NewLogoutUseCase,
-	admin.NewUpdateConfigUseCase,
 	// Contact use cases
 	contact.NewCreateContactUseCase,
 	contact.NewGetContactsUseCase,
@@ -97,6 +105,7 @@ var UseCaseSet = wire.NewSet(
 	session.NewGetSessionDetailUseCase,
 	session.NewUpdateSessionUseCase,
 	session.NewCancelSessionUseCase,
+	session.NewReplaceBankAccountsUseCase,
 	// Participant use cases
 	participant.NewAddParticipantsUseCase,
 	participant.NewRemoveParticipantUseCase,
@@ -107,6 +116,11 @@ var UseCaseSet = wire.NewSet(
 	billing.NewUpdateBillItemUseCase,
 	billing.NewDeleteBillItemUseCase,
 	billing.NewCalculateSplitsUseCase,
+	billing.NewUploadBillImageUseCase,
+	billing.NewGetBillImagesUseCase,
+	billing.NewGetBillImageSignedUrlUseCase,
+	billing.NewDeleteBillImageUseCase,
+	billing.NewUpdateFeeConfigUseCase,
 	// Payment use cases
 	payment.NewSubmitPaymentUseCase,
 	payment.NewApprovePaymentUseCase,
@@ -115,10 +129,17 @@ var UseCaseSet = wire.NewSet(
 	payment.NewBulkRejectUseCase,
 	payment.NewGetPaymentPageUseCase,
 	payment.NewGetPaymentProofUseCase,
+	payment.NewMarkPaidWithoutProofUseCase,
 	// Notification use cases
 	notification.NewSendNotificationsUseCase,
 	notification.NewSendReminderUseCase,
 	notification.NewBulkReminderUseCase,
+	notification.NewReminderStatusUseCase,
+	notification.NewRetryNotificationUseCase,
+	// Admin template use cases
+	admintemplates.NewListTemplatesUseCase,
+	admintemplates.NewUpdateTemplateUseCase,
+	admintemplates.NewTestSendUseCase,
 	// Dashboard use cases
 	dashboard.NewGetDashboardUseCase,
 )
@@ -127,6 +148,7 @@ var HandlerSet = wire.NewSet(
 	handler.NewHealthHandler,
 	handler.NewAuthHandler,
 	handler.NewAdminHandler,
+	handler.NewAdminTemplatesHandler,
 	handler.NewWhatsAppWebhookHandler,
 	handler.NewContactGroupHandler,
 	handler.NewContactHandler,
@@ -162,12 +184,13 @@ func NewPasswordService() *service.PasswordService {
 	return service.NewPasswordService(12) // bcrypt cost
 }
 
-// NewWhatsAppService creates a new WhatsApp service with config values
-func NewWhatsAppService(cfg *config.Config, configRepo ports.WhatsAppConfigRepository) *service.WhatsAppService {
+// NewWhatsAppService creates a new WhatsApp service with config values.
+// No DB dependency: the service is a pass-through to the WAGA SDK and
+// stores no state locally.
+func NewWhatsAppService(cfg *config.Config) *service.WhatsAppService {
 	return service.NewWhatsAppService(
 		cfg.WhatsAppGatewayURL,
 		cfg.WhatsAppAPIKey,
-		configRepo,
 	)
 }
 
@@ -197,6 +220,12 @@ func NewImageServiceProvider(cfg *config.Config) (*service.ImageService, error) 
 	return NewImageService(cfg)
 }
 
+// NewAppURL provides the application URL string from config. Wire needs a
+// named provider because multiple constructors take a plain `string` param.
+func NewAppURL(cfg *config.Config) string {
+	return cfg.AppURL
+}
+
 // InitializeApp creates the application and injects all dependencies
 func InitializeApp() (*App, error) {
 	wire.Build(
@@ -205,6 +234,7 @@ func InitializeApp() (*App, error) {
 		ServiceSet,
 		UseCaseSet,
 		ApiSet,
+		NewAppURL,
 		wire.Struct(new(App), "*"),
 	)
 	return &App{}, nil

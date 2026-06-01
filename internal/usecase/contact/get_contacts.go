@@ -53,16 +53,28 @@ func NewGetContactsUseCase(
 	}
 }
 
-// Execute retrieves contacts with filters and pagination
+// Execute retrieves contacts with filters and pagination.
+// Pagination is clamped here so a malformed query string can't request
+// 1,000,000 rows; defaults if the caller passes 0/negative values.
 func (uc *GetContactsUseCase) Execute(ctx context.Context, userID string, req *GetContactsRequest) (*GetContactsResponse, error) {
+	page := req.Page
+	if page < 1 {
+		page = 1
+	}
+	limit := req.Limit
+	if limit <= 0 {
+		limit = 50
+	} else if limit > 200 {
+		limit = 200
+	}
 	opts := &ports.ContactFilterOptions{
 		GroupID:    req.GroupID,
 		IsFavorite: req.IsFavorite,
 		Search:     req.Search,
 		SortBy:     req.SortBy,
 		SortOrder:  req.SortOrder,
-		Page:       req.Page,
-		Limit:      req.Limit,
+		Page:       page,
+		Limit:      limit,
 	}
 
 	result, err := uc.contactRepo.FindAll(ctx, userID, opts)

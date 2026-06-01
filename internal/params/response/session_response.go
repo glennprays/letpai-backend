@@ -1,5 +1,7 @@
 package response
 
+import "time"
+
 // SessionResponse represents a session
 type SessionResponse struct {
 	SessionID   string  `json:"session_id"`
@@ -30,24 +32,39 @@ type SessionDetailResponse struct {
 	Bills            []*BillItemResponse    `json:"bills"`
 }
 
-// ParticipantResponse represents a session participant
+// ParticipantResponse represents a session participant.
+//
+// PaidManually surfaces whether the host closed this participant out
+// without a proof upload (see /participants/:id/mark-paid). It lets the
+// FE render a distinct badge and disable upload affordances.
+//
+// NotificationCount / LastNotificationAt mirror the participant row so
+// the host UI can show "Reminded 2× — Last 4h ago" and derive cooldown
+// state without an extra round trip.
 type ParticipantResponse struct {
-	ParticipantID   string  `json:"participant_id"`
-	ContactID       *string `json:"contact_id,omitempty"`
-	Name            string  `json:"name"`
-	WhatsAppNumber  string  `json:"whatsapp_number"`
-	AvatarURL       *string `json:"avatar_url,omitempty"`
-	ShareAmount     float64 `json:"share_amount"`
-	PaymentStatus   string  `json:"payment_status"`
-	PaymentProofURL *string `json:"payment_proof_url,omitempty"`
+	ParticipantID      string     `json:"participant_id"`
+	ContactID          *string    `json:"contact_id,omitempty"`
+	Name               string     `json:"name"`
+	WhatsAppNumber     string     `json:"whatsapp_number"`
+	AvatarURL          *string    `json:"avatar_url,omitempty"`
+	ShareAmount        float64    `json:"share_amount"`
+	PaymentStatus      string     `json:"payment_status"`
+	PaymentProofURL    *string    `json:"payment_proof_url,omitempty"`
+	PaidManually       bool       `json:"paid_manually"`
+	NotificationCount  int        `json:"notification_count"`
+	LastNotificationAt *time.Time `json:"last_notification_at,omitempty"`
 }
 
-// BillItemResponse represents a bill item
+// BillItemResponse represents a bill item.
+//
+// ParticipantIDs is the per-bill participant assignment; an empty slice
+// means "applies to everyone in the session" (legacy default).
 type BillItemResponse struct {
-	BillItemID  string  `json:"bill_item_id"`
-	Description string  `json:"description"`
-	Amount      float64 `json:"amount"`
-	Category    *string `json:"category,omitempty"`
+	BillItemID     string   `json:"bill_item_id"`
+	Description    string   `json:"description"`
+	Amount         float64  `json:"amount"`
+	Category       *string  `json:"category,omitempty"`
+	ParticipantIDs []string `json:"participant_ids"`
 }
 
 // SessionListResponse represents a paginated list of sessions

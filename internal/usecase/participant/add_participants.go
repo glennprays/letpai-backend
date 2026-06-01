@@ -7,6 +7,7 @@ import (
 	"github.com/glennprays/letpai-backend/domain"
 	"github.com/glennprays/letpai-backend/domain/entity"
 	"github.com/glennprays/letpai-backend/domain/ports"
+	"github.com/glennprays/letpai-backend/internal/usecase/billing"
 	"github.com/google/uuid"
 )
 
@@ -38,11 +39,18 @@ type AddParticipantsResponse struct {
 	Participants []*ParticipantItem `json:"participants"`
 }
 
-// AddParticipantsUseCase handles adding participants to a session
+// AddParticipantsUseCase handles adding participants to a session.
+//
+// After successfully inserting all requested participants, the use
+// case re-runs CalculateSplits if the session already has at least
+// one bill -- otherwise existing participants would keep their old
+// share_amount while the new ones sit at 0.
 type AddParticipantsUseCase struct {
 	sessionRepo     ports.SessionRepository
 	participantRepo ports.ParticipantRepository
 	contactRepo     ports.ContactRepository
+	billItemRepo    ports.BillItemRepository
+	calcSplits      *billing.CalculateSplitsUseCase
 }
 
 // NewAddParticipantsUseCase creates a new add participants use case
@@ -50,11 +58,15 @@ func NewAddParticipantsUseCase(
 	sessionRepo ports.SessionRepository,
 	participantRepo ports.ParticipantRepository,
 	contactRepo ports.ContactRepository,
+	billItemRepo ports.BillItemRepository,
+	calcSplits *billing.CalculateSplitsUseCase,
 ) *AddParticipantsUseCase {
 	return &AddParticipantsUseCase{
 		sessionRepo:     sessionRepo,
 		participantRepo: participantRepo,
 		contactRepo:     contactRepo,
+		billItemRepo:    billItemRepo,
+		calcSplits:      calcSplits,
 	}
 }
 
@@ -91,7 +103,12 @@ func (uc *AddParticipantsUseCase) Execute(ctx context.Context, userID, sessionID
 				return nil, err
 			}
 
-			participantEnt := entity.NewParticipantFromContact(sessionUUID, contactUUID)
+			// Snapshot name + whatsapp from the contact so the unique
+			// (session_id, custom_whatsapp) key carries a real value and
+			// GetSessionDetail can render the row without re-joining.
+			participantEnt := entity.NewParticipantFromContact(
+				sessionUUID, contactUUID, contact.Name, contact.WhatsAppNumber,
+			)
 			if err := uc.participantRepo.Create(ctx, participantEnt); err != nil {
 				return nil, err
 			}
@@ -127,6 +144,17 @@ func (uc *AddParticipantsUseCase) Execute(ctx context.Context, userID, sessionID
 		}
 
 		participantItems = append(participantItems, participant)
+	}
+
+	// If the session already has bills, redistribute them across the
+	// new full participant set so existing participants' share_amount
+	// reflects the new headcount. CalculateSplits is safe to call when
+	// nothing has changed; we still gate on bills > 0 to avoid the
+	// "no bills yet" early-return path that would otherwise wrap the
+	// no-op in a domain error.
+	billTotal, _ := uc.billItemRepo.SumBySessionID(ctx, sessionID)
+	if billTotal > 0 {
+		_, _ = uc.calcSplits.Execute(ctx, userID, sessionID)
 	}
 
 	return &AddParticipantsResponse{

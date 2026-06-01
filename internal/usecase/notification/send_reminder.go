@@ -4,18 +4,20 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/glennprays/letpai-backend/domain"
 	"github.com/glennprays/letpai-backend/domain/ports"
+	"github.com/glennprays/letpai-backend/domain/valueobject"
 	"github.com/glennprays/letpai-backend/internal/service"
 )
 
-// SendReminderResponse represents the response after sending a reminder
+// SendReminderResponse represents the response after queueing a reminder
 type SendReminderResponse struct {
-	Message           string `json:"message"`
-	WhatsAppMessageID string `json:"whatsapp_message_id"`
-	NextAvailableAt   string `json:"next_available_at"`
-	RetryAfter        int64  `json:"retry_after,omitempty"`
+	Message         string `json:"message"`
+	Status          string `json:"status"`
+	NextAvailableAt string `json:"next_available_at"`
+	RetryAfter      int64  `json:"retry_after,omitempty"`
 }
 
 // SendReminderUseCase handles sending reminder to a specific participant
@@ -23,8 +25,11 @@ type SendReminderUseCase struct {
 	participantRepo ports.ParticipantRepository
 	sessionRepo     ports.SessionRepository
 	contactRepo     ports.ContactRepository
-	whatsappSvc     *service.WhatsAppService
+	userRepo        ports.UserRepository
+	notifier        *service.AsyncNotifier
+	renderer        *service.TemplateRenderer
 	rateLimitSvc    *service.RateLimitService
+	appURL          string
 }
 
 // NewSendReminderUseCase creates a new send reminder use case
@@ -32,15 +37,21 @@ func NewSendReminderUseCase(
 	participantRepo ports.ParticipantRepository,
 	sessionRepo ports.SessionRepository,
 	contactRepo ports.ContactRepository,
-	whatsappSvc *service.WhatsAppService,
+	userRepo ports.UserRepository,
+	notifier *service.AsyncNotifier,
+	renderer *service.TemplateRenderer,
 	rateLimitSvc *service.RateLimitService,
+	appURL string,
 ) *SendReminderUseCase {
 	return &SendReminderUseCase{
 		participantRepo: participantRepo,
 		sessionRepo:     sessionRepo,
 		contactRepo:     contactRepo,
-		whatsappSvc:     whatsappSvc,
+		userRepo:        userRepo,
+		notifier:        notifier,
+		renderer:        renderer,
 		rateLimitSvc:    rateLimitSvc,
+		appURL:          strings.TrimRight(appURL, "/"),
 	}
 }
 
@@ -68,18 +79,15 @@ func (uc *SendReminderUseCase) Execute(ctx context.Context, userID, participantI
 		return nil, domain.NewError(domain.ErrBadRequest, errors.New("participant has already paid"))
 	}
 
-	// Check rate limit
-	canSend, retryAfter, nextResetAt, err := uc.rateLimitSvc.GetReminderStatus(ctx, participantID)
+	// Rate-limit gating lives in the Fiber middleware (ReminderRateLimiter
+	// in internal/middleware/rate_limit.go), which returns the canonical
+	// 429 + Retry-After + next_available_at response. Re-checking here
+	// would double-decrement the limiter and ship a divergent 400 payload
+	// when the use-case ran first under a race. The status helper below
+	// remains for /reminder-status reads.
+	_, _, nextResetAt, err := uc.rateLimitSvc.GetReminderStatus(ctx, participantID)
 	if err != nil {
 		return nil, err
-	}
-
-	if !canSend {
-		return &SendReminderResponse{
-			Message:         fmt.Sprintf("Rate limit exceeded. Wait %s", service.FormatRetryAfter(retryAfter)),
-			NextAvailableAt: nextResetAt.Format("2006-01-02T15:04:05Z07:00"),
-			RetryAfter:      int64(retryAfter.Seconds()),
-		}, domain.NewError(domain.ErrBadRequest, errors.New("rate limit exceeded"))
 	}
 
 	// Get WhatsApp number
@@ -100,32 +108,51 @@ func (uc *SendReminderUseCase) Execute(ctx context.Context, userID, participantI
 		return nil, domain.NewError(domain.ErrBadRequest, errors.New("no WhatsApp number found for participant"))
 	}
 
-	// Format reminder message
-	message := uc.formatReminderMessage(session.Title, participantName, participant.ShareAmount)
-
-	// Send reminder and get message ID
-	messageID, err := uc.whatsappSvc.SendNotification(ctx, whatsappNumber, message)
-	if err != nil {
-		return nil, domain.NewError(domain.ErrInternalFailure, err)
+	// Resolve the session host's display name for MakerName.
+	makerName := "the host"
+	if host, err := uc.userRepo.FindByID(ctx, session.UserID.String()); err == nil && host.FullName != "" {
+		makerName = host.FullName
 	}
 
-	// Record reminder for rate limiting
+	// Render reminder via the admin-managed template; fall back to a
+	// hardcoded body if the template is missing/broken.
+	vars := reminderVars{
+		ParticipantName: participantName,
+		SessionName:     session.Title,
+		MakerName:       makerName,
+		Share:           formatIDR(participant.ShareAmount),
+		URL:             uc.appURL + "/payment/" + participant.PublicSlug,
+	}
+	message, err := uc.renderer.Render(ctx, "payment_reminder", vars)
+	if err != nil || message == "" {
+		message = fallbackReminder(vars)
+	}
+
+	// Queue the gateway send; record rate-limit + counter immediately.
+	uc.notifier.Dispatch(participant.ParticipantID, valueobject.NotificationTypeReminder, whatsappNumber, message)
 	_ = uc.rateLimitSvc.RecordReminder(ctx, participantID)
+	participant.BumpNotificationCount()
+	_ = uc.participantRepo.Update(ctx, participant)
 
 	return &SendReminderResponse{
-		Message:           fmt.Sprintf("Reminder sent to %s", participantName),
-		WhatsAppMessageID: messageID,
-		NextAvailableAt:   nextResetAt.Format("2006-01-02T15:04:05Z07:00"),
+		Message:         fmt.Sprintf("Reminder queued for %s", participantName),
+		Status:          "queued",
+		NextAvailableAt: nextResetAt.Format("2006-01-02T15:04:05Z07:00"),
 	}, nil
 }
 
-// formatReminderMessage formats a reminder message
-func (uc *SendReminderUseCase) formatReminderMessage(sessionName, participantName string, shareAmount float64) string {
-	return fmt.Sprintf("*Letpai - Payment Reminder*\n\n"+
-		"Hi %s!\n\n"+
-		"This is a friendly reminder about your pending payment for: *%s*\n\n"+
-		"Amount Due: *Rp%.0f*\n\n"+
-		"Please submit your payment proof at your earliest convenience.\n\n"+
-		"Thank you for using Letpai!",
-		participantName, sessionName, shareAmount)
+// reminderVars is the template data context for the payment_reminder
+// template. The fields must match the {{.Field}} placeholders in the
+// admin-authored body.
+type reminderVars struct {
+	ParticipantName string
+	SessionName     string
+	MakerName       string
+	Share           string
+	URL             string
+}
+
+func fallbackReminder(v reminderVars) string {
+	return fmt.Sprintf("Hey %s, just a reminder! 👋\n\n%s is waiting for your payment on: %s\n\nAmount Due: Rp%s\n\nUpload your payment proof here:\n%s\n\nThanks!\n— Letpai\nhttps://letpai.app",
+		v.ParticipantName, v.MakerName, v.SessionName, v.Share, v.URL)
 }

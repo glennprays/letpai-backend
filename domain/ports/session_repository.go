@@ -2,6 +2,7 @@ package ports
 
 import (
 	"context"
+	"time"
 
 	"github.com/glennprays/letpai-backend/domain/entity"
 	"github.com/glennprays/letpai-backend/domain/valueobject"
@@ -31,6 +32,12 @@ type SessionRepository interface {
 	// FindByID finds a session by ID
 	FindByID(ctx context.Context, sessionID string, userID string) (*entity.Session, error)
 
+	// FindBySlug looks up a session by its public_slug column. When
+	// userID is the empty string the ownership filter is skipped —
+	// host views pass their userID for the ACL gate, the public
+	// payment page passes "".
+	FindBySlug(ctx context.Context, slug string, userID string) (*entity.Session, error)
+
 	// FindAll finds sessions for a user with filters and pagination
 	FindAll(ctx context.Context, userID string, opts *SessionFilterOptions) (*SessionListResult, error)
 
@@ -40,9 +47,20 @@ type SessionRepository interface {
 	// Delete performs a soft delete on a session
 	Delete(ctx context.Context, sessionID string, userID string) error
 
-	// UpdateTotalAmount updates the total amount of a session
+	// UpdateTotalAmount updates the total amount of a session.
+	// SECURITY: not scoped by user_id. Callers MUST verify session ownership
+	// via FindByID(ctx, sessionID, userID) first.
 	UpdateTotalAmount(ctx context.Context, sessionID string, totalAmount float64) error
 
-	// UpdateStatus updates the status of a session
+	// UpdateStatus updates the status of a session.
+	// SECURITY: not scoped by user_id. Callers MUST verify session ownership
+	// via FindByID(ctx, sessionID, userID) first.
 	UpdateStatus(ctx context.Context, sessionID string, status valueobject.SessionStatus) error
+
+	// MarkNotified persists the timestamp of the most recent successful
+	// `send-notifications` call. CRITICAL: implementations MUST NOT
+	// touch updated_at — the dirty-for-notify predicate compares
+	// updated_at against last_notified_at, so bumping the former
+	// would re-open the gate the moment we close it.
+	MarkNotified(ctx context.Context, sessionID string, at time.Time) error
 }
