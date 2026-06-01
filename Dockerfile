@@ -17,29 +17,29 @@ COPY go.mod go.sum ./
 # Download all the dependencies
 RUN go mod download
 
-# Copy the source code (except the template directory)
+# Copy the source code
 COPY . .
 
 # Delete the template directory from the builder stage to prevent it from being compiled
 RUN rm -rf /app/template
 
 # Build the Go application with CGO enabled (required for bimg)
-RUN CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -o /app/main ./cmd/api/main.go
+# TARGETARCH is set automatically by Docker Buildx for multi-arch builds
+ARG TARGETARCH
+RUN CGO_ENABLED=1 GOOS=linux GOARCH=${TARGETARCH} go build -o /app/main ./cmd/api/main.go
 
 # Stage 2: Prepare CA certificates and timezone data
-FROM debian:bullseye-slim AS certs-tzdata
+FROM debian:bookworm-slim AS certs-tzdata
 
-# Install ca-certificates and tzdata
-RUN apt-get update && apt-get install -y ca-certificates tzdata
+RUN apt-get update && apt-get install -y ca-certificates tzdata \
+    && rm -rf /var/lib/apt/lists/*
 
 # Stage 3: Final stage with libvips for image processing
-# We need a full OS because bimg requires libvips for image processing
-FROM debian:bullseye-slim
+FROM debian:bookworm-slim
 
-# Install libvips and libvips-dev for image processing
+# Install libvips runtime library for image processing (bimg)
 RUN apt-get update && apt-get install -y \
     libvips42 \
-    libvips-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy the compiled Go binary from the build stage
