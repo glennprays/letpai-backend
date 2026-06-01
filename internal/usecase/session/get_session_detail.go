@@ -376,11 +376,13 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, userID, sessionI
 			pidStrs = append(pidStrs, id.String())
 		}
 		billItems = append(billItems, &BillItemItem{
-			BillItemID:     b.BillItemID.String(),
-			Description:    b.Description,
-			Amount:         b.Amount,
-			Category:       b.Category,
-			ParticipantIDs: pidStrs,
+			BillItemID:            b.BillItemID.String(),
+			Description:           b.Description,
+			Amount:                b.Amount,
+			Category:              b.Category,
+			ParticipantIDs:        pidStrs,
+			IncludesServiceCharge: b.IncludesServiceCharge,
+			IncludesTax:           b.IncludesTax,
 		})
 	}
 

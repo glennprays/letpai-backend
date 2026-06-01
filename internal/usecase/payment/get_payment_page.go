@@ -35,6 +35,13 @@ type PaymentPageFeeBreakdown struct {
 	Total              float64 `json:"total"`
 }
 
+// PaymentPageFeeConfig exposes the session's fee percentages so the
+// frontend can calculate per-item fee breakdowns.
+type PaymentPageFeeConfig struct {
+	ServiceChargePercentage float64 `json:"service_charge_percentage"`
+	TaxPercentage           float64 `json:"tax_percentage"`
+}
+
 // PaymentPageBillImage is a simplified bill image for the public page.
 type PaymentPageBillImage struct {
 	BillImageID  string  `json:"bill_image_id"`
@@ -65,6 +72,7 @@ type PaymentPageResponse struct {
 	IsExpired         bool                      `json:"is_expired"`
 	BillImages        []*PaymentPageBillImage   `json:"bill_images,omitempty"`
 	FeeBreakdown      *PaymentPageFeeBreakdown  `json:"fee_breakdown,omitempty"`
+	FeeConfig         *PaymentPageFeeConfig     `json:"fee_config,omitempty"`
 }
 
 // BillItemInfo carries both the bill's full amount and THIS
@@ -73,12 +81,14 @@ type PaymentPageResponse struct {
 // the bill was divided across so the UI can render "Rp 50000 / 3
 // people = Rp 16667 your share".
 type BillItemInfo struct {
-	BillItemID  string  `json:"bill_item_id"`
-	Description string  `json:"description"`
-	Amount      float64 `json:"amount"`
-	Category    *string `json:"category,omitempty"`
-	YourShare   float64 `json:"your_share"`
-	SharedWith  int     `json:"shared_with"`
+	BillItemID            string   `json:"bill_item_id"`
+	Description           string   `json:"description"`
+	Amount                float64  `json:"amount"`
+	Category              *string  `json:"category,omitempty"`
+	YourShare             float64  `json:"your_share"`
+	SharedWith            int      `json:"shared_with"`
+	IncludesServiceCharge bool     `json:"includes_service_charge"`
+	IncludesTax           bool     `json:"includes_tax"`
 }
 
 // GetPaymentPageUseCase handles getting public payment page data
@@ -188,12 +198,14 @@ func (uc *GetPaymentPageUseCase) Execute(ctx context.Context, participantID stri
 		}
 		yourShare := math.Floor(bill.Amount / float64(sharedWith))
 		billItemInfos = append(billItemInfos, BillItemInfo{
-			BillItemID:  bill.BillItemID.String(),
-			Description: bill.Description,
-			Amount:      bill.Amount,
-			Category:    bill.Category,
-			YourShare:   yourShare,
-			SharedWith:  sharedWith,
+			BillItemID:            bill.BillItemID.String(),
+			Description:           bill.Description,
+			Amount:                bill.Amount,
+			Category:              bill.Category,
+			YourShare:             yourShare,
+			SharedWith:            sharedWith,
+			IncludesServiceCharge: bill.IncludesServiceCharge,
+			IncludesTax:           bill.IncludesTax,
 		})
 
 		itemsTotal += yourShare
@@ -289,6 +301,7 @@ func (uc *GetPaymentPageUseCase) Execute(ctx context.Context, participantID stri
 		IsExpired:         isExpired,
 		BillImages:        billImageItems,
 		FeeBreakdown:      feeBreakdown,
+		FeeConfig:         buildFeeConfig(session),
 	}, nil
 }
 
@@ -299,4 +312,17 @@ func anyNonNil(name, number, holder *string) bool {
 		}
 	}
 	return false
+}
+
+// buildFeeConfig returns a PaymentPageFeeConfig when the session has
+// at least one non-zero fee percentage, so the frontend can calculate
+// per-item fee breakdowns.
+func buildFeeConfig(session *entity.Session) *PaymentPageFeeConfig {
+	if session.ServiceChargePercentage <= 0 && session.TaxPercentage <= 0 {
+		return nil
+	}
+	return &PaymentPageFeeConfig{
+		ServiceChargePercentage: session.ServiceChargePercentage,
+		TaxPercentage:           session.TaxPercentage,
+	}
 }
