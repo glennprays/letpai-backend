@@ -35,6 +35,7 @@ type SendNotificationsUseCase struct {
 	participantRepo ports.ParticipantRepository
 	contactRepo     ports.ContactRepository
 	billItemRepo    ports.BillItemRepository
+	userRepo        ports.UserRepository
 	notifier        *service.AsyncNotifier
 	renderer        *service.TemplateRenderer
 	appURL          string
@@ -46,6 +47,7 @@ func NewSendNotificationsUseCase(
 	participantRepo ports.ParticipantRepository,
 	contactRepo ports.ContactRepository,
 	billItemRepo ports.BillItemRepository,
+	userRepo ports.UserRepository,
 	notifier *service.AsyncNotifier,
 	renderer *service.TemplateRenderer,
 	appURL string,
@@ -55,6 +57,7 @@ func NewSendNotificationsUseCase(
 		participantRepo: participantRepo,
 		contactRepo:     contactRepo,
 		billItemRepo:    billItemRepo,
+		userRepo:        userRepo,
 		notifier:        notifier,
 		renderer:        renderer,
 		appURL:          strings.TrimRight(appURL, "/"),
@@ -67,6 +70,7 @@ func NewSendNotificationsUseCase(
 type notificationVars struct {
 	ParticipantName string
 	SessionName     string
+	MakerName       string
 	Total           string
 	Share           string
 	URL             string
@@ -143,6 +147,12 @@ func (uc *SendNotificationsUseCase) Execute(ctx context.Context, userID, session
 		return nil, domain.NewError(domain.ErrBadRequest, errors.New("no participants found in this session"))
 	}
 
+	// Resolve the session host's display name for MakerName.
+	makerName := "the host"
+	if host, err := uc.userRepo.FindByID(ctx, session.UserID.String()); err == nil && host.FullName != "" {
+		makerName = host.FullName
+	}
+
 	// Use the session's stored TotalAmount; bill-list sum is a fallback
 	// for sessions that haven't been recalculated yet.
 	totalAmount := session.TotalAmount
@@ -165,6 +175,7 @@ func (uc *SendNotificationsUseCase) Execute(ctx context.Context, userID, session
 		vars := notificationVars{
 			ParticipantName: participantName,
 			SessionName:     session.Title,
+			MakerName:       makerName,
 			Total:           formatIDR(totalAmount),
 			Share:           formatIDR(participant.ShareAmount),
 			URL:             uc.appURL + "/payment/" + participant.PublicSlug,
@@ -229,6 +240,6 @@ func formatIDR(amount float64) string {
 }
 
 func fallbackSessionNotification(v notificationVars) string {
-	return fmt.Sprintf("*Letpai - Bill Split*\n\nHi %s!\n\nYou've been added to a bill split session: *%s*\n\nTotal Amount: *Rp%s*\nYour Share: *Rp%s*\n\nView your bill and upload proof here:\n%s\n\nThank you for using Letpai!",
-		v.ParticipantName, v.SessionName, v.Total, v.Share, v.URL)
+	return fmt.Sprintf("Hello, %s 👋\n\n%s has added you to a bill split: %s\n\nBill Summary\n• Total Amount: Rp%s\n• Your Share: Rp%s\n\nReview the bill and upload your payment proof:\n%s\n\nIf you have any questions, contact %s directly.\n\n— Letpai · Bill Split\nhttps://letpai.app",
+		v.ParticipantName, v.MakerName, v.SessionName, v.Total, v.Share, v.URL, v.MakerName)
 }

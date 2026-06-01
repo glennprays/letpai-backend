@@ -37,6 +37,7 @@ type RetryNotificationUseCase struct {
 	contactRepo      ports.ContactRepository
 	billItemRepo     ports.BillItemRepository
 	logRepo          ports.NotificationLogRepository
+	userRepo         ports.UserRepository
 	notifier         *service.AsyncNotifier
 	renderer         *service.TemplateRenderer
 	rateLimitService *service.RateLimitService
@@ -49,6 +50,7 @@ func NewRetryNotificationUseCase(
 	contactRepo ports.ContactRepository,
 	billItemRepo ports.BillItemRepository,
 	logRepo ports.NotificationLogRepository,
+	userRepo ports.UserRepository,
 	notifier *service.AsyncNotifier,
 	renderer *service.TemplateRenderer,
 	rateLimitService *service.RateLimitService,
@@ -60,6 +62,7 @@ func NewRetryNotificationUseCase(
 		contactRepo:      contactRepo,
 		billItemRepo:     billItemRepo,
 		logRepo:          logRepo,
+		userRepo:         userRepo,
 		notifier:         notifier,
 		renderer:         renderer,
 		rateLimitService: rateLimitService,
@@ -127,6 +130,12 @@ func (uc *RetryNotificationUseCase) Execute(ctx context.Context, userID, partici
 		}
 	}
 
+	// Resolve the session host's display name for MakerName.
+	makerName := "the host"
+	if host, err := uc.userRepo.FindByID(ctx, session.UserID.String()); err == nil && host.FullName != "" {
+		makerName = host.FullName
+	}
+
 	url := uc.appURL + "/payment/" + participant.PublicSlug
 	var message string
 	switch notifType {
@@ -134,6 +143,7 @@ func (uc *RetryNotificationUseCase) Execute(ctx context.Context, userID, partici
 		vars := reminderVars{
 			ParticipantName: participantName,
 			SessionName:     session.Title,
+			MakerName:       makerName,
 			Share:           formatIDR(participant.ShareAmount),
 			URL:             url,
 		}
@@ -146,6 +156,7 @@ func (uc *RetryNotificationUseCase) Execute(ctx context.Context, userID, partici
 		vars := notificationVars{
 			ParticipantName: participantName,
 			SessionName:     session.Title,
+			MakerName:       makerName,
 			Total:           formatIDR(totalAmount),
 			Share:           formatIDR(participant.ShareAmount),
 			URL:             url,

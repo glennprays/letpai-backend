@@ -25,6 +25,7 @@ type SendReminderUseCase struct {
 	participantRepo ports.ParticipantRepository
 	sessionRepo     ports.SessionRepository
 	contactRepo     ports.ContactRepository
+	userRepo        ports.UserRepository
 	notifier        *service.AsyncNotifier
 	renderer        *service.TemplateRenderer
 	rateLimitSvc    *service.RateLimitService
@@ -36,6 +37,7 @@ func NewSendReminderUseCase(
 	participantRepo ports.ParticipantRepository,
 	sessionRepo ports.SessionRepository,
 	contactRepo ports.ContactRepository,
+	userRepo ports.UserRepository,
 	notifier *service.AsyncNotifier,
 	renderer *service.TemplateRenderer,
 	rateLimitSvc *service.RateLimitService,
@@ -45,6 +47,7 @@ func NewSendReminderUseCase(
 		participantRepo: participantRepo,
 		sessionRepo:     sessionRepo,
 		contactRepo:     contactRepo,
+		userRepo:        userRepo,
 		notifier:        notifier,
 		renderer:        renderer,
 		rateLimitSvc:    rateLimitSvc,
@@ -105,11 +108,18 @@ func (uc *SendReminderUseCase) Execute(ctx context.Context, userID, participantI
 		return nil, domain.NewError(domain.ErrBadRequest, errors.New("no WhatsApp number found for participant"))
 	}
 
+	// Resolve the session host's display name for MakerName.
+	makerName := "the host"
+	if host, err := uc.userRepo.FindByID(ctx, session.UserID.String()); err == nil && host.FullName != "" {
+		makerName = host.FullName
+	}
+
 	// Render reminder via the admin-managed template; fall back to a
 	// hardcoded body if the template is missing/broken.
 	vars := reminderVars{
 		ParticipantName: participantName,
 		SessionName:     session.Title,
+		MakerName:       makerName,
 		Share:           formatIDR(participant.ShareAmount),
 		URL:             uc.appURL + "/payment/" + participant.PublicSlug,
 	}
@@ -137,11 +147,12 @@ func (uc *SendReminderUseCase) Execute(ctx context.Context, userID, participantI
 type reminderVars struct {
 	ParticipantName string
 	SessionName     string
+	MakerName       string
 	Share           string
 	URL             string
 }
 
 func fallbackReminder(v reminderVars) string {
-	return fmt.Sprintf("*Letpai - Payment Reminder*\n\nHi %s!\n\nFriendly reminder about your pending payment for: *%s*\n\nAmount Due: *Rp%s*\n\nUpload your proof here:\n%s\n\nThank you for using Letpai!",
-		v.ParticipantName, v.SessionName, v.Share, v.URL)
+	return fmt.Sprintf("Hey %s, just a reminder! 👋\n\n%s is waiting for your payment on: %s\n\nAmount Due: Rp%s\n\nUpload your payment proof here:\n%s\n\nThanks!\n— Letpai\nhttps://letpai.app",
+		v.ParticipantName, v.MakerName, v.SessionName, v.Share, v.URL)
 }

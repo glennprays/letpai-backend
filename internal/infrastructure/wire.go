@@ -15,6 +15,7 @@ import (
 	"github.com/glennprays/letpai-backend/internal/router"
 	"github.com/glennprays/letpai-backend/internal/service"
 	"github.com/glennprays/letpai-backend/internal/usecase/admin"
+	"github.com/glennprays/letpai-backend/internal/usecase/admintemplates"
 	"github.com/glennprays/letpai-backend/internal/usecase/auth"
 	"github.com/glennprays/letpai-backend/internal/usecase/billing"
 	"github.com/glennprays/letpai-backend/internal/usecase/contact"
@@ -46,6 +47,8 @@ var RepositorySet = wire.NewSet(
 	repository.NewPostgresNotificationLogRepository,
 	repository.NewPostgresWhatsAppConfigRepository,
 	repository.NewPostgresAdminRepository,
+	repository.NewPostgresMessageTemplateRepository,
+	repository.NewPostgresSessionBankAccountRepository,
 )
 
 var ServiceSet = wire.NewSet(
@@ -55,6 +58,8 @@ var ServiceSet = wire.NewSet(
 	NewWhatsAppService,
 	NewImageServiceProvider,
 	NewRateLimitService,
+	service.NewTemplateRenderer,
+	service.NewAsyncNotifier,
 )
 
 var UseCaseSet = wire.NewSet(
@@ -100,6 +105,7 @@ var UseCaseSet = wire.NewSet(
 	session.NewGetSessionDetailUseCase,
 	session.NewUpdateSessionUseCase,
 	session.NewCancelSessionUseCase,
+	session.NewReplaceBankAccountsUseCase,
 	// Participant use cases
 	participant.NewAddParticipantsUseCase,
 	participant.NewRemoveParticipantUseCase,
@@ -110,11 +116,11 @@ var UseCaseSet = wire.NewSet(
 	billing.NewUpdateBillItemUseCase,
 	billing.NewDeleteBillItemUseCase,
 	billing.NewCalculateSplitsUseCase,
-		billing.NewUploadBillImageUseCase,
-		billing.NewGetBillImagesUseCase,
-		billing.NewGetBillImageSignedUrlUseCase,
-		billing.NewDeleteBillImageUseCase,
-		billing.NewUpdateFeeConfigUseCase,
+	billing.NewUploadBillImageUseCase,
+	billing.NewGetBillImagesUseCase,
+	billing.NewGetBillImageSignedUrlUseCase,
+	billing.NewDeleteBillImageUseCase,
+	billing.NewUpdateFeeConfigUseCase,
 	// Payment use cases
 	payment.NewSubmitPaymentUseCase,
 	payment.NewApprovePaymentUseCase,
@@ -128,6 +134,12 @@ var UseCaseSet = wire.NewSet(
 	notification.NewSendNotificationsUseCase,
 	notification.NewSendReminderUseCase,
 	notification.NewBulkReminderUseCase,
+	notification.NewReminderStatusUseCase,
+	notification.NewRetryNotificationUseCase,
+	// Admin template use cases
+	admintemplates.NewListTemplatesUseCase,
+	admintemplates.NewUpdateTemplateUseCase,
+	admintemplates.NewTestSendUseCase,
 	// Dashboard use cases
 	dashboard.NewGetDashboardUseCase,
 )
@@ -136,6 +148,7 @@ var HandlerSet = wire.NewSet(
 	handler.NewHealthHandler,
 	handler.NewAuthHandler,
 	handler.NewAdminHandler,
+	handler.NewAdminTemplatesHandler,
 	handler.NewWhatsAppWebhookHandler,
 	handler.NewContactGroupHandler,
 	handler.NewContactHandler,
@@ -207,6 +220,12 @@ func NewImageServiceProvider(cfg *config.Config) (*service.ImageService, error) 
 	return NewImageService(cfg)
 }
 
+// NewAppURL provides the application URL string from config. Wire needs a
+// named provider because multiple constructors take a plain `string` param.
+func NewAppURL(cfg *config.Config) string {
+	return cfg.AppURL
+}
+
 // InitializeApp creates the application and injects all dependencies
 func InitializeApp() (*App, error) {
 	wire.Build(
@@ -215,6 +234,7 @@ func InitializeApp() (*App, error) {
 		ServiceSet,
 		UseCaseSet,
 		ApiSet,
+		NewAppURL,
 		wire.Struct(new(App), "*"),
 	)
 	return &App{}, nil

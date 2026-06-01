@@ -226,6 +226,7 @@ func (r *Router) setupAdminRoutes(group fiber.Router) {
 	// admin only would be cheap to add later).
 	protectedAdmin.Get("/templates", r.AdminTemplatesHandler.List)
 	protectedAdmin.Put("/templates/:key", r.AdminTemplatesHandler.Update)
+	protectedAdmin.Post("/templates/:key/test-send", r.AdminTemplatesHandler.TestSend)
 
 	// Admin management routes (super admin only)
 	superAdmin := protectedAdmin.Use(middleware.RequireSuperAdminRole(r.jwtService))

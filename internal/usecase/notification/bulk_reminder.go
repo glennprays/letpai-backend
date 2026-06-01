@@ -32,6 +32,7 @@ type BulkReminderUseCase struct {
 	participantRepo ports.ParticipantRepository
 	sessionRepo     ports.SessionRepository
 	contactRepo     ports.ContactRepository
+	userRepo        ports.UserRepository
 	notifier        *service.AsyncNotifier
 	renderer        *service.TemplateRenderer
 	rateLimitSvc    *service.RateLimitService
@@ -42,6 +43,7 @@ func NewBulkReminderUseCase(
 	participantRepo ports.ParticipantRepository,
 	sessionRepo ports.SessionRepository,
 	contactRepo ports.ContactRepository,
+	userRepo ports.UserRepository,
 	notifier *service.AsyncNotifier,
 	renderer *service.TemplateRenderer,
 	rateLimitSvc *service.RateLimitService,
@@ -51,6 +53,7 @@ func NewBulkReminderUseCase(
 		participantRepo: participantRepo,
 		sessionRepo:     sessionRepo,
 		contactRepo:     contactRepo,
+		userRepo:        userRepo,
 		notifier:        notifier,
 		renderer:        renderer,
 		rateLimitSvc:    rateLimitSvc,
@@ -71,6 +74,12 @@ func (uc *BulkReminderUseCase) Execute(ctx context.Context, userID, sessionID st
 
 	if len(participants) == 0 {
 		return nil, domain.NewError(domain.ErrBadRequest, errors.New("no participants found in this session"))
+	}
+
+	// Resolve the session host's display name for MakerName.
+	makerName := "the host"
+	if host, err := uc.userRepo.FindByID(ctx, session.UserID.String()); err == nil && host.FullName != "" {
+		makerName = host.FullName
 	}
 
 	sentCount := 0
@@ -119,6 +128,7 @@ func (uc *BulkReminderUseCase) Execute(ctx context.Context, userID, sessionID st
 		vars := reminderVars{
 			ParticipantName: participantName,
 			SessionName:     session.Title,
+			MakerName:       makerName,
 			Share:           formatIDR(participant.ShareAmount),
 			URL:             uc.appURL + "/payment/" + participant.PublicSlug,
 		}
