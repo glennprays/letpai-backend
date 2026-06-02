@@ -147,3 +147,28 @@ jobs:
           git tag -a "$VERSION" -m "Release $VERSION"
           git push origin "$VERSION"
           echo "Successfully created tag $VERSION"
+
+      - name: Create GitHub Release
+        if: steps.release.outputs.SKIP != 'true' && steps.tagged.outputs.ALREADY_TAGGED != 'true' && steps.tag_exists.outputs.EXISTS != 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const version = '${{ steps.version.outputs.VERSION }}';
+            const { data: prs } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              commit_sha: context.sha
+            });
+            let body = '';
+            if (prs.length > 0) {
+              body = prs[0].body || '';
+            }
+            await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: version,
+              name: `${version}`,
+              body: body,
+              draft: false,
+              prerelease: false
+            });
