@@ -128,8 +128,12 @@ func (uc *SendReminderUseCase) Execute(ctx context.Context, userID, participantI
 		message = fallbackReminder(vars)
 	}
 
-	// Queue the gateway send; record rate-limit + counter immediately.
-	uc.notifier.Dispatch(participant.ParticipantID, valueobject.NotificationTypeReminder, whatsappNumber, message)
+	// Enqueue the send first; only burn the reminder rate-limit + counter if
+	// the notification was actually queued, so a failed enqueue doesn't cost
+	// the host one of their limited reminders.
+	if err := uc.notifier.Dispatch(participant.ParticipantID, valueobject.NotificationTypeReminder, whatsappNumber, message); err != nil {
+		return nil, err
+	}
 	_ = uc.rateLimitSvc.RecordReminder(ctx, participantID)
 	participant.BumpNotificationCount()
 	_ = uc.participantRepo.Update(ctx, participant)

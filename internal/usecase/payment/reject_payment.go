@@ -4,14 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/glennprays/letpai-backend/domain"
-	"github.com/glennprays/letpai-backend/domain/entity"
 	"github.com/glennprays/letpai-backend/domain/ports"
 	"github.com/glennprays/letpai-backend/domain/valueobject"
 	"github.com/glennprays/letpai-backend/internal/service"
-	"github.com/google/uuid"
 )
 
 // RejectPaymentRequest represents a request to reject payment
@@ -29,11 +26,10 @@ type RejectPaymentResponse struct {
 
 // RejectPaymentUseCase handles rejecting payment proof
 type RejectPaymentUseCase struct {
-	participantRepo     ports.ParticipantRepository
-	sessionRepo         ports.SessionRepository
-	contactRepo         ports.ContactRepository
-	whatsappSvc         *service.WhatsAppService
-	notificationLogRepo ports.NotificationLogRepository
+	participantRepo ports.ParticipantRepository
+	sessionRepo     ports.SessionRepository
+	contactRepo     ports.ContactRepository
+	notifier        *service.AsyncNotifier
 }
 
 // NewRejectPaymentUseCase creates a new reject payment use case
@@ -41,15 +37,13 @@ func NewRejectPaymentUseCase(
 	participantRepo ports.ParticipantRepository,
 	sessionRepo ports.SessionRepository,
 	contactRepo ports.ContactRepository,
-	whatsappSvc *service.WhatsAppService,
-	notificationLogRepo ports.NotificationLogRepository,
+	notifier *service.AsyncNotifier,
 ) *RejectPaymentUseCase {
 	return &RejectPaymentUseCase{
-		participantRepo:     participantRepo,
-		sessionRepo:         sessionRepo,
-		contactRepo:         contactRepo,
-		whatsappSvc:         whatsappSvc,
-		notificationLogRepo: notificationLogRepo,
+		participantRepo: participantRepo,
+		sessionRepo:     sessionRepo,
+		contactRepo:     contactRepo,
+		notifier:        notifier,
 	}
 }
 
@@ -117,32 +111,12 @@ func (uc *RejectPaymentUseCase) Execute(ctx context.Context, userID, participant
 			"Thank you for using Letpai!",
 			participantName, req.RejectionReason)
 
-		messageID, err := uc.whatsappSvc.SendNotification(ctx, whatsappNumber, message)
-		if err != nil {
-			// Log failure but don't block the rejection
-			errMsg := err.Error()
-			log := &entity.NotificationLog{
-				LogID:            uuid.New(),
-				ParticipantID:    participant.ParticipantID,
-				NotificationType: valueobject.NotificationTypeRejection,
-				MessageContent:   message,
-				SentAt:           time.Now(),
-				Status:           entity.NotificationStatusFailed,
-				ErrorMessage:     &errMsg,
-			}
-			uc.notificationLogRepo.Create(ctx, log)
-		} else {
-			log := &entity.NotificationLog{
-				LogID:             uuid.New(),
-				ParticipantID:     participant.ParticipantID,
-				NotificationType:  valueobject.NotificationTypeRejection,
-				WhatsAppMessageID: &messageID,
-				MessageContent:    message,
-				SentAt:            time.Now(),
-				Status:            entity.NotificationStatusQueued,
-			}
-			uc.notificationLogRepo.Create(ctx, log)
-		}
+		// Enqueue into the delivery outbox instead of sending inline. The
+		// rejection has already been persisted above; the WhatsApp send must
+		// not block the HTTP response on the (slow) gateway, and the worker
+		// retries it durably. A failed enqueue is best-effort — the rejection
+		// still stands.
+		_ = uc.notifier.Dispatch(participant.ParticipantID, valueobject.NotificationTypeRejection, whatsappNumber, message)
 	}
 
 	return &RejectPaymentResponse{

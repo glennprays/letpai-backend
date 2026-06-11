@@ -60,6 +60,7 @@ var ServiceSet = wire.NewSet(
 	NewRateLimitService,
 	service.NewTemplateRenderer,
 	service.NewAsyncNotifier,
+	service.NewNotificationWorker,
 )
 
 var UseCaseSet = wire.NewSet(
