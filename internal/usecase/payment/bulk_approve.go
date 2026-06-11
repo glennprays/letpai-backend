@@ -95,18 +95,14 @@ func (uc *BulkApproveUseCase) Execute(ctx context.Context, userID string, req *B
 		sessionIDs[participant.SessionID.String()] = true
 	}
 
-	// Check if any sessions are now complete
+	// Atomically complete any session whose participants are now all paid.
+	// Ownership was already verified for every session in the map during the
+	// approval loop above. The single guarded UPDATE avoids the read-then-write
+	// completion race.
 	sessionCompleted := false
 	for sessionID := range sessionIDs {
-		if complete, _ := uc.checkSessionCompletion(ctx, sessionID); complete {
-			// Mark session as completed
-			session, err := uc.sessionRepo.FindByID(ctx, sessionID, userID)
-			if err == nil {
-				if err := session.Complete(); err == nil {
-					_ = uc.sessionRepo.Update(ctx, session)
-					sessionCompleted = true
-				}
-			}
+		if done, _ := uc.sessionRepo.CompleteIfAllPaid(ctx, sessionID); done {
+			sessionCompleted = true
 		}
 	}
 
@@ -116,20 +112,4 @@ func (uc *BulkApproveUseCase) Execute(ctx context.Context, userID string, req *B
 		Failed:           failures,
 		SessionCompleted: sessionCompleted,
 	}, nil
-}
-
-// checkSessionCompletion checks if all participants in a session have paid
-func (uc *BulkApproveUseCase) checkSessionCompletion(ctx context.Context, sessionID string) (bool, error) {
-	participants, err := uc.participantRepo.FindBySessionID(ctx, sessionID)
-	if err != nil {
-		return false, err
-	}
-
-	for _, p := range participants {
-		if !p.IsPaid() {
-			return false, nil
-		}
-	}
-
-	return true, nil
 }

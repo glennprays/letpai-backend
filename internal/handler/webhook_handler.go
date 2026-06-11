@@ -57,45 +57,58 @@ func (h *WebhookHandler) HandleWhatsAppStatus(c *fiber.Ctx) error {
 	// Process webhook based on event type string
 	switch string(payload.Event) {
 	case "message.queued", "message.sent", "message.failed":
-		// These are status update events (outgoing messages)
-		// Parse as outgoing webhook payload to get message ID
+		// Status update for an outgoing message. Parse to get the message ID.
 		outgoingPayload, err := verifier.ParseOutgoingWebhook(body, signature)
 		if err != nil {
-			// Failed to parse as outgoing, skip
-			break
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"success": false,
+				"error":   "Invalid webhook payload",
+			})
 		}
 
-		// Find notification log by WhatsApp message ID
+		// Resolve the log row this event belongs to. An unknown message ID
+		// means there is nothing to update (e.g. a send we never recorded, or
+		// a row already pruned) — acknowledge so the gateway stops retrying.
 		log, err := h.notificationLogRepo.FindByWhatsAppMessageID(c.Context(), outgoingPayload.MessageId)
 		if err != nil {
-			// Log not found, skip
-			break
+			return c.Status(fiber.StatusOK).JSON(fiber.Map{
+				"success": true,
+				"message": "no matching notification log",
+			})
 		}
 
-		// Update status based on event
-		switch string(payload.Event) {
-		case "message.queued":
-			// Already queued, no update needed
-			break
-		case "message.sent":
-			err := h.notificationLogRepo.UpdateStatus(c.Context(), log.LogID.String(), string(entity.NotificationStatusSent))
-			if err != nil {
-				break
-			}
-		case "message.failed":
-			errMsg := "Failed to deliver via WhatsApp"
-			err := h.notificationLogRepo.UpdateStatusWithError(c.Context(), log.LogID.String(), string(entity.NotificationStatusFailed), errMsg)
-			if err != nil {
-				break
-			}
+		// Forward-only state machine: ignore duplicate / out-of-order /
+		// terminal events so re-delivered webhooks are idempotent no-ops.
+		next, ok := entity.NextWebhookStatus(log.Status, string(payload.Event))
+		if !ok {
+			return c.Status(fiber.StatusOK).JSON(fiber.Map{
+				"success": true,
+				"message": "no-op",
+			})
+		}
+
+		var errMsg *string
+		if next == entity.NotificationStatusFailed {
+			m := "Failed to deliver via WhatsApp"
+			errMsg = &m
+		}
+
+		// Compare-and-swap on the observed current status. A real DB error
+		// returns 5xx so the gateway retries; a lost CAS (another delivery
+		// advanced the row first) is reported as success inside the repo.
+		if err := h.notificationLogRepo.UpdateStatusGuarded(
+			c.Context(), log.LogID.String(), string(next), string(log.Status), errMsg,
+		); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"success": false,
+				"error":   "Failed to update notification status",
+			})
 		}
 
 	case "message.incoming":
-		// Incoming message - not currently used for Letpai
-		// But could be used for future features
-		break
+		// Incoming message - not currently used for Letpai.
 	default:
-		// Unknown event type - log but don't fail
+		// Unknown event type - acknowledge without failing.
 	}
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{

@@ -168,7 +168,9 @@ func (uc *RetryNotificationUseCase) Execute(ctx context.Context, userID, partici
 		message = rendered
 	}
 
-	uc.notifier.Dispatch(participant.ParticipantID, notifType, whatsappNumber, message)
+	if err := uc.notifier.Dispatch(participant.ParticipantID, notifType, whatsappNumber, message); err != nil {
+		return nil, err
+	}
 
 	return &RetryNotificationResponse{
 		Message:  "Retry queued",

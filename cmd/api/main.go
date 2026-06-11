@@ -74,6 +74,13 @@ func main() {
 	// Setup routes (includes custom middleware)
 	app.Router.Setup(fiberApp)
 
+	// Start the durable WhatsApp delivery worker. It drains the
+	// notification_logs outbox in the background; cancelling workerCtx on
+	// shutdown stops it cleanly. Any send interrupted mid-flight is left in
+	// 'sending' and requeued by the worker's stuck-row reaper on next start.
+	workerCtx, stopWorker := context.WithCancel(context.Background())
+	go app.NotificationWorker.Run(workerCtx)
+
 	// Start server in goroutine
 	addr := fmt.Sprintf(":%d", app.Config.AppPort)
 	go func() {
@@ -95,6 +102,9 @@ func main() {
 	<-quit
 
 	logger.Info(lifecycleID, "Shutting down server", nil)
+
+	// Stop the delivery worker before draining HTTP so no new sends start.
+	stopWorker()
 
 	// Timeout context for shutdown
 	timeoutSeconds := 10

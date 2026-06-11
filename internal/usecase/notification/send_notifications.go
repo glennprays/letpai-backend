@@ -188,7 +188,11 @@ func (uc *SendNotificationsUseCase) Execute(ctx context.Context, userID, session
 			message = fallbackSessionNotification(vars)
 		}
 
-		uc.notifier.Dispatch(participant.ParticipantID, valueobject.NotificationTypeInitial, whatsappNumber, message)
+		if err := uc.notifier.Dispatch(participant.ParticipantID, valueobject.NotificationTypeInitial, whatsappNumber, message); err != nil {
+			// Enqueue (DB insert) failed; don't report this participant as
+			// queued. The host can re-send; nothing was half-committed.
+			continue
+		}
 
 		queued = append(queued, NotificationItem{
 			ParticipantID: participant.ParticipantID.String(),

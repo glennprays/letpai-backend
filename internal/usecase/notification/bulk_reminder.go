@@ -137,7 +137,10 @@ func (uc *BulkReminderUseCase) Execute(ctx context.Context, userID, sessionID st
 			message = fallbackReminder(vars)
 		}
 
-		uc.notifier.Dispatch(participant.ParticipantID, valueobject.NotificationTypeReminder, whatsappNumber, message)
+		if err := uc.notifier.Dispatch(participant.ParticipantID, valueobject.NotificationTypeReminder, whatsappNumber, message); err != nil {
+			// Enqueue failed; skip without burning this participant's reminder.
+			continue
+		}
 		_ = uc.rateLimitSvc.RecordReminder(ctx, participant.ParticipantID.String())
 
 		notifications = append(notifications, NotificationItem{

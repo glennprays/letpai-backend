@@ -78,6 +78,13 @@ func (uc *SubmitPaymentUseCase) Execute(ctx context.Context, participantID strin
 		return nil, domain.NewError(domain.ErrBadRequest, errors.New("this session has expired and no longer accepts payments"))
 	}
 
+	// Enforce the same 7-day link lifetime the payment page advertises
+	// (get_payment_page computes CreatedAt+7d for the is_expired flag). Without
+	// this, an "expired" link still accepts proof uploads server-side.
+	if time.Now().After(session.CreatedAt.Add(7 * 24 * time.Hour)) {
+		return nil, domain.NewError(domain.ErrBadRequest, errors.New("this payment link has expired and no longer accepts payments"))
+	}
+
 	if err := uc.imageService.ValidateBase64(req.ProofImage); err != nil {
 		return nil, domain.NewError(domain.ErrBadRequest, err)
 	}

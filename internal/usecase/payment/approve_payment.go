@@ -71,34 +71,13 @@ func (uc *ApprovePaymentUseCase) Execute(ctx context.Context, userID, participan
 		return nil, err
 	}
 
-	// Check if all participants in the session have paid
-	// If so, mark session as completed
-	sessionCompleted, err := uc.checkSessionCompletion(ctx, participant.SessionID.String())
-	if err == nil && sessionCompleted {
-		// Mark session as completed
-		if err := session.Complete(); err == nil {
-			_ = uc.sessionRepo.Update(ctx, session)
-		}
-	}
+	// Atomically complete the session iff every participant is now paid. A
+	// single guarded UPDATE avoids the race where two concurrent approvals both
+	// read a stale "still unpaid" snapshot and neither completes the session.
+	_, _ = uc.sessionRepo.CompleteIfAllPaid(ctx, participant.SessionID.String())
 
 	return &ApprovePaymentResponse{
 		PaymentStatus: participant.PaymentStatus.String(),
 		ApprovedAt:    participant.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	}, nil
-}
-
-// checkSessionCompletion checks if all participants in a session have paid
-func (uc *ApprovePaymentUseCase) checkSessionCompletion(ctx context.Context, sessionID string) (bool, error) {
-	participants, err := uc.participantRepo.FindBySessionID(ctx, sessionID)
-	if err != nil {
-		return false, err
-	}
-
-	for _, p := range participants {
-		if !p.IsPaid() {
-			return false, nil
-		}
-	}
-
-	return true, nil
 }

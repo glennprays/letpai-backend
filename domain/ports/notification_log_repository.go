@@ -2,6 +2,7 @@ package ports
 
 import (
 	"context"
+	"time"
 
 	"github.com/glennprays/letpai-backend/domain/entity"
 	"github.com/google/uuid"
@@ -48,6 +49,12 @@ type NotificationLogRepository interface {
 	// UpdateStatusWithError updates the status and error message of a notification log
 	UpdateStatusWithError(ctx context.Context, logID string, status string, errorMessage string) error
 
+	// UpdateStatusGuarded advances status via optimistic compare-and-swap:
+	// it only applies when the row is still at expectedCurrent. Zero rows
+	// affected is treated as a successful no-op (another delivery won the
+	// race), making duplicate/out-of-order webhook processing idempotent.
+	UpdateStatusGuarded(ctx context.Context, logID, newStatus, expectedCurrent string, errorMessage *string) error
+
 	// CountByParticipantIDAndType counts notification logs for a participant filtered by type
 	CountByParticipantIDAndType(ctx context.Context, participantID string, notificationType string) (int, error)
 
@@ -62,4 +69,23 @@ type NotificationLogRepository interface {
 
 	// FindByWhatsAppMessageID finds a notification log by WhatsApp message ID
 	FindByWhatsAppMessageID(ctx context.Context, whatsappMessageID string) (*entity.NotificationLog, error)
+
+	// --- Outbox / delivery worker (migration 000030) ---
+
+	// ClaimPending atomically claims up to limit due rows for the given
+	// worker (FOR UPDATE SKIP LOCKED), flipping them to 'sending'.
+	ClaimPending(ctx context.Context, workerID string, limit int) ([]*entity.NotificationLog, error)
+
+	// MarkSent records a successful send with the gateway message id.
+	MarkSent(ctx context.Context, logID, whatsappMessageID string) error
+
+	// MarkRetry records a retryable failure with the next scheduled attempt.
+	MarkRetry(ctx context.Context, logID string, attempts int, nextAttemptAt time.Time, errMsg string) error
+
+	// MarkDead records terminal failure after retries are exhausted.
+	MarkDead(ctx context.Context, logID string, attempts int, errMsg string) error
+
+	// RequeueStuck returns rows stuck in 'sending' before stuckBefore to
+	// 'pending'. Returns the number of rows requeued.
+	RequeueStuck(ctx context.Context, stuckBefore time.Time) (int64, error)
 }

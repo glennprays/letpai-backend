@@ -26,7 +26,12 @@ func ErrorHandler(debug bool) fiber.ErrorHandler {
 	return func(c *fiber.Ctx, err error) error {
 		// 1. Handle Fiber errors FIRST
 		if fe, ok := err.(*fiber.Error); ok {
-			body := fiber.Map{"error": fe.Message}
+			apiError := httperror.APIError{
+				Status:  fe.Code,
+				Code:    httperror.CodeForStatus(fe.Code),
+				Message: fe.Message,
+			}
+			body := fiber.Map(apiError.Response())
 			withPanicDetails(c, body, debug)
 			return c.Status(fe.Code).JSON(body)
 		}
@@ -36,10 +41,12 @@ func ErrorHandler(debug bool) fiber.ErrorHandler {
 
 		if apiError.Status == 0 {
 			apiError.Status = fiber.StatusInternalServerError
+			apiError.Code = httperror.CodeForStatus(apiError.Status)
 			apiError.Message = "Internal Server Error"
 		}
 
-		body := fiber.Map{"error": apiError.Message}
+		// Unified envelope: { success:false, error:{ code, message } }.
+		body := fiber.Map(apiError.Response())
 		withPanicDetails(c, body, debug)
 		return c.Status(apiError.Status).JSON(body)
 	}

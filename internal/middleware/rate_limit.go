@@ -100,19 +100,42 @@ func LoginRateLimiter(rateLimitService *service.RateLimitService) fiber.Handler 
 	})
 }
 
-// VerifyOTPRateLimiter returns rate limiting middleware for OTP verification endpoint
+// VerifyOTPRateLimiter rate-limits OTP verification on TWO dimensions: per-IP
+// (stops one host hammering the endpoint) AND per-phone across all IPs (stops a
+// botnet spreading brute-force guesses of the 6-digit code over many
+// addresses). A request is rejected if either limit is exceeded.
 func VerifyOTPRateLimiter(rateLimitService *service.RateLimitService) fiber.Handler {
-	return RateLimitMiddleware(RateLimitConfig{
-		KeyExtractor: func(c *fiber.Ctx) string {
-			// For OTP, we'll rate limit per IP to prevent OTP enumeration attacks
-			ip := c.IP()
-			return fmt.Sprintf("verifyotp:ip:%s", ip)
-		},
-		CheckRateLimit: func(ctx context.Context, key string) (*service.RateLimitResult, error) {
-			// Use OTP verification rate limit (3 per IP per 15 minutes)
-			return rateLimitService.CheckOTPRateLimit(ctx, key)
-		},
-	})
+	respond := func(c *fiber.Ctx, result *service.RateLimitResult) error {
+		c.Set("Retry-After", strconv.Itoa(service.CalculateRetryAfterSeconds(result.RetryAfter)))
+		return c.Status(fiber.StatusTooManyRequests).JSON(fiber.Map{
+			"success": false,
+			"error": fiber.Map{
+				"code":    "RATE_LIMIT_001",
+				"message": fmt.Sprintf("Too many attempts. Please try again in %s", service.FormatRetryAfter(result.RetryAfter)),
+			},
+			"retry_after": service.CalculateRetryAfterSeconds(result.RetryAfter),
+		})
+	}
+
+	return func(c *fiber.Ctx) error {
+		// Per-phone limit across all IPs (botnet brute-force guard). Best-effort:
+		// skip on extraction/limiter failure so a Redis blip doesn't block logins.
+		if phone := extractWhatsAppNumber(c); phone != "" {
+			if res, err := rateLimitService.CheckOTPPhoneRateLimit(c.Context(), phone); err == nil && !res.Allowed {
+				return respond(c, res)
+			}
+		}
+
+		// Per-IP limit.
+		res, err := rateLimitService.CheckOTPRateLimit(c.Context(), "ip:"+c.IP())
+		if err != nil {
+			return c.Next() // fail-open on limiter error
+		}
+		if !res.Allowed {
+			return respond(c, res)
+		}
+		return c.Next()
+	}
 }
 
 // RegisterRateLimiter returns rate limiting middleware for registration endpoint
