@@ -48,6 +48,12 @@ type NotificationLogRepository interface {
 	// UpdateStatusWithError updates the status and error message of a notification log
 	UpdateStatusWithError(ctx context.Context, logID string, status string, errorMessage string) error
 
+	// UpdateStatusGuarded advances status via optimistic compare-and-swap:
+	// it only applies when the row is still at expectedCurrent. Zero rows
+	// affected is treated as a successful no-op (another delivery won the
+	// race), making duplicate/out-of-order webhook processing idempotent.
+	UpdateStatusGuarded(ctx context.Context, logID, newStatus, expectedCurrent string, errorMessage *string) error
+
 	// CountByParticipantIDAndType counts notification logs for a participant filtered by type
 	CountByParticipantIDAndType(ctx context.Context, participantID string, notificationType string) (int, error)
 

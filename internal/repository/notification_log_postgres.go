@@ -25,8 +25,10 @@ func NewPostgresNotificationLogRepository(db *sqlx.DB) ports.NotificationLogRepo
 // Create creates a new notification log entry
 func (r *PostgresNotificationLogRepository) Create(ctx context.Context, log *entity.NotificationLog) error {
 	query := `
-		INSERT INTO notification_logs (log_id, participant_id, notification_type, message_content, sent_at, status)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO notification_logs
+			(log_id, participant_id, notification_type, whatsapp_message_id,
+			 message_content, sent_at, status, error_message, phone)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 	`
 
 	_, err := r.db.ExecContext(
@@ -35,9 +37,12 @@ func (r *PostgresNotificationLogRepository) Create(ctx context.Context, log *ent
 		log.LogID,
 		log.ParticipantID,
 		log.NotificationType,
+		log.WhatsAppMessageID,
 		log.MessageContent,
 		log.SentAt,
 		log.Status,
+		log.ErrorMessage,
+		log.Phone,
 	)
 
 	if err != nil {
@@ -368,6 +373,28 @@ func (r *PostgresNotificationLogRepository) UpdateStatusWithError(ctx context.Co
 
 	if rows == 0 {
 		return domain.NewError(domain.ErrNotFound, nil)
+	}
+
+	return nil
+}
+
+// UpdateStatusGuarded advances status only if the row is still at
+// expectedCurrent (optimistic compare-and-swap). Zero rows affected means
+// another webhook delivery already advanced it — that is a successful no-op,
+// not an error, which is what makes concurrent/duplicate webhook deliveries
+// safe. A real DB error is surfaced so the caller can return 5xx and let the
+// gateway retry.
+func (r *PostgresNotificationLogRepository) UpdateStatusGuarded(ctx context.Context, logID, newStatus, expectedCurrent string, errorMessage *string) error {
+	query := `
+		UPDATE notification_logs
+		   SET status = $2,
+		       error_message = COALESCE($4, error_message),
+		       updated_at = CURRENT_TIMESTAMP
+		 WHERE log_id = $1 AND status = $3
+	`
+
+	if _, err := r.db.ExecContext(ctx, query, logID, newStatus, expectedCurrent, errorMessage); err != nil {
+		return domain.NewError(domain.ErrInternalFailure, err)
 	}
 
 	return nil
