@@ -78,6 +78,15 @@ type NotificationLog struct {
 	// sends to the number captured when the notification was created rather
 	// than re-resolving a possibly-changed contact.
 	Phone *string `json:"phone,omitempty" db:"phone"`
+
+	// Outbox bookkeeping (migration 000030). Populated for rows driven by
+	// the delivery worker; legacy rows leave these at their column defaults.
+	Attempts      int        `json:"attempts" db:"attempts"`
+	MaxAttempts   int        `json:"max_attempts" db:"max_attempts"`
+	NextAttemptAt time.Time  `json:"next_attempt_at" db:"next_attempt_at"`
+	LockedAt      *time.Time `json:"locked_at,omitempty" db:"locked_at"`
+	LockedBy      *string    `json:"locked_by,omitempty" db:"locked_by"`
+	UpdatedAt     time.Time  `json:"updated_at" db:"updated_at"`
 }
 
 // NewNotificationLog creates a new notification log entry
