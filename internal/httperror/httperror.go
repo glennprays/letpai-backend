@@ -8,14 +8,43 @@ import (
 
 type APIError struct {
 	Status  int
+	Code    string
 	Message string
 }
 
-// Response returns the error response in the format expected by the API
+// CodeForStatus maps an HTTP status to the stable machine-readable error code
+// the frontend branches on. Keeping this in one place is what lets every error
+// path — handler-level and the global ErrorHandler — emit the same envelope.
+func CodeForStatus(status int) string {
+	switch status {
+	case 400:
+		return "BAD_REQUEST"
+	case 401:
+		return "UNAUTHORIZED"
+	case 403:
+		return "FORBIDDEN"
+	case 404:
+		return "NOT_FOUND"
+	case 409:
+		return "CONFLICT"
+	case 429:
+		return "RATE_LIMITED"
+	default:
+		return "INTERNAL"
+	}
+}
+
+// Response returns the unified error envelope used across the whole API:
+// { "success": false, "error": { "code": ..., "message": ... } }.
 func (e APIError) Response() map[string]interface{} {
+	code := e.Code
+	if code == "" {
+		code = CodeForStatus(e.Status)
+	}
 	return map[string]interface{}{
 		"success": false,
 		"error": map[string]interface{}{
+			"code":    code,
 			"message": e.Message,
 		},
 	}
@@ -62,6 +91,7 @@ func FromError(err error) APIError {
 		apiError.Message = "Internal server error"
 	}
 
+	apiError.Code = CodeForStatus(apiError.Status)
 	return apiError
 }
 

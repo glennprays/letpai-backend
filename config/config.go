@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"reflect"
 	"strings"
@@ -9,6 +10,11 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/spf13/viper"
 )
+
+// defaultJWTSecret is the placeholder shipped in the struct tag. Booting a
+// non-development environment with it would let anyone forge tokens, so Load
+// refuses to start in that case.
+const defaultJWTSecret = "your-secret-key-change-in-production"
 
 type Config struct {
 	Env     Environment `mapstructure:"ENV" default:"development"`
@@ -106,6 +112,12 @@ func Load() (*Config, error) {
 	// This will override defaults with actual env values
 	if err := viper.Unmarshal(cfg); err != nil {
 		return nil, err
+	}
+
+	// Fail loudly rather than silently shipping the insecure default signing
+	// key anywhere but local development.
+	if env != DEV && cfg.JWTSecret == defaultJWTSecret {
+		return nil, fmt.Errorf("JWT_SECRET must be overridden with a strong value in %s (refusing to start with the default placeholder)", env)
 	}
 
 	return cfg, nil

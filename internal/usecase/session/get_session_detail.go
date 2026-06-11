@@ -168,12 +168,19 @@ func friendlyNotificationStatus(status entity.NotificationStatus, age time.Durat
 	switch status {
 	case entity.NotificationStatusSent:
 		return "Sent"
-	case entity.NotificationStatusQueued:
+	case entity.NotificationStatusQueued, entity.NotificationStatusPending, entity.NotificationStatusSending:
+		// In the outbox: waiting for, or being handled by, the worker. If it's
+		// been this way for over 2 minutes the worker is likely behind/down, so
+		// invite a manual retry.
 		if age > 2*time.Minute {
 			return "Stuck — tap to retry"
 		}
 		return "Sending…"
 	case entity.NotificationStatusFailed:
+		// Transient failure; the worker auto-retries with backoff.
+		return "Retrying…"
+	case entity.NotificationStatusDead:
+		// Retries exhausted — terminal, needs a manual retry.
 		return "Failed — tap to retry"
 	}
 	return "Unknown"

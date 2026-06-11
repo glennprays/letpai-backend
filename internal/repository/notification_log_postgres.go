@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"time"
 
 	"github.com/glennprays/letpai-backend/domain"
 	"github.com/glennprays/letpai-backend/domain/entity"
@@ -11,6 +12,12 @@ import (
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 )
+
+// outboxColumns is the shared SELECT/RETURNING projection for the worker
+// queue methods, including the outbox bookkeeping columns added in 000030.
+const outboxColumns = `log_id, participant_id, notification_type, whatsapp_message_id,
+	message_content, sent_at, status, error_message, phone,
+	attempts, max_attempts, next_attempt_at, locked_at, locked_by, updated_at`
 
 // PostgresNotificationLogRepository implements NotificationLogRepository using PostgreSQL
 type PostgresNotificationLogRepository struct {
@@ -25,8 +32,10 @@ func NewPostgresNotificationLogRepository(db *sqlx.DB) ports.NotificationLogRepo
 // Create creates a new notification log entry
 func (r *PostgresNotificationLogRepository) Create(ctx context.Context, log *entity.NotificationLog) error {
 	query := `
-		INSERT INTO notification_logs (log_id, participant_id, notification_type, message_content, sent_at, status)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO notification_logs
+			(log_id, participant_id, notification_type, whatsapp_message_id,
+			 message_content, sent_at, status, error_message, phone)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 	`
 
 	_, err := r.db.ExecContext(
@@ -35,9 +44,12 @@ func (r *PostgresNotificationLogRepository) Create(ctx context.Context, log *ent
 		log.LogID,
 		log.ParticipantID,
 		log.NotificationType,
+		log.WhatsAppMessageID,
 		log.MessageContent,
 		log.SentAt,
 		log.Status,
+		log.ErrorMessage,
+		log.Phone,
 	)
 
 	if err != nil {
@@ -371,6 +383,129 @@ func (r *PostgresNotificationLogRepository) UpdateStatusWithError(ctx context.Co
 	}
 
 	return nil
+}
+
+// UpdateStatusGuarded advances status only if the row is still at
+// expectedCurrent (optimistic compare-and-swap). Zero rows affected means
+// another webhook delivery already advanced it — that is a successful no-op,
+// not an error, which is what makes concurrent/duplicate webhook deliveries
+// safe. A real DB error is surfaced so the caller can return 5xx and let the
+// gateway retry.
+func (r *PostgresNotificationLogRepository) UpdateStatusGuarded(ctx context.Context, logID, newStatus, expectedCurrent string, errorMessage *string) error {
+	query := `
+		UPDATE notification_logs
+		   SET status = $2,
+		       error_message = COALESCE($4, error_message),
+		       updated_at = CURRENT_TIMESTAMP
+		 WHERE log_id = $1 AND status = $3
+	`
+
+	if _, err := r.db.ExecContext(ctx, query, logID, newStatus, expectedCurrent, errorMessage); err != nil {
+		return domain.NewError(domain.ErrInternalFailure, err)
+	}
+
+	return nil
+}
+
+// ClaimPending atomically claims up to limit due rows for this worker. It
+// flips them to 'sending' and stamps the lock, using FOR UPDATE SKIP LOCKED so
+// multiple worker instances never grab the same row. Returns the claimed rows.
+func (r *PostgresNotificationLogRepository) ClaimPending(ctx context.Context, workerID string, limit int) ([]*entity.NotificationLog, error) {
+	query := `
+		UPDATE notification_logs
+		   SET status = 'sending', locked_at = CURRENT_TIMESTAMP, locked_by = $1, updated_at = CURRENT_TIMESTAMP
+		 WHERE log_id IN (
+		     SELECT log_id FROM notification_logs
+		      WHERE status IN ('pending','queued','failed')
+		        AND next_attempt_at <= CURRENT_TIMESTAMP
+		      ORDER BY next_attempt_at
+		      LIMIT $2
+		      FOR UPDATE SKIP LOCKED
+		 )
+		 RETURNING ` + outboxColumns
+
+	rows, err := r.db.QueryxContext(ctx, query, workerID, limit)
+	if err != nil {
+		return nil, domain.NewError(domain.ErrInternalFailure, err)
+	}
+	defer rows.Close()
+
+	var logs []*entity.NotificationLog
+	for rows.Next() {
+		var log entity.NotificationLog
+		if err := rows.StructScan(&log); err != nil {
+			return nil, domain.NewError(domain.ErrInternalFailure, err)
+		}
+		logCopy := log
+		logs = append(logs, &logCopy)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, domain.NewError(domain.ErrInternalFailure, err)
+	}
+	return logs, nil
+}
+
+// MarkSent records a successful send: status 'sent' + the gateway message id,
+// clearing the worker lock.
+func (r *PostgresNotificationLogRepository) MarkSent(ctx context.Context, logID, whatsappMessageID string) error {
+	query := `
+		UPDATE notification_logs
+		   SET status = 'sent', whatsapp_message_id = $2,
+		       locked_at = NULL, locked_by = NULL, updated_at = CURRENT_TIMESTAMP
+		 WHERE log_id = $1
+	`
+	if _, err := r.db.ExecContext(ctx, query, logID, whatsappMessageID); err != nil {
+		return domain.NewError(domain.ErrInternalFailure, err)
+	}
+	return nil
+}
+
+// MarkRetry records a failed attempt that will be retried: status 'failed',
+// bumped attempts, the scheduled next_attempt_at, and the error, clearing the
+// lock so the row is claimable again once due.
+func (r *PostgresNotificationLogRepository) MarkRetry(ctx context.Context, logID string, attempts int, nextAttemptAt time.Time, errMsg string) error {
+	query := `
+		UPDATE notification_logs
+		   SET status = 'failed', attempts = $2, next_attempt_at = $3, error_message = $4,
+		       locked_at = NULL, locked_by = NULL, updated_at = CURRENT_TIMESTAMP
+		 WHERE log_id = $1
+	`
+	if _, err := r.db.ExecContext(ctx, query, logID, attempts, nextAttemptAt, errMsg); err != nil {
+		return domain.NewError(domain.ErrInternalFailure, err)
+	}
+	return nil
+}
+
+// MarkDead records terminal failure after retries are exhausted: status
+// 'dead', clearing the lock so it is never claimed again.
+func (r *PostgresNotificationLogRepository) MarkDead(ctx context.Context, logID string, attempts int, errMsg string) error {
+	query := `
+		UPDATE notification_logs
+		   SET status = 'dead', attempts = $2, error_message = $3,
+		       locked_at = NULL, locked_by = NULL, updated_at = CURRENT_TIMESTAMP
+		 WHERE log_id = $1
+	`
+	if _, err := r.db.ExecContext(ctx, query, logID, attempts, errMsg); err != nil {
+		return domain.NewError(domain.ErrInternalFailure, err)
+	}
+	return nil
+}
+
+// RequeueStuck returns rows that have been stuck in 'sending' since before
+// stuckBefore back to 'pending' so a crashed/restarted worker doesn't leave
+// them locked forever. Returns the number of rows requeued.
+func (r *PostgresNotificationLogRepository) RequeueStuck(ctx context.Context, stuckBefore time.Time) (int64, error) {
+	query := `
+		UPDATE notification_logs
+		   SET status = 'pending', locked_at = NULL, locked_by = NULL, updated_at = CURRENT_TIMESTAMP
+		 WHERE status = 'sending' AND locked_at < $1
+	`
+	res, err := r.db.ExecContext(ctx, query, stuckBefore)
+	if err != nil {
+		return 0, domain.NewError(domain.ErrInternalFailure, err)
+	}
+	n, _ := res.RowsAffected()
+	return n, nil
 }
 
 // CountByParticipantIDAndType counts notification logs for a participant filtered by type

@@ -134,14 +134,14 @@ func InitializeApp() (*App, error) {
 	sessionHandler := handler.NewSessionHandler(createSessionUseCase, getSessionsUseCase, getSessionDetailUseCase, updateSessionUseCase, cancelSessionUseCase, addParticipantsUseCase, removeParticipantUseCase, updateParticipantUseCase, addBillItemUseCase, updateBillItemUseCase, deleteBillItemUseCase, calculateSplitsUseCase, replaceBankAccountsUseCase, uploadBillImageUseCase, getBillImagesUseCase, getBillImageSignedUrlUseCase, deleteBillImageUseCase, updateFeeConfigUseCase)
 	submitPaymentUseCase := payment.NewSubmitPaymentUseCase(participantRepository, sessionRepository, imageService)
 	approvePaymentUseCase := payment.NewApprovePaymentUseCase(participantRepository, sessionRepository)
-	rejectPaymentUseCase := payment.NewRejectPaymentUseCase(participantRepository, sessionRepository, contactRepository, whatsAppService, notificationLogRepository)
+	asyncNotifier := service.NewAsyncNotifier(notificationLogRepository)
+	rejectPaymentUseCase := payment.NewRejectPaymentUseCase(participantRepository, sessionRepository, contactRepository, asyncNotifier)
 	bulkApproveUseCase := payment.NewBulkApproveUseCase(participantRepository, sessionRepository)
 	bulkRejectUseCase := payment.NewBulkRejectUseCase(participantRepository, sessionRepository, contactRepository, whatsAppService, notificationLogRepository)
 	getPaymentPageUseCase := payment.NewGetPaymentPageUseCase(participantRepository, sessionRepository, billItemRepository, contactRepository, sessionBankAccountRepository, billImageRepository, imageService)
 	getPaymentProofUseCase := payment.NewGetPaymentProofUseCase(participantRepository)
 	markPaidWithoutProofUseCase := payment.NewMarkPaidWithoutProofUseCase(sessionRepository, participantRepository)
 	paymentHandler := handler.NewPaymentHandler(submitPaymentUseCase, approvePaymentUseCase, rejectPaymentUseCase, bulkApproveUseCase, bulkRejectUseCase, getPaymentPageUseCase, getPaymentProofUseCase, markPaidWithoutProofUseCase)
-	asyncNotifier := service.NewAsyncNotifier(whatsAppService, notificationLogRepository)
 	string2 := NewAppURL(configConfig)
 	sendNotificationsUseCase := notification.NewSendNotificationsUseCase(sessionRepository, participantRepository, contactRepository, billItemRepository, userRepository, asyncNotifier, templateRenderer, string2)
 	rateLimitService := NewRateLimitService(client)
@@ -154,11 +154,13 @@ func InitializeApp() (*App, error) {
 	getDashboardUseCase := dashboard.NewGetDashboardUseCase(sessionRepository, participantRepository)
 	dashboardHandler := handler.NewDashboardHandler(getDashboardUseCase)
 	routerRouter := router.NewRouter(logLogger, healthHandler, authHandler, adminHandler, adminTemplatesHandler, whatsAppWebhookHandler, contactGroupHandler, contactHandler, sessionHandler, paymentHandler, notificationHandler, webhookHandler, dashboardHandler, jwtService, rateLimitService)
+	notificationWorker := service.NewNotificationWorker(whatsAppService, notificationLogRepository, logLogger)
 	app := &App{
-		Config: configConfig,
-		Logger: logLogger,
-		DB:     db,
-		Router: routerRouter,
+		Config:             configConfig,
+		Logger:             logLogger,
+		DB:                 db,
+		Router:             routerRouter,
+		NotificationWorker: notificationWorker,
 	}
 	return app, nil
 }
@@ -177,7 +179,7 @@ var ServiceSet = wire.NewSet(
 	NewPasswordService,
 	NewWhatsAppService,
 	NewImageServiceProvider,
-	NewRateLimitService, service.NewTemplateRenderer, service.NewAsyncNotifier,
+	NewRateLimitService, service.NewTemplateRenderer, service.NewAsyncNotifier, service.NewNotificationWorker,
 )
 
 var UseCaseSet = wire.NewSet(auth.NewRegisterUserUseCase, auth.NewVerifyOTPUseCase, auth.NewLoginUserUseCase, auth.NewLogoutUserUseCase, auth.NewUpdateProfileUseCase, auth.NewForgotPasswordUseCase, admin.NewInitiateLoginUseCase, admin.NewVerifyOTPUseCase, admin.NewLoginUseCase, admin.NewGetProfileUseCase, admin.NewUpdateProfileUseCase, admin.NewSetupPasswordUseCase, admin.NewNeedsSetupUseCase, admin.NewBootstrapUseCase, admin.NewListAdminsUseCase, admin.NewCreateAdminUseCase, admin.NewUpdateAdminUseCase, admin.NewDeleteAdminUseCase, admin.NewGetStatusUseCase, admin.NewGetQRCodeUseCase, admin.NewLogoutUseCase, contact.NewCreateContactUseCase, contact.NewGetContactsUseCase, contact.NewGetContactByIDUseCase, contact.NewUpdateContactUseCase, contact.NewDeleteContactUseCase, contact.NewBulkOperationsUseCase, contact.NewImportContactsUseCase, contactgroup.NewCreateGroupUseCase, contactgroup.NewGetGroupsUseCase, contactgroup.NewUpdateGroupUseCase, contactgroup.NewDeleteGroupUseCase, session.NewCreateSessionUseCase, session.NewGetSessionsUseCase, session.NewGetSessionDetailUseCase, session.NewUpdateSessionUseCase, session.NewCancelSessionUseCase, session.NewReplaceBankAccountsUseCase, participant.NewAddParticipantsUseCase, participant.NewRemoveParticipantUseCase, participant.NewUpdateParticipantUseCase, participant.NewImportFromGroupUseCase, billing.NewAddBillItemUseCase, billing.NewUpdateBillItemUseCase, billing.NewDeleteBillItemUseCase, billing.NewCalculateSplitsUseCase, billing.NewUploadBillImageUseCase, billing.NewGetBillImagesUseCase, billing.NewGetBillImageSignedUrlUseCase, billing.NewDeleteBillImageUseCase, billing.NewUpdateFeeConfigUseCase, payment.NewSubmitPaymentUseCase, payment.NewApprovePaymentUseCase, payment.NewRejectPaymentUseCase, payment.NewBulkApproveUseCase, payment.NewBulkRejectUseCase, payment.NewGetPaymentPageUseCase, payment.NewGetPaymentProofUseCase, payment.NewMarkPaidWithoutProofUseCase, notification.NewSendNotificationsUseCase, notification.NewSendReminderUseCase, notification.NewBulkReminderUseCase, notification.NewReminderStatusUseCase, notification.NewRetryNotificationUseCase, admintemplates.NewListTemplatesUseCase, admintemplates.NewUpdateTemplateUseCase, admintemplates.NewTestSendUseCase, dashboard.NewGetDashboardUseCase)
