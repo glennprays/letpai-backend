@@ -7,6 +7,7 @@ package validation
 import (
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"sync"
 
@@ -19,12 +20,25 @@ var (
 	instance *validator.Validate
 )
 
+// phoneRegex accepts an MSISDN as an optional leading '+' followed by 8-15
+// digits. Deliberately lenient (it allows a leading 0 in local-format numbers)
+// so it doesn't reject what the current frontend submits; the goal here is to
+// catch the garbage that otherwise only fails later, silently, at the WhatsApp
+// gateway (letters, empty strings, obviously-too-short/long input). Full E.164
+// normalisation is a follow-up coordinated with the frontend.
+var phoneRegex = regexp.MustCompile(`^\+?\d{8,15}$`)
+
+func validatePhone(fl validator.FieldLevel) bool {
+	return phoneRegex.MatchString(fl.Field().String())
+}
+
 // get lazily initialises the singleton validator. Initialised once on first
 // use to avoid the cost (~few µs) at startup; trivially safe under concurrent
 // reads because sync.Once handles the race.
 func get() *validator.Validate {
 	once.Do(func() {
 		instance = validator.New(validator.WithRequiredStructEnabled())
+		_ = instance.RegisterValidation("phone", validatePhone)
 	})
 	return instance
 }

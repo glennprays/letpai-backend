@@ -3,7 +3,7 @@ package request
 // CreateContactRequest represents the request to create a contact
 type CreateContactRequest struct {
 	Name           string  `json:"name" validate:"required,min=1,max=100"`
-	WhatsAppNumber string  `json:"whatsapp_number" validate:"required"`
+	WhatsAppNumber string  `json:"whatsapp_number" validate:"required,phone"`
 	GroupID        *string `json:"group_id,omitempty"`
 	AvatarURL      *string `json:"avatar_url,omitempty"`
 	Notes          *string `json:"notes,omitempty"`
@@ -12,7 +12,7 @@ type CreateContactRequest struct {
 // UpdateContactRequest represents the request to update a contact
 type UpdateContactRequest struct {
 	Name           *string `json:"name" validate:"omitempty,min=1,max=100"`
-	WhatsAppNumber *string `json:"whatsapp_number" validate:"omitempty"`
+	WhatsAppNumber *string `json:"whatsapp_number" validate:"omitempty,phone"`
 	GroupID        *string `json:"group_id,omitempty"`
 	IsFavorite     *bool   `json:"is_favorite,omitempty"`
 	AvatarURL      *string `json:"avatar_url,omitempty"`

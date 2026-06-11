@@ -47,7 +47,7 @@ type AddParticipantsRequest struct {
 type AddParticipantRequest struct {
 	ContactID      *string `json:"contact_id,omitempty"`
 	CustomName     string  `json:"custom_name,omitempty"`
-	CustomWhatsApp string  `json:"custom_whatsapp,omitempty"`
+	CustomWhatsApp string  `json:"custom_whatsapp,omitempty" validate:"omitempty,phone"`
 }
 
 // UpdateParticipantRequest represents the request to update a participant's
@@ -56,7 +56,7 @@ type AddParticipantRequest struct {
 // PaymentHandler.SubmitPayment / ApprovePayment / RejectPayment.
 type UpdateParticipantRequest struct {
 	CustomName     *string `json:"custom_name,omitempty"`
-	CustomWhatsApp *string `json:"custom_whatsapp,omitempty"`
+	CustomWhatsApp *string `json:"custom_whatsapp,omitempty" validate:"omitempty,phone"`
 }
 
 // AddBillItemRequest represents the request to add a bill item.
