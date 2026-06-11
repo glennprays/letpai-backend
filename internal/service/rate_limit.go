@@ -39,10 +39,19 @@ func (s *RateLimitService) CheckLoginRateLimit(ctx context.Context, identifier s
 	return s.checkRateLimit(ctx, "login", identifier, 5, 15*time.Minute)
 }
 
-// CheckOTPRateLimit checks rate limit for OTP verification attempts
-// Returns: 3 attempts per OTP code (single-use)
+// CheckOTPRateLimit checks the per-IP rate limit for OTP verification attempts.
+// Returns: 3 attempts per 5 minutes per identifier (IP).
 func (s *RateLimitService) CheckOTPRateLimit(ctx context.Context, otpCode string) (*RateLimitResult, error) {
 	return s.checkRateLimit(ctx, "otp", otpCode, 3, 5*time.Minute)
+}
+
+// CheckOTPPhoneRateLimit bounds total OTP-verify attempts per phone number
+// across ALL source IPs. The per-IP limit alone lets a botnet spread guesses
+// over many addresses to brute-force the 6-digit code (10^6 keyspace); this
+// caps attempts per target phone within the OTP's lifetime regardless of how
+// many IPs the attacker controls. 5 attempts per 5 minutes (the OTP TTL).
+func (s *RateLimitService) CheckOTPPhoneRateLimit(ctx context.Context, phone string) (*RateLimitResult, error) {
+	return s.checkRateLimit(ctx, "otp-phone", phone, 5, 5*time.Minute)
 }
 
 // CheckReminderRateLimit checks rate limit for reminder sending
