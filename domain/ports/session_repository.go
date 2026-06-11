@@ -57,6 +57,11 @@ type SessionRepository interface {
 	// via FindByID(ctx, sessionID, userID) first.
 	UpdateStatus(ctx context.Context, sessionID string, status valueobject.SessionStatus) error
 
+	// CompleteIfAllPaid atomically marks an active session 'completed' iff no
+	// participant is still unpaid. Returns true if this call completed it.
+	// SECURITY: not scoped by user_id; verify ownership first.
+	CompleteIfAllPaid(ctx context.Context, sessionID string) (bool, error)
+
 	// MarkNotified persists the timestamp of the most recent successful
 	// `send-notifications` call. CRITICAL: implementations MUST NOT
 	// touch updated_at — the dirty-for-notify predicate compares

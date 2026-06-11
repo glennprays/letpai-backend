@@ -498,6 +498,37 @@ func (r *PostgresSessionRepository) UpdateTotalAmount(ctx context.Context, sessi
 }
 
 // UpdateStatus updates the status of a session
+// CompleteIfAllPaid atomically marks an active session 'completed' iff no
+// participant is still unpaid, in a single guarded UPDATE. This replaces a
+// read-then-write completion check (read all participants in Go, then update)
+// that could race two concurrent approvals into both observing a stale "still
+// unpaid" snapshot so neither completes the session. Returns true if this call
+// performed the completion.
+func (r *PostgresSessionRepository) CompleteIfAllPaid(ctx context.Context, sessionID string) (bool, error) {
+	query := `
+		UPDATE sessions
+		   SET status = 'completed', updated_at = NOW()
+		 WHERE session_id = $1
+		   AND status = 'active'
+		   AND deleted_at IS NULL
+		   AND NOT EXISTS (
+		       SELECT 1 FROM session_participants sp
+		        WHERE sp.session_id = $1
+		          AND sp.payment_status <> 'paid'
+		   )
+	`
+
+	result, err := r.db.ExecContext(ctx, query, sessionID)
+	if err != nil {
+		return false, domain.NewError(domain.ErrInternalFailure, err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return false, domain.NewError(domain.ErrInternalFailure, err)
+	}
+	return rows > 0, nil
+}
+
 func (r *PostgresSessionRepository) UpdateStatus(ctx context.Context, sessionID string, status valueobject.SessionStatus) error {
 	query := `
 		UPDATE sessions
