@@ -14,7 +14,55 @@ const (
 	NotificationStatusQueued NotificationStatus = "queued"
 	NotificationStatusSent   NotificationStatus = "sent"
 	NotificationStatusFailed NotificationStatus = "failed"
+
+	// Outbox lifecycle states (migration 000030).
+	NotificationStatusPending NotificationStatus = "pending"
+	NotificationStatusSending NotificationStatus = "sending"
+	NotificationStatusDead    NotificationStatus = "dead"
 )
+
+// rank orders the positive delivery lifecycle. queued is the legacy alias
+// for pending. Failure states are not on this ladder (they are handled
+// explicitly in NextWebhookStatus).
+func (s NotificationStatus) rank() int {
+	switch s {
+	case NotificationStatusQueued, NotificationStatusPending:
+		return 0
+	case NotificationStatusSending:
+		return 1
+	case NotificationStatusSent:
+		return 2
+	default:
+		return -1
+	}
+}
+
+// NextWebhookStatus encodes the forward-only state machine for gateway
+// status webhooks. It returns the status to transition to, or ("", false)
+// when the event should be ignored — duplicate, out-of-order, or terminal.
+// This is what makes webhook processing idempotent: a re-delivered or stale
+// event can never move a row backwards (e.g. a late message.queued can't
+// downgrade an already-sent row). The WAGA gateway only emits message.queued
+// / message.sent / message.failed; anything else is ignored.
+func NextWebhookStatus(current NotificationStatus, event string) (NotificationStatus, bool) {
+	switch event {
+	case "message.sent":
+		if NotificationStatusSent.rank() > current.rank() {
+			return NotificationStatusSent, true
+		}
+		return "", false
+	case "message.failed":
+		// Apply unless already in a terminal failure state.
+		if current == NotificationStatusFailed || current == NotificationStatusDead {
+			return "", false
+		}
+		return NotificationStatusFailed, true
+	default:
+		// message.queued carries no information beyond what recording the
+		// send already told us, so it is a deliberate no-op.
+		return "", false
+	}
+}
 
 // NotificationLog represents a record of a WhatsApp notification sent to a participant
 type NotificationLog struct {
@@ -26,6 +74,10 @@ type NotificationLog struct {
 	SentAt            time.Time                    `json:"sent_at" db:"sent_at"`
 	Status            NotificationStatus           `json:"status" db:"status"`
 	ErrorMessage      *string                      `json:"error_message,omitempty" db:"error_message"`
+	// Phone is the recipient MSISDN snapshot at enqueue time, so the worker
+	// sends to the number captured when the notification was created rather
+	// than re-resolving a possibly-changed contact.
+	Phone *string `json:"phone,omitempty" db:"phone"`
 }
 
 // NewNotificationLog creates a new notification log entry
