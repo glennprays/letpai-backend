@@ -21,7 +21,7 @@ type UpdateContactRequest struct {
 
 // BulkContactsRequest represents the request for bulk contact operations
 type BulkContactsRequest struct {
-	Operation  string   `json:"operation" validate:"required,oneof=add_to_group delete"`
+	Action     string   `json:"action" validate:"required,oneof=add_to_group delete"`
 	ContactIDs []string `json:"contact_ids" validate:"required,min=1"`
 	GroupID    string   `json:"group_id,omitempty"`
 }
@@ -31,7 +31,7 @@ type GetContactsQuery struct {
 	GroupID    *string `query:"group_id"`
 	IsFavorite *bool   `query:"is_favorite"`
 	Search     *string `query:"search"`
-	SortBy     string  `query:"sort_by" validate:"omitempty,oneof=name created_at group_name whatsappnumber"`
+	SortBy     string  `query:"sort_by" validate:"omitempty,oneof=name created_at whatsapp_number"`
 	SortOrder  string  `query:"sort_order" validate:"omitempty,oneof=asc desc"`
 	Page       int     `query:"page" validate:"omitempty,min=1"`
 	Limit      int     `query:"limit" validate:"omitempty,min=1,max=100"`

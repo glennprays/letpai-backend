@@ -31,12 +31,17 @@ type GetContactsRequest struct {
 	Limit      int
 }
 
-// GetContactsResponse represents the response for listing contacts
+// GetContactsResponse represents the swagger {data, pagination} envelope
 type GetContactsResponse struct {
-	Contacts []*ContactItem `json:"contacts"`
-	Total    int            `json:"total"`
-	Page     int            `json:"page"`
-	Limit    int            `json:"limit"`
+	Data       []*ContactItem `json:"data"`
+	Pagination Pagination     `json:"pagination"`
+}
+
+// Pagination represents swagger pagination metadata
+type Pagination struct {
+	Page  int `json:"page"`
+	Limit int `json:"limit"`
+	Total int `json:"total"`
 }
 
 // GetContactsUseCase handles retrieving contacts
@@ -105,9 +110,11 @@ func (uc *GetContactsUseCase) Execute(ctx context.Context, userID string, req *G
 	}
 
 	return &GetContactsResponse{
-		Contacts: contacts,
-		Total:    result.Total,
-		Page:     req.Page,
-		Limit:    req.Limit,
+		Data: contacts,
+		Pagination: Pagination{
+			Page:  req.Page,
+			Limit: req.Limit,
+			Total: result.Total,
+		},
 	}, nil
 }

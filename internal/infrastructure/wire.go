@@ -75,6 +75,7 @@ var UseCaseSet = wire.NewSet(
 	admin.NewInitiateLoginUseCase,
 	admin.NewVerifyOTPUseCase,
 	admin.NewLoginUseCase,
+	contactgroup.NewGetGroupUseCase,
 	admin.NewGetProfileUseCase,
 	admin.NewUpdateProfileUseCase,
 	admin.NewSetupPasswordUseCase,
@@ -129,7 +130,6 @@ var UseCaseSet = wire.NewSet(
 	payment.NewBulkApproveUseCase,
 	payment.NewBulkRejectUseCase,
 	payment.NewGetPaymentPageUseCase,
-	payment.NewGetPaymentProofUseCase,
 	payment.NewMarkPaidWithoutProofUseCase,
 	// Notification use cases
 	notification.NewSendNotificationsUseCase,

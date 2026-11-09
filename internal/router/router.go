@@ -1,6 +1,8 @@
 package router
 
 import (
+	"time"
+
 	"github.com/glennprays/letpai-backend/internal/handler"
 	"github.com/glennprays/letpai-backend/internal/middleware"
 	"github.com/glennprays/letpai-backend/internal/service"
@@ -113,12 +115,12 @@ func (r *Router) setupAuthRoutes(group fiber.Router) {
 func (r *Router) setupProtectedAuthRoutes(group fiber.Router) {
 	auth := group.Group("/auth")
 	auth.Post("/logout", r.AuthHandler.Logout)
-	auth.Put("/profile", r.AuthHandler.UpdateProfile)
+	auth.Patch("/profile", r.AuthHandler.UpdateProfile)
 }
 
 func (r *Router) setupPublicPaymentRoutes(group fiber.Router) {
-	// Public payment routes (no auth required)
-	payments := group.Group("/payments")
+	// Public payment routes (no auth required); unauthenticated traffic is keyed by IP
+	payments := group.Group("/payments", middleware.GeneralRateLimiter(r.rateLimitService, 10, time.Minute))
 	payments.Post("/:participant_id/submit", r.PaymentHandler.SubmitPayment)
 	payments.Get("/:participant_id/public", r.PaymentHandler.GetPaymentPage)
 }
@@ -127,6 +129,7 @@ func (r *Router) setupContactGroupRoutes(group fiber.Router) {
 	contactGroups := group.Group("/contact-groups")
 	contactGroups.Post("/", r.ContactGroupHandler.Create)
 	contactGroups.Get("/", r.ContactGroupHandler.GetGroups)
+	contactGroups.Get("/:id", r.ContactGroupHandler.GetByID)
 	contactGroups.Put("/:id", r.ContactGroupHandler.Update)
 	contactGroups.Delete("/:id", r.ContactGroupHandler.Delete)
 }
@@ -206,9 +209,9 @@ func (r *Router) setupAdminRoutes(group fiber.Router) {
 	admin := group.Group("/admin")
 	admin.Get("/auth/needs-setup", r.AdminHandler.NeedsSetup)
 	admin.Post("/auth/bootstrap", r.AdminHandler.Bootstrap)
-	admin.Post("/auth/initiate", r.AdminHandler.InitiateLogin)
-	admin.Post("/auth/login", r.AdminHandler.Login)
-	admin.Post("/auth/verify-otp", r.AdminHandler.VerifyOTP)
+	admin.Post("/auth/initiate", middleware.VerifyOTPRateLimiter(r.rateLimitService), r.AdminHandler.InitiateLogin)
+	admin.Post("/auth/login", middleware.LoginRateLimiter(r.rateLimitService), r.AdminHandler.Login)
+	admin.Post("/auth/verify-otp", middleware.VerifyOTPRateLimiter(r.rateLimitService), r.AdminHandler.VerifyOTP)
 
 	// Protected admin routes
 	protectedAdmin := admin.Use(middleware.Authenticate(r.jwtService))
@@ -217,8 +220,11 @@ func (r *Router) setupAdminRoutes(group fiber.Router) {
 	protectedAdmin.Put("/profile/setup-password", r.AdminHandler.SetupPassword)
 
 	// Super admin only routes
-	protectedAdmin.Get("/status", r.AdminHandler.GetStatus)
-	protectedAdmin.Post("/qr-code", r.AdminHandler.GetQRCode)
+	gatewayAdmin := protectedAdmin.Use(middleware.RequireSuperAdminRole(r.jwtService))
+	gatewayAdmin.Get("/status", r.AdminHandler.GetStatus)
+	gatewayAdmin.Post("/qr-code", r.AdminHandler.GetQRCode)
+
+	// Any authenticated admin
 	protectedAdmin.Post("/logout", r.AdminHandler.Logout)
 
 	// Admin message-template management (any admin can read; updates

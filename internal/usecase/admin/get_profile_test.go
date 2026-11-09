@@ -119,6 +119,18 @@ func (m *mockAdminRepository) UpdateLastLogin(ctx context.Context, adminID strin
 	return nil
 }
 
+func (m *mockAdminRepository) CountActiveSuperAdmins(ctx context.Context) (int, error) {
+	return 1, nil
+}
+
+func (m *mockAdminRepository) HasUsableSuperAdmin(ctx context.Context) (bool, error) {
+	return true, nil
+}
+
+func (m *mockAdminRepository) UpsertBootstrapSuperAdmin(ctx context.Context, admin *entity.Admin) error {
+	return nil
+}
+
 func (m *mockAdminRepository) CheckExistsByWhatsAppNumber(ctx context.Context, whatsappNumber string) (bool, error) {
 	return false, nil
 }

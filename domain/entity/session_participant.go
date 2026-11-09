@@ -4,11 +4,12 @@ import (
 	"errors"
 	"time"
 
+	"github.com/glennprays/letpai-backend/domain"
 	"github.com/glennprays/letpai-backend/domain/valueobject"
 	"github.com/google/uuid"
 )
 
-var ErrInvalidPaymentStatusTransitionError = errors.New("invalid payment status transition")
+// ErrInvalidPaymentStatusTransition is the sentinel used for payment status rule rejections (400 via httperror).
 
 // SessionParticipant represents a participant in a session
 type SessionParticipant struct {
@@ -105,7 +106,7 @@ func (p *SessionParticipant) SetShareAmount(amount float64) {
 // UpdatePaymentStatus updates the payment status
 func (p *SessionParticipant) UpdatePaymentStatus(newStatus valueobject.PaymentStatus) error {
 	if !p.PaymentStatus.CanTransitionTo(newStatus) {
-		return ErrInvalidPaymentStatusTransitionError
+		return domain.NewError(domain.ErrInvalidPaymentStatusTransition, errors.New("invalid payment status transition"))
 	}
 	p.PaymentStatus = newStatus
 	p.UpdatedAt = time.Now()
@@ -139,7 +140,7 @@ func (p *SessionParticipant) ApprovePayment() error {
 // the participant is already paid (a no-op the caller can surface as 409).
 func (p *SessionParticipant) MarkPaidManually() error {
 	if p.PaymentStatus == valueobject.PaymentStatusPaid {
-		return ErrInvalidPaymentStatusTransitionError
+		return domain.NewError(domain.ErrInvalidPaymentStatusTransition, errors.New("participant is already paid"))
 	}
 	// Forced transition: paid_manually bypasses the regular state machine.
 	p.PaymentStatus = valueobject.PaymentStatusPaid

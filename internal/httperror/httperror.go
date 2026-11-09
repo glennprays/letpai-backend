@@ -66,7 +66,7 @@ func FromError(err error) APIError {
 		}
 		svcErr := domainError.ServiceError()
 		switch svcErr {
-		case domain.ErrBadRequest:
+		case domain.ErrBadRequest, domain.ErrInvalidStatusTransition, domain.ErrInvalidPaymentStatusTransition:
 			apiError.Status = 400
 		case domain.ErrInternalFailure:
 			apiError.Status = 500

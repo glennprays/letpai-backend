@@ -4,11 +4,12 @@ import (
 	"errors"
 	"time"
 
+	"github.com/glennprays/letpai-backend/domain"
 	"github.com/glennprays/letpai-backend/domain/valueobject"
 	"github.com/google/uuid"
 )
 
-var ErrInvalidStatusTransitionError = errors.New("invalid status transition")
+// ErrInvalidStatusTransition is the sentinel used for session status rule rejections (400 via httperror).
 
 // Session represents a bill splitting session
 type Session struct {
@@ -125,7 +126,7 @@ func (s *Session) Update(title, description, currency string, sessionDate *time.
 // UpdateStatus updates the session status
 func (s *Session) UpdateStatus(newStatus valueobject.SessionStatus) error {
 	if !s.Status.CanTransitionTo(newStatus) {
-		return ErrInvalidStatusTransitionError
+		return domain.NewError(domain.ErrInvalidStatusTransition, errors.New("invalid status transition"))
 	}
 	s.Status = newStatus
 	s.UpdatedAt = time.Now()
