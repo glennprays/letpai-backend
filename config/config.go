@@ -38,8 +38,19 @@ type Config struct {
 	// embedded in WhatsApp notifications. Without a trailing slash.
 	AppURL string `mapstructure:"APP_URL" default:"http://localhost:4001"`
 
-	WhatsAppGatewayURL    string `mapstructure:"WHATSAPP_GATEWAY_URL" default:"http://localhost:8080"`
-	WhatsAppAPIKey        string `mapstructure:"WHATSAPP_API_KEY" default:""`
+	WhatsAppGatewayURL string `mapstructure:"WHATSAPP_GATEWAY_URL" default:"http://localhost:8080"`
+	// WhatsAppAPIKey is the WAGA gateway registration secret ("secret_key"
+	// for POST /register) — NOT a JWT. The gateway JWT is minted at
+	// runtime by RegisterGatewayUseCase and stored encrypted in
+	// whatsapp_configs.gateway_token.
+	WhatsAppAPIKey string `mapstructure:"WHATSAPP_API_KEY" default:""`
+	// WhatsAppGatewayToken is an optional pre-minted JWT used to
+	// bootstrap the very first pairing (admin OTP delivery needs a
+	// paired gateway before any admin can log in and register).
+	WhatsAppGatewayToken string `mapstructure:"WHATSAPP_GATEWAY_TOKEN" default:""`
+	// WhatsAppTokenEncKey is the base64-encoded 32-byte AES-256-GCM key
+	// used to encrypt the gateway JWT at rest.
+	WhatsAppTokenEncKey string `mapstructure:"WHATSAPP_TOKEN_ENC_KEY" default:""`
 	WhatsAppWebhookSecret string `mapstructure:"WHATSAPP_WEBHOOK_SECRET" default:""`
 
 	RedisHost     string `mapstructure:"REDIS_HOST" default:"localhost"`
@@ -118,6 +129,13 @@ func Load() (*Config, error) {
 	// key anywhere but local development.
 	if env != DEV && cfg.JWTSecret == defaultJWTSecret {
 		return nil, fmt.Errorf("JWT_SECRET must be overridden with a strong value in %s (refusing to start with the default placeholder)", env)
+	}
+
+	// Without the WAGA registration secret no gateway JWT can ever be
+	// minted, so every WhatsApp send path is dead. Refuse to boot prod
+	// without it rather than discover it from a failed OTP delivery.
+	if env != DEV && cfg.WhatsAppAPIKey == "" {
+		return nil, fmt.Errorf("WHATSAPP_API_KEY must be set in %s (it holds the WAGA gateway registration secret)", env)
 	}
 
 	return cfg, nil

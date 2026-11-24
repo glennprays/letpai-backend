@@ -223,6 +223,7 @@ func (r *Router) setupAdminRoutes(group fiber.Router) {
 	gatewayAdmin := protectedAdmin.Use(middleware.RequireSuperAdminRole(r.jwtService))
 	gatewayAdmin.Get("/status", r.AdminHandler.GetStatus)
 	gatewayAdmin.Post("/qr-code", r.AdminHandler.GetQRCode)
+	gatewayAdmin.Post("/whatsapp/register", r.AdminHandler.RegisterGatewayPhone)
 
 	// Any authenticated admin
 	protectedAdmin.Post("/logout", r.AdminHandler.Logout)

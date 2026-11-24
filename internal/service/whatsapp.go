@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -11,11 +12,12 @@ import (
 
 // WhatsAppService is a thin pass-through to the WAGA gateway SDK.
 //
-// We deliberately don't persist gateway state. The JWT is configured
-// once at startup via WHATSAPP_API_KEY; the SDK derives the phone
-// from it on every call. Connection status is fetched live from the
-// gateway. No DB read or write happens on the OTP / notification /
-// QR / status paths.
+// The JWT no longer comes from WHATSAPP_API_KEY (that env is now the
+// /register secret). It is minted at runtime by
+// RegisterGatewayUseCase, persisted encrypted in whatsapp_configs,
+// and rehydrated onto the shared client at boot by
+// infrastructure.RestoreGatewayToken. Connection status is fetched
+// live from the gateway.
 type WhatsAppService struct {
 	client *waga.Client
 }
@@ -26,6 +28,17 @@ func NewWhatsAppService(baseURL, apiKey string) *WhatsAppService {
 		waga.WithToken(apiKey),
 	)
 	return &WhatsAppService{client: client}
+}
+
+// SetToken swaps the gateway JWT on the shared client. Used by boot
+// restore and by RegisterGatewayUseCase right after minting.
+func (s *WhatsAppService) SetToken(token string) {
+	s.client.SetToken(token)
+}
+
+// GetToken returns the JWT currently loaded on the shared client.
+func (s *WhatsAppService) GetToken() string {
+	return s.client.GetToken()
 }
 
 type SendResult struct {
@@ -55,6 +68,28 @@ func (s *WhatsAppService) SendNotification(ctx context.Context, phoneNumber, mes
 	return resp.MessageId, nil
 }
 
+// Register mints a gateway JWT for phoneNumber via the gateway's
+// POST /register using the configured registration secret. The SDK
+// stores the token on the shared client; persisting it (encrypted) is
+// the caller's job.
+func (s *WhatsAppService) Register(ctx context.Context, phoneNumber, secretKey string) (*waga.RegisterResponse, error) {
+	resp, err := s.client.Register(ctx, phoneNumber, secretKey)
+	if err != nil {
+		return nil, domain.NewError(domain.ErrInternalFailure, fmt.Errorf("gateway register failed: %w", err))
+	}
+	return resp, nil
+}
+
+// Logout unpairs the currently-scoped device session on the gateway.
+// Best-effort by callers when switching phones: an error here doesn't
+// block registering a new phone.
+func (s *WhatsAppService) Logout(ctx context.Context) error {
+	if err := s.client.Logout(ctx); err != nil {
+		return domain.NewError(domain.ErrInternalFailure, fmt.Errorf("gateway logout failed: %w", err))
+	}
+	return nil
+}
+
 // GetQRCode pulls a pairing QR from the gateway.
 //
 // WAGA's JWT (set via WHATSAPP_API_KEY -> waga.WithToken) is bound to
@@ -68,6 +103,13 @@ func (s *WhatsAppService) SendNotification(ctx context.Context, phoneNumber, mes
 // is the authority for "current QR" and "current connection status";
 // we just pass that through.
 func (s *WhatsAppService) GetQRCode(ctx context.Context) (string, time.Time, error) {
+	// Edge case: the device is already paired, so minting a QR would be
+	// meaningless at best (gateway errors) and confusing at worst.
+	authenticated, _, statusErr := s.GetLoginStatus(ctx)
+	if statusErr == nil && authenticated {
+		return "", time.Time{}, domain.NewError(domain.ErrBadRequest, errors.New("gateway already paired"))
+	}
+
 	resp, err := s.client.GetQRCode(ctx, "json")
 	if err != nil {
 		return "", time.Time{}, domain.NewError(domain.ErrInternalFailure, fmt.Errorf("failed to get QR code: %w", err))
@@ -89,7 +131,5 @@ func (s *WhatsAppService) GetLoginStatus(ctx context.Context) (bool, string, err
 }
 
 // Logout, SetToken, RegisterPhone were removed when the local
-// whatsapp_configs persistence layer was dropped. WAGA's SDK doesn't
-// expose a gateway-level logout, so "disconnect" was a UI-only label
-// flipping a column we never read; token rotation now happens via
-// editing WHATSAPP_API_KEY in .env and restarting the backend.
+// whatsapp_configs persistence layer was dropped; they are reintroduced
+// by the gateway-JWT store feature.

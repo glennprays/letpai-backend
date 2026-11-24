@@ -25,6 +25,7 @@ type AdminHandler struct {
 	logoutUseCase        *adminuc.LogoutUseCase
 	needsSetupUseCase    *adminuc.NeedsSetupUseCase
 	bootstrapUseCase     *adminuc.BootstrapUseCase
+	registerGateway      *adminuc.RegisterGatewayUseCase
 }
 
 // NewAdminHandler creates a new admin handler
@@ -44,6 +45,7 @@ func NewAdminHandler(
 	logoutUseCase *adminuc.LogoutUseCase,
 	needsSetupUseCase *adminuc.NeedsSetupUseCase,
 	bootstrapUseCase *adminuc.BootstrapUseCase,
+	registerGatewayUseCase *adminuc.RegisterGatewayUseCase,
 ) *AdminHandler {
 	return &AdminHandler{
 		initiateLoginUseCase: initiateLoginUseCase,
@@ -61,6 +63,7 @@ func NewAdminHandler(
 		logoutUseCase:        logoutUseCase,
 		needsSetupUseCase:    needsSetupUseCase,
 		bootstrapUseCase:     bootstrapUseCase,
+		registerGateway:      registerGatewayUseCase,
 	}
 }
 
@@ -304,6 +307,31 @@ func (h *AdminHandler) DeleteAdmin(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
 		"success":  true,
 		"admin_id": adminID,
+	})
+}
+
+// RegisterGatewayPhone mints a gateway JWT for the admin-entered
+// WhatsApp number and stores it encrypted.
+func (h *AdminHandler) RegisterGatewayPhone(c *fiber.Ctx) error {
+	var req adminuc.RegisterGatewayRequest
+	if err := c.BodyParser(&req); err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+	if err := validation.Struct(&req); err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+
+	result, err := h.registerGateway.Execute(c.Context(), &req)
+	if err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"success": true,
+		"data":    result,
 	})
 }
 

@@ -87,6 +87,7 @@ var UseCaseSet = wire.NewSet(
 	admin.NewDeleteAdminUseCase,
 	admin.NewGetStatusUseCase,
 	admin.NewGetQRCodeUseCase,
+	admin.NewRegisterGatewayUseCase,
 	admin.NewLogoutUseCase,
 	// Contact use cases
 	contact.NewCreateContactUseCase,
