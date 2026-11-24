@@ -109,6 +109,7 @@ func (r *Router) setupAuthRoutes(group fiber.Router) {
 	auth.Post("/verify-otp", middleware.VerifyOTPRateLimiter(r.rateLimitService), r.AuthHandler.VerifyOTP)
 	auth.Post("/login", middleware.LoginRateLimiter(r.rateLimitService), r.AuthHandler.Login)
 	auth.Post("/forgot-password", middleware.LoginRateLimiter(r.rateLimitService), r.AuthHandler.ForgotPassword)
+	auth.Post("/reset-password", middleware.VerifyOTPRateLimiter(r.rateLimitService), r.AuthHandler.ResetPassword)
 }
 
 // Auth routes that require a valid token (logout, profile editing).

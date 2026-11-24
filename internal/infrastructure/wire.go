@@ -71,6 +71,7 @@ var UseCaseSet = wire.NewSet(
 	auth.NewLogoutUserUseCase,
 	auth.NewUpdateProfileUseCase,
 	auth.NewForgotPasswordUseCase,
+	auth.NewResetPasswordUseCase,
 	// Admin use cases
 	admin.NewInitiateLoginUseCase,
 	admin.NewVerifyOTPUseCase,

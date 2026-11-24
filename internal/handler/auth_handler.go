@@ -7,8 +7,8 @@ import (
 	"github.com/glennprays/letpai-backend/internal/middleware"
 	"github.com/glennprays/letpai-backend/internal/params/request"
 	"github.com/glennprays/letpai-backend/internal/params/response"
-	"github.com/glennprays/letpai-backend/internal/validation"
 	"github.com/glennprays/letpai-backend/internal/usecase/auth"
+	"github.com/glennprays/letpai-backend/internal/validation"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -20,6 +20,7 @@ type AuthHandler struct {
 	logoutUser     *auth.LogoutUserUseCase
 	updateProfile  *auth.UpdateProfileUseCase
 	forgotPassword *auth.ForgotPasswordUseCase
+	resetPassword  *auth.ResetPasswordUseCase
 }
 
 // NewAuthHandler creates a new auth handler
@@ -30,6 +31,7 @@ func NewAuthHandler(
 	logoutUser *auth.LogoutUserUseCase,
 	updateProfile *auth.UpdateProfileUseCase,
 	forgotPassword *auth.ForgotPasswordUseCase,
+	resetPassword *auth.ResetPasswordUseCase,
 ) *AuthHandler {
 	return &AuthHandler{
 		registerUser:   registerUser,
@@ -38,6 +40,7 @@ func NewAuthHandler(
 		logoutUser:     logoutUser,
 		updateProfile:  updateProfile,
 		forgotPassword: forgotPassword,
+		resetPassword:  resetPassword,
 	}
 }
 
@@ -191,6 +194,36 @@ func (h *AuthHandler) ForgotPassword(c *fiber.Ctx) error {
 		Success:   true,
 		Message:   result.Message,
 		ExpiresAt: result.ExpiresAt,
+	})
+}
+
+// ResetPassword completes the password-reset flow: the WhatsApp code sent by
+// ForgotPassword plus the new password. Successful verification consumes the
+// code and updates the stored password hash.
+func (h *AuthHandler) ResetPassword(c *fiber.Ctx) error {
+	var req request.ResetPasswordRequest
+	if err := c.BodyParser(&req); err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+	if err := validation.Struct(&req); err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+
+	result, err := h.resetPassword.Execute(c.Context(), &auth.ResetPasswordRequest{
+		WhatsAppNumber: req.WhatsAppNumber,
+		OTPCode:        req.OTPCode,
+		NewPassword:    req.NewPassword,
+	})
+	if err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
+	}
+
+	return c.Status(fiber.StatusOK).JSON(response.ResetPasswordResponse{
+		Success: true,
+		Message: result.Message,
 	})
 }
 
