@@ -129,7 +129,7 @@ func (r *PostgresUserRepository) FindByWhatsApp(ctx context.Context, whatsappNum
 func (r *PostgresUserRepository) Update(ctx context.Context, user *entity.User) error {
 	query := `
 		UPDATE users
-		SET full_name = $2, avatar_url = $3, is_verified = $4, updated_at = $5
+		SET password_hash = $2, full_name = $3, avatar_url = $4, is_verified = $5, updated_at = $6
 		WHERE user_id = $1 AND deleted_at IS NULL
 	`
 
@@ -137,6 +137,7 @@ func (r *PostgresUserRepository) Update(ctx context.Context, user *entity.User) 
 		ctx,
 		query,
 		user.UserID,
+		user.PasswordHash,
 		user.FullName,
 		user.AvatarURL,
 		user.IsVerified,
