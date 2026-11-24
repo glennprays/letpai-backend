@@ -116,11 +116,14 @@ func (s *WhatsAppService) GetQRCode(ctx context.Context) (string, time.Time, err
 	}
 
 	// WAGA's json QR payload carries `timeout` (seconds), not
-	// `expires_in` — the SDK's ExpiresIn field never binds and decodes
-	// to 0, which made every QR appear instantly expired. Use
-	// ExpiresIn when a gateway ever sends it; otherwise fall back to
-	// WhatsApp's own 60 s QR validity (what WAGA reports as `timeout`).
-	ttl := resp.ExpiresIn
+	// `expires_in`. SDK v0.8.1+ binds it as resp.Timeout, so prefer the
+	// gateway-reported value; ExpiresIn covers gateways that send the
+	// other spelling, and the 60 s last resort is WhatsApp's own QR
+	// validity for pre-v0.8.1 SDKs and gateways that omit both.
+	ttl := resp.Timeout
+	if ttl <= 0 {
+		ttl = resp.ExpiresIn
+	}
 	if ttl <= 0 {
 		ttl = 60
 	}
