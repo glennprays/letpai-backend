@@ -138,9 +138,8 @@ paths:
       description: |
         Sends a one-time verification code via WhatsApp to the supplied
         number. The response is identical whether or not the number is
-        registered (to avoid leaking account existence). The OTP can then
-        be exchanged via /auth/verify-otp for a session that allows the
-        user to set a new password.
+        registered (to avoid leaking account existence). Submit that code
+        with the new password to /auth/reset-password to complete the reset.
       operationId: forgotPassword
       tags:
         - Authentication
@@ -157,6 +156,39 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ForgotPasswordResponse'
+        '429':
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/reset-password:
+    post:
+      summary: Complete password reset
+      description: Verifies the WhatsApp reset code and sets a new password. The code is consumed on success.
+      operationId: resetPassword
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetPasswordRequest'
+      responses:
+        '200':
+          description: Password reset successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResetPasswordResponse'
+        '400':
+          description: Invalid, expired, or previously used verification code; or an invalid password
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '429':
           description: Rate limited
           content:
@@ -1507,6 +1539,39 @@ components:
           type: string
           format: date-time
           description: When the issued OTP expires. Omitted for unknown numbers.
+
+    ResetPasswordRequest:
+      type: object
+      required:
+        - whatsapp_number
+        - otp_code
+        - new_password
+      properties:
+        whatsapp_number:
+          type: string
+          minLength: 10
+          maxLength: 20
+          example: "6281234567890"
+        otp_code:
+          type: string
+          minLength: 6
+          maxLength: 6
+          example: "123456"
+        new_password:
+          type: string
+          format: password
+          minLength: 8
+          example: "NewSecurePass123!"
+
+    ResetPasswordResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Password updated. You can now sign in with your new password."
 
     LoginResponse:
       type: object
