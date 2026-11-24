@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"github.com/glennprays/letpai-backend/internal/httperror"
 	"github.com/glennprays/letpai-backend/internal/middleware"
 	"github.com/glennprays/letpai-backend/internal/usecase/dashboard"
 	"github.com/gofiber/fiber/v2"
@@ -24,9 +25,8 @@ func (h *DashboardHandler) GetDashboard(c *fiber.Ctx) error {
 
 	result, err := h.getDashboard.Execute(c.Context(), userID)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
 	}
 
 	return c.JSON(result)

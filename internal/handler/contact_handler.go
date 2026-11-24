@@ -115,10 +115,7 @@ func (h *ContactHandler) GetContacts(c *fiber.Ctx) error {
 		return c.Status(apiErr.Status).JSON(apiErr.Response())
 	}
 
-	return c.JSON(fiber.Map{
-		"success": true,
-		"data":    result,
-	})
+	return c.JSON(result)
 }
 
 // GetByID retrieves a contact by ID
@@ -206,7 +203,7 @@ func (h *ContactHandler) BulkOperations(c *fiber.Ctx) error {
 	}
 
 	ucReq := &contact.BulkOperationsRequest{
-		Operation:  req.Operation,
+		Operation:  req.Action,
 		ContactIDs: req.ContactIDs,
 		GroupID:    req.GroupID,
 	}

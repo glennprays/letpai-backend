@@ -2,7 +2,7 @@
 
 ## Context
 Admin module is partially implemented with:
-- ✅ Database migrations (admins, whatsapp_configs, admin_ops_verifications tables)
+- ✅ Database migrations (admins, whatsapp_configs, admin_otp_verifications tables)
 - ✅ Domain entities (Admin, WhatsAppConfig)
 - ✅ Repository interfaces and PostgreSQL implementations
 - ✅ Admin handler with placeholder implementations
@@ -94,7 +94,7 @@ Admin module is partially implemented with:
 
 ## Current Status
 - **Branch**: dev
-- **Last Commit**: `49fbc54` - "docs: add admin module documentation to README"
+- **Last Commit**: `babc8a4`
 - **Build Status**: ✅ Passing
 - **Pushed**: ✅ origin/dev
 

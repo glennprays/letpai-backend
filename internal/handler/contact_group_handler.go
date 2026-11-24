@@ -14,6 +14,7 @@ import (
 type ContactGroupHandler struct {
 	createGroup *contactgroup.CreateGroupUseCase
 	getGroups   *contactgroup.GetGroupsUseCase
+	getGroup    *contactgroup.GetGroupUseCase
 	updateGroup *contactgroup.UpdateGroupUseCase
 	deleteGroup *contactgroup.DeleteGroupUseCase
 }
@@ -22,12 +23,14 @@ type ContactGroupHandler struct {
 func NewContactGroupHandler(
 	createGroup *contactgroup.CreateGroupUseCase,
 	getGroups *contactgroup.GetGroupsUseCase,
+	getGroup *contactgroup.GetGroupUseCase,
 	updateGroup *contactgroup.UpdateGroupUseCase,
 	deleteGroup *contactgroup.DeleteGroupUseCase,
 ) *ContactGroupHandler {
 	return &ContactGroupHandler{
 		createGroup: createGroup,
 		getGroups:   getGroups,
+		getGroup:    getGroup,
 		updateGroup: updateGroup,
 		deleteGroup: deleteGroup,
 	}
@@ -80,21 +83,23 @@ func (h *ContactGroupHandler) GetGroups(c *fiber.Ctx) error {
 		return c.Status(apiErr.Status).JSON(apiErr.Response())
 	}
 
-	groups := make([]*response.ContactGroupResponse, 0, len(result.Groups))
-	for _, g := range result.Groups {
-		groups = append(groups, &response.ContactGroupResponse{
-			GroupID:   g.GroupID,
-			Name:      g.Name,
-			Color:     g.Color,
-			SortOrder: g.SortOrder,
-		})
+	return c.JSON(result)
+}
+
+// GetByID retrieves a single contact group
+func (h *ContactGroupHandler) GetByID(c *fiber.Ctx) error {
+	userID := middleware.GetUserID(c)
+	groupID := c.Params("id")
+
+	item, err := h.getGroup.Execute(c.Context(), groupID, userID)
+	if err != nil {
+		apiErr := httperror.FromError(err)
+		return c.Status(apiErr.Status).JSON(apiErr.Response())
 	}
 
 	return c.JSON(fiber.Map{
 		"success": true,
-		"data": fiber.Map{
-			"groups": groups,
-		},
+		"data":    item,
 	})
 }
 

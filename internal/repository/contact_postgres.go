@@ -232,7 +232,6 @@ func (r *PostgresContactRepository) FindAll(ctx context.Context, userID string, 
 	validSortBy := map[string]bool{
 		"name":            true,
 		"created_at":      true,
-		"group_name":      true,
 		"whatsapp_number": true,
 	}
 	if !validSortBy[opts.SortBy] {

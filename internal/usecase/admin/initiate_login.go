@@ -12,10 +12,14 @@ import (
 	"github.com/glennprays/letpai-backend/internal/service"
 )
 
-// LoginRequest represents admin login request (password-based)
+// LoginRequest represents admin login request. Swagger AdminLoginRequest
+// carries {whatsapp_number, otp_code}; password is the backup path for
+// admins who have set one via setup-password. Exactly one of the two
+// credentials must be present.
 type LoginRequest struct {
 	WhatsAppNumber string `json:"whatsapp_number" validate:"required,len=13,max=20"`
-	Password       string `json:"password" validate:"required,min=8,max=100"`
+	OTPCode        string `json:"otp_code" validate:"excluded_with=Password,omitempty,len=6"`
+	Password       string `json:"password" validate:"excluded_with=OTPCode,omitempty,min=8,max=100"`
 }
 
 // InitiateLoginRequest represents initiate login request
@@ -182,46 +186,73 @@ func (uc *VerifyOTPUseCase) Execute(ctx context.Context, req *VerifyOTPRequest) 
 	}, nil
 }
 
-// LoginResult mirrors the VerifyOTPResult shape so the password login
-// flow returns the same token shape clients already understand.
+// LoginResult mirrors the VerifyOTPResult shape so the admin login
+// flows return the same token shape clients already understand.
 type LoginResult struct {
 	Token     string `json:"token"`
 	ExpiresAt string `json:"expires_at"`
 }
 
-// LoginUseCase handles password-based admin login. It's the backup
-// path for when the WhatsApp gateway is down — admins who have set
-// a password via PUT /admin/profile/setup-password can sign in
-// without an OTP round trip.
+// LoginUseCase handles admin login. Primary path is OTP per swagger
+// AdminLoginRequest {whatsapp_number, otp_code}; password is the backup
+// path for admins who set one via PUT /admin/profile/setup-password and
+// can't receive WhatsApp when the gateway is down. Exactly one of the
+// two credentials must be present.
 type LoginUseCase struct {
 	adminRepo   ports.AdminRepository
+	otpRepo     ports.OTPRepository
 	passwordSvc *service.PasswordService
 	jwtService  *service.JWTService
 }
 
-// NewLoginUseCase wires the password login use case.
+// NewLoginUseCase wires the admin login use case.
 func NewLoginUseCase(
 	adminRepo ports.AdminRepository,
+	otpRepo ports.OTPRepository,
 	passwordSvc *service.PasswordService,
 	jwtService *service.JWTService,
 ) *LoginUseCase {
 	return &LoginUseCase{
 		adminRepo:   adminRepo,
+		otpRepo:     otpRepo,
 		passwordSvc: passwordSvc,
 		jwtService:  jwtService,
 	}
 }
 
-// Execute verifies credentials and returns a JWT. Returns a generic
-// 401-style error on any failed verification step to avoid leaking
-// whether a given WhatsApp number belongs to a real admin.
+// Execute verifies credentials and returns a JWT. Failed verification
+// steps return generic errors to avoid leaking whether a WhatsApp
+// number belongs to a real admin.
 func (uc *LoginUseCase) Execute(ctx context.Context, req *LoginRequest) (*LoginResult, error) {
+	if req.OTPCode != "" {
+		return uc.loginWithOTP(ctx, req)
+	}
+	return uc.loginWithPassword(ctx, req)
+}
+
+func (uc *LoginUseCase) loginWithOTP(ctx context.Context, req *LoginRequest) (*LoginResult, error) {
+	otpRecord, err := uc.otpRepo.FindValidByPhone(ctx, req.WhatsAppNumber)
+	if err != nil {
+		return nil, domain.NewError(domain.ErrUnauthorized, errors.New("invalid or expired OTP"))
+	}
+	if otpRecord.OTPCode != req.OTPCode {
+		return nil, domain.NewError(domain.ErrUnauthorized, errors.New("invalid or expired OTP"))
+	}
+	if err := uc.otpRepo.MarkAsUsed(ctx, otpRecord.OTPID.String()); err != nil {
+		return nil, domain.NewError(domain.ErrInternalFailure, fmt.Errorf("failed to mark OTP as used: %w", err))
+	}
+
 	admin, err := uc.adminRepo.FindByWhatsAppNumber(ctx, req.WhatsAppNumber)
 	if err != nil || admin == nil {
 		return nil, domain.NewError(domain.ErrUnauthorized, errors.New("invalid credentials"))
 	}
-	if !admin.IsActive {
-		return nil, domain.NewError(domain.ErrUnauthorized, errors.New("account is inactive"))
+	return uc.issueToken(ctx, admin)
+}
+
+func (uc *LoginUseCase) loginWithPassword(ctx context.Context, req *LoginRequest) (*LoginResult, error) {
+	admin, err := uc.adminRepo.FindByWhatsAppNumber(ctx, req.WhatsAppNumber)
+	if err != nil || admin == nil {
+		return nil, domain.NewError(domain.ErrUnauthorized, errors.New("invalid credentials"))
 	}
 	if admin.PasswordHash == "" {
 		// Distinct error so the FE can suggest the OTP path instead of
@@ -230,6 +261,13 @@ func (uc *LoginUseCase) Execute(ctx context.Context, req *LoginRequest) (*LoginR
 	}
 	if !uc.passwordSvc.Verify(req.Password, admin.PasswordHash) {
 		return nil, domain.NewError(domain.ErrUnauthorized, errors.New("invalid credentials"))
+	}
+	return uc.issueToken(ctx, admin)
+}
+
+func (uc *LoginUseCase) issueToken(ctx context.Context, admin *entity.Admin) (*LoginResult, error) {
+	if !admin.IsActive {
+		return nil, domain.NewError(domain.ErrUnauthorized, errors.New("account is inactive"))
 	}
 
 	admin.UpdateLastLogin()
@@ -243,11 +281,9 @@ func (uc *LoginUseCase) Execute(ctx context.Context, req *LoginRequest) (*LoginR
 	}
 
 	return &LoginResult{
-		Token:     token,
+		Token: token,
 		// JWT TTL is owned by the service; FE only uses ExpiresAt as a
-		// hint for cookie lifetime. Mirror VerifyOTP's behaviour and
-		// stamp the current time as a floor — clients will get the
-		// real exp from the JWT claims if they parse it.
+		// hint for cookie lifetime.
 		ExpiresAt: time.Now().Add(24 * time.Hour).Format(time.RFC3339),
 	}, nil
 }

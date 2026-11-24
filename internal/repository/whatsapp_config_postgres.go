@@ -35,7 +35,8 @@ func NewPostgresWhatsAppConfigRepository(db *sqlx.DB) ports.WhatsAppConfigReposi
 // were correct, the read just never sourced them.
 func (r *PostgresWhatsAppConfigRepository) Get(ctx context.Context) (*entity.WhatsAppConfig, error) {
 	const query = `
-		SELECT config_id, phone_number, gateway_token, is_connected, qr_code_base64,
+		SELECT config_id, phone_number, gateway_token, is_connected,
+		       COALESCE(qr_code_base64, '') AS qr_code_base64,
 		       qr_code_expires_at, connection_status, last_connected_at,
 		       last_disconnected_at, created_at, updated_at
 		FROM whatsapp_configs

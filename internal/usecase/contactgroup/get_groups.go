@@ -6,15 +6,15 @@ import (
 	"github.com/glennprays/letpai-backend/domain/ports"
 )
 
-// GetGroupsResponse represents the response for listing contact groups
+// GetGroupsResponse represents the swagger {data} envelope
 type GetGroupsResponse struct {
-	Groups []*GroupItem `json:"groups"`
+	Data []*GroupItem `json:"data"`
 }
 
 // GroupItem represents a contact group item
 type GroupItem struct {
 	GroupID   string `json:"group_id"`
-	Name      string `json:"name"`
+	GroupName string `json:"group_name"`
 	Color     string `json:"color"`
 	SortOrder int    `json:"sort_order"`
 }
@@ -44,13 +44,13 @@ func (uc *GetGroupsUseCase) Execute(ctx context.Context, userID string) (*GetGro
 	for _, g := range groups {
 		items = append(items, &GroupItem{
 			GroupID:   g.GroupID.String(),
-			Name:      g.Name,
+			GroupName: g.Name,
 			Color:     g.Color,
 			SortOrder: g.SortOrder,
 		})
 	}
 
 	return &GetGroupsResponse{
-		Groups: items,
+		Data: items,
 	}, nil
 }

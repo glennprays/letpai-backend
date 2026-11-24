@@ -115,7 +115,7 @@ pkg/
 migrations/             # Database migration files
 ├── 000010_create_admins.up.sql
 ├── 000011_create_whatsapp_configs.up.sql
-├── 000012_create_admin_ops_verifications.up.sql
+├── 000012_create_admin_otp_verifications.up.sql
 └── 000013_seed_super_admin.up.sql
 ```
 
@@ -277,7 +277,7 @@ The dev guide covers:
 ### Admin Module Status
 
 **Completed:**
-- ✅ Database migrations (admins, whatsapp_configs, admin_ops_verifications tables)
+- ✅ Database migrations (admins, whatsapp_configs, admin_otp_verifications tables)
 - ✅ Domain entities (Admin, WhatsAppConfig)
 - ✅ Repository interfaces and PostgreSQL implementations
 - ✅ Admin handler with placeholder implementations
@@ -421,7 +421,7 @@ func (r *PostgresSomeRepository) Create(ctx context.Context, entity *entity.Some
 - `internal/params/response/admin/` - Response DTOs
 - `migrations/000010_create_admins.up.sql` - Admin table migration
 - `migrations/000011_create_whatsapp_configs.up.sql` - WhatsApp config migration
-- `migrations/000012_create_admin_ops_verifications.up.sql` - Verification log migration
+- `migrations/000012_create_admin_otp_verifications.up.sql` - Verification log migration
 - `migrations/000013_seed_super_admin.up.sql` - Super admin seed data
 
 ### WhatsApp Integration Files

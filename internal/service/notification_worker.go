@@ -8,6 +8,7 @@ import (
 	"github.com/glennprays/letpai-backend/domain/entity"
 	"github.com/glennprays/letpai-backend/domain/ports"
 	glog "github.com/glennprays/log"
+	waga "github.com/glennprays/whatsapp-gateway-sdk-go"
 	"github.com/google/uuid"
 )
 
@@ -40,6 +41,12 @@ func NewNotificationWorker(whatsapp *WhatsAppService, logRepo ports.Notification
 		sendTimeout: 60 * time.Second,
 		stuckAfter:  5 * time.Minute,
 	}
+}
+
+// Whatsapp exposes the shared WhatsAppService so boot code can
+// restore the gateway JWT onto the same client the worker uses.
+func (w *NotificationWorker) Whatsapp() *WhatsAppService {
+	return w.whatsapp
 }
 
 // Run drives the worker loop until ctx is cancelled. Intended to be launched in
@@ -109,6 +116,21 @@ func (w *NotificationWorker) process(ctx context.Context, l *entity.Notification
 	messageID, err := w.whatsapp.SendNotification(sendCtx, phone, l.MessageContent)
 	if err != nil {
 		attempts := l.Attempts + 1
+
+		// A 401 from the gateway means the stored JWT is bad (expired,
+		// revoked, or never registered). Retrying cannot fix it — the
+		// token only changes when the admin re-registers — so skip the
+		// backoff loop and dead-letter immediately.
+		if waga.IsUnauthorized(err) {
+			_ = w.logRepo.MarkDead(ctx, l.LogID.String(), attempts, err.Error())
+			w.logger.Error(w.workerID, "notification dead-lettered (gateway rejected token)", map[string]any{
+				"log_id":   l.LogID.String(),
+				"attempts": attempts,
+				"error":    err.Error(),
+			})
+			return
+		}
+
 		if attempts >= l.MaxAttempts {
 			_ = w.logRepo.MarkDead(ctx, l.LogID.String(), attempts, err.Error())
 			w.logger.Error(w.workerID, "notification dead-lettered", map[string]any{

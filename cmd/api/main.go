@@ -74,6 +74,11 @@ func main() {
 	// Setup routes (includes custom middleware)
 	app.Router.Setup(fiberApp)
 
+	// Rehydrate the gateway JWT (from whatsapp_configs, or the
+	// WHATSAPP_GATEWAY_TOKEN bootstrap env) before the delivery worker
+	// starts, so outbox sends use the real token from the first tick.
+	infrastructure.RestoreGatewayToken(app.Config, app.DB, app.NotificationWorker.Whatsapp(), app.Logger)
+
 	// Start the durable WhatsApp delivery worker. It drains the
 	// notification_logs outbox in the background; cancelling workerCtx on
 	// shutdown stops it cleanly. Any send interrupted mid-flight is left in
