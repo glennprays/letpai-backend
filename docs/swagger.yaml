@@ -166,7 +166,7 @@ paths:
   /auth/reset-password:
     post:
       summary: Complete password reset
-      description: Verifies the WhatsApp reset code and sets a new password. The code is consumed on success.
+      description: Verifies the WhatsApp reset code and sets a new password. The code is consumed on success. On success the account is also marked verified.
       operationId: resetPassword
       tags:
         - Authentication

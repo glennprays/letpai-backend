@@ -75,6 +75,7 @@ func newResetPasswordTestUseCase(t *testing.T, code string, expiresAt time.Time)
 		t.Fatalf("hash old password: %v", err)
 	}
 	user := entity.NewUser("6281234567890", oldHash)
+	user.IsVerified = false
 	userRepo := &resetPasswordUserRepo{user: user}
 	otp := entity.NewOTPVerificationWithUser(user.UserID, user.WhatsAppNumber, code, time.Minute)
 	otp.ExpiresAt = expiresAt
@@ -99,6 +100,9 @@ func TestResetPassword_UpdatesPasswordAndConsumesOTP(t *testing.T) {
 	if !userRepo.updated || !passwordSvc.Verify("new-password", userRepo.user.PasswordHash) {
 		t.Fatal("expected the stored password hash to match the new password")
 	}
+	if !userRepo.user.IsVerified {
+		t.Fatal("expected reset completion to verify the account")
+	}
 	if !otpRepo.marked || !otpRepo.otp.IsUsed || !otpRepo.invalidated {
 		t.Fatal("expected reset OTP to be consumed and stale OTPs invalidated")
 	}
@@ -116,8 +120,8 @@ func TestResetPassword_RejectsInvalidCodeWithoutChangingPassword(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected invalid code error")
 	}
-	if userRepo.updated || otpRepo.marked || userRepo.user.PasswordHash != oldHash || !passwordSvc.Verify("old-password", userRepo.user.PasswordHash) {
-		t.Fatal("invalid code must not consume the OTP or change the password")
+	if userRepo.updated || otpRepo.marked || userRepo.user.PasswordHash != oldHash || !passwordSvc.Verify("old-password", userRepo.user.PasswordHash) || userRepo.user.IsVerified {
+		t.Fatal("invalid code must not consume the OTP, change the password, or verify the account")
 	}
 }
 
