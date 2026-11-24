@@ -50,3 +50,31 @@ func TestGetQRCodeDefaultsTTLOnMissingExpiresIn(t *testing.T) {
 		t.Fatalf("TTL wrong: got %v, want ~60s", left)
 	}
 }
+
+// Precedence: when the gateway reports expires_in but no timeout, the
+// TTL must come from expires_in (30s), not the hardcoded 60s fallback.
+func TestGetQRCodeUsesExpiresInWhenTimeoutMissing(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/login/status":
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`{"authenticated":false}`))
+		case "/login/qr_code/json":
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`{"qr_code":"data:image/png;base64,AAAA","expires_in":30}`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+
+	svc := NewWhatsAppService(srv.URL, "test-jwt")
+	_, expires, err := svc.GetQRCode(context.Background())
+	if err != nil {
+		t.Fatalf("GetQRCode: %v", err)
+	}
+	left := time.Until(expires)
+	if left < 28*time.Second || left > 31*time.Second {
+		t.Fatalf("TTL wrong: got %v, want ~30s", left)
+	}
+}
