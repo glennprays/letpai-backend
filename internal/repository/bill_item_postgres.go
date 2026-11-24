@@ -38,14 +38,15 @@ func (r *PostgresBillItemRepository) Create(ctx context.Context, item *entity.Bi
 	}()
 
 	const insertItem = `
-		INSERT INTO bill_items (bill_item_id, session_id, description, amount, category, includes_service_charge, includes_tax, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		INSERT INTO bill_items (bill_item_id, session_id, name, description, amount, category, includes_service_charge, includes_tax, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 	`
 	if _, err := tx.ExecContext(
 		ctx,
 		insertItem,
 		item.BillItemID,
 		item.SessionID,
+		item.Description,
 		item.Description,
 		item.Amount,
 		item.Category,
