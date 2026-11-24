@@ -89,6 +89,7 @@ func (uc *ResetPasswordUseCase) Execute(ctx context.Context, req *ResetPasswordR
 		return nil, domain.NewError(domain.ErrInternalFailure, err)
 	}
 	user.PasswordHash = hashedPassword
+	user.MarkVerified()
 	if err := uc.userRepo.Update(ctx, user); err != nil {
 		return nil, err
 	}

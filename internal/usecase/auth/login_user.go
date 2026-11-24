@@ -51,7 +51,7 @@ func (uc *LoginUserUseCase) Execute(ctx context.Context, req *LoginRequest) (*Lo
 
 	// Check if user is verified
 	if !user.IsVerified {
-		return nil, domain.NewError(domain.ErrUnauthorized, errors.New("please verify your account first"))
+		return nil, domain.NewError(domain.ErrUnauthorized, errors.New("please verify your account first — use “Forgot it?” on the sign-in page to finish verifying with a WhatsApp code"))
 	}
 
 	// Verify password
