@@ -279,6 +279,13 @@ func (uc *GetPaymentPageUseCase) Execute(ctx context.Context, participantID stri
 	linkExpiresAt := session.CreatedAt.Add(7 * 24 * time.Hour)
 	isExpired := time.Now().After(linkExpiresAt)
 
+	proofURL := participant.PaymentProofURL
+	if proofURL != nil {
+		if signed := uc.imageService.PresignStoredObjectKey(ctx, *proofURL, 15*time.Minute); signed != "" {
+			proofURL = &signed
+		}
+	}
+
 	return &PaymentPageResponse{
 		SessionID:         session.SessionID.String(),
 		SessionSlug:       session.PublicSlug,
@@ -291,7 +298,7 @@ func (uc *GetPaymentPageUseCase) Execute(ctx context.Context, participantID stri
 		Currency:          session.Currency,
 		BillItems:         billItemInfos,
 		PaymentStatus:     participant.PaymentStatus.String(),
-		PaymentProofURL:   participant.PaymentProofURL,
+		PaymentProofURL:   proofURL,
 		RejectionReason:   participant.RejectionReason,
 		BankName:          session.BankName,
 		BankAccountNumber: session.BankAccountNumber,

@@ -94,12 +94,10 @@ func (uc *SubmitPaymentUseCase) Execute(ctx context.Context, participantID strin
 		return nil, domain.NewError(domain.ErrInternalFailure, err)
 	}
 
-	// UploadResult.URL is the raw object reference (s3://bucket/key) — not
-	// browser-resolvable. UploadResult.PublicURL honours CDN_URL and produces
-	// the https URL we actually want stored and returned. Reading the wrong
-	// field here was leaking s3:// URIs into payment_proof_url, which then
-	// broke every <img> render on the FE.
-	claimed, err := uc.participantRepo.MarkSubmittedWithProof(ctx, participantID, uploadResult.PublicURL)
+	// We store the bare S3 object key in payment_proof_url; reads presign it
+	// because the bucket is private and the old CDN host is unrouted.
+	// UploadResult.URL is the raw s3:// reference — never browser-resolvable.
+	claimed, err := uc.participantRepo.MarkSubmittedWithProof(ctx, participantID, uploadResult.ObjectKey)
 	if err != nil {
 		return nil, err
 	}
@@ -111,6 +109,6 @@ func (uc *SubmitPaymentUseCase) Execute(ctx context.Context, participantID strin
 		ProofID:    participantID,
 		Status:     "submitted",
 		UploadedAt: uploadResult.UploadedAt.Format("2006-01-02T15:04:05Z07:00"),
-		ProofURL:   uploadResult.PublicURL,
+		ProofURL:   uc.imageService.PresignStoredObjectKey(ctx, uploadResult.ObjectKey, 15*time.Minute),
 	}, nil
 }

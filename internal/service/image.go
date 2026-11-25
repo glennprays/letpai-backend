@@ -26,7 +26,6 @@ import (
 type ImageService struct {
 	s3Client    *minio.Client
 	bucketName  string
-	cdnURL      string // Optional CDN URL for serving images
 	enableWebP  bool
 	webPQuality int
 	maxFileSize int64
@@ -39,7 +38,6 @@ type ImageConfig struct {
 	AWSAccessID string
 	AWSSecret   string
 	BucketName  string
-	CDNURL      string
 	EnableWebP  bool
 	WebPQuality int
 	MaxFileSize int64 // in bytes
@@ -92,6 +90,7 @@ func NewImageService(cfg *ImageConfig) (*ImageService, error) {
 	s3Client, err := minio.New(endpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(cfg.AWSAccessID, cfg.AWSSecret, ""),
 		Secure: useSSL,
+		Region: cfg.AWSRegion, // set so presigning never dials GetBucketLocation
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create MinIO client: %w", err)
@@ -100,7 +99,6 @@ func NewImageService(cfg *ImageConfig) (*ImageService, error) {
 	return &ImageService{
 		s3Client:    s3Client,
 		bucketName:  cfg.BucketName,
-		cdnURL:      cfg.CDNURL,
 		enableWebP:  cfg.EnableWebP,
 		webPQuality: cfg.WebPQuality,
 		maxFileSize: cfg.MaxFileSize,
@@ -116,7 +114,7 @@ type UploadResult struct {
 	Width      int       `json:"width"`
 	Height     int       `json:"height"`
 	UploadedAt time.Time `json:"uploaded_at"`
-	PublicURL  string    `json:"public_url"`
+	ObjectKey  string    `json:"object_key"`
 	Etag       string    `json:"etag,omitempty"`
 }
 
@@ -180,12 +178,10 @@ func (s *ImageService) processAndUpload(ctx context.Context, imageData []byte, f
 	s3Key := uuid.New().String() + s.extensionFromFormat(outputFormat)
 	_ = fileName // original name preserved by caller
 
-	etag, s3url, err := s.uploadToS3(ctx, processedData, s3Key, s.contentTypeFromFormat(outputFormat))
+	etag, s3url, key, err := s.uploadToS3(ctx, processedData, s3Key, s.contentTypeFromFormat(outputFormat))
 	if err != nil {
 		return nil, fmt.Errorf("failed to upload to S3: %w", err)
 	}
-
-	publicURL := s.getPublicURL(s3Key)
 
 	return &UploadResult{
 		URL:        s3url,
@@ -195,32 +191,39 @@ func (s *ImageService) processAndUpload(ctx context.Context, imageData []byte, f
 		Width:      width,
 		Height:     height,
 		UploadedAt: time.Now(),
-		PublicURL:  publicURL,
+		ObjectKey:  key,
 		Etag:       etag,
 	}, nil
 }
 
 // uploadToS3 uploads to image data to S3
-func (s *ImageService) uploadToS3(ctx context.Context, imageData []byte, fileName, contentType string) (string, string, error) {
+func (s *ImageService) uploadToS3(ctx context.Context, imageData []byte, fileName, contentType string) (string, string, string, error) {
 	key := fmt.Sprintf("payments/%s", fileName)
 
 	uploadInfo, err := s.s3Client.PutObject(ctx, s.bucketName, key, bytes.NewReader(imageData), int64(len(imageData)), minio.PutObjectOptions{
 		ContentType: contentType,
 	})
 	if err != nil {
-		return "", "", fmt.Errorf("failed to upload object: %w", err)
+		return "", "", "", fmt.Errorf("failed to upload object: %w", err)
 	}
 
 	s3url := fmt.Sprintf("s3://%s/%s", s.bucketName, key)
-	return uploadInfo.ETag, s3url, nil
+	return uploadInfo.ETag, s3url, key, nil
 }
 
-// getPublicURL returns the public URL for uploaded image
-func (s *ImageService) getPublicURL(fileName string) string {
-	if s.cdnURL != "" {
-		return fmt.Sprintf("%s/payments/%s", strings.TrimSuffix(s.cdnURL, "/"), fileName)
+// PresignStoredObjectKey returns a presigned GET URL when stored looks like a
+// bare S3 object key (contains "/" and no "://"); anything else (legacy full
+// https URLs, bare filenames) is returned unchanged so old rows keep their
+// current behaviour. Empty input returns "".
+func (s *ImageService) PresignStoredObjectKey(ctx context.Context, stored string, expiresIn time.Duration) string {
+	if stored == "" || !strings.Contains(stored, "/") || strings.Contains(stored, "://") {
+		return stored
 	}
-	return fmt.Sprintf("https://%s.s3.amazonaws.com/payments/%s", s.bucketName, fileName)
+	signed, err := s.s3Client.PresignedGetObject(ctx, s.bucketName, stored, expiresIn, url.Values{})
+	if err != nil || signed == nil {
+		return stored
+	}
+	return signed.String()
 }
 
 // extractAndValidateImage extracts image data from base64 and validates it
@@ -398,12 +401,10 @@ func (s *ImageService) processAndUploadWithPrefix(ctx context.Context, imageData
 	s3Key := uuid.New().String() + s.extensionFromFormat(outputFormat)
 	_ = fileName // original name preserved by caller
 
-	etag, s3url, err := s.uploadToS3WithPrefix(ctx, processedData, s3Key, s.contentTypeFromFormat(outputFormat), prefix)
+	etag, s3url, key, err := s.uploadToS3WithPrefix(ctx, processedData, s3Key, s.contentTypeFromFormat(outputFormat), prefix)
 	if err != nil {
 		return nil, fmt.Errorf("failed to upload to S3: %w", err)
 	}
-
-	publicURL := s.getPublicURLWithPrefix(s3Key, prefix)
 
 	return &UploadResult{
 		URL:        s3url,
@@ -413,13 +414,13 @@ func (s *ImageService) processAndUploadWithPrefix(ctx context.Context, imageData
 		Width:      width,
 		Height:     height,
 		UploadedAt: time.Now(),
-		PublicURL:  publicURL,
+		ObjectKey:  key,
 		Etag:       etag,
 	}, nil
 }
 
 // uploadToS3WithPrefix uploads image data to S3 with a configurable key prefix.
-func (s *ImageService) uploadToS3WithPrefix(ctx context.Context, imageData []byte, fileName, contentType, prefix string) (string, string, error) {
+func (s *ImageService) uploadToS3WithPrefix(ctx context.Context, imageData []byte, fileName, contentType, prefix string) (string, string, string, error) {
 	if prefix == "" {
 		prefix = "payments/"
 	}
@@ -432,25 +433,11 @@ func (s *ImageService) uploadToS3WithPrefix(ctx context.Context, imageData []byt
 		ContentType: contentType,
 	})
 	if err != nil {
-		return "", "", fmt.Errorf("failed to upload object: %w", err)
+		return "", "", "", fmt.Errorf("failed to upload object: %w", err)
 	}
 
 	s3url := fmt.Sprintf("s3://%s/%s", s.bucketName, key)
-	return uploadInfo.ETag, s3url, nil
-}
-
-// getPublicURLWithPrefix returns the public URL using a configurable prefix.
-func (s *ImageService) getPublicURLWithPrefix(fileName, prefix string) string {
-	if prefix == "" {
-		prefix = "payments/"
-	}
-	if !strings.HasSuffix(prefix, "/") {
-		prefix += "/"
-	}
-	if s.cdnURL != "" {
-		return fmt.Sprintf("%s/%s%s", strings.TrimSuffix(s.cdnURL, "/"), prefix, fileName)
-	}
-	return fmt.Sprintf("https://%s.s3.amazonaws.com/%s%s", s.bucketName, prefix, fileName)
+	return uploadInfo.ETag, s3url, key, nil
 }
 
 // GetPresignedGetURL generates a presigned GET URL for reading an object.
