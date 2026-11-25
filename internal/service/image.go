@@ -24,23 +24,25 @@ import (
 
 // ImageService handles image upload operations with MinIO/S3 and pure Go image libraries
 type ImageService struct {
-	s3Client    *minio.Client
-	bucketName  string
-	enableWebP  bool
-	webPQuality int
-	maxFileSize int64
+	s3Client      *minio.Client
+	bucketName    string
+	publicBaseURL string // Optional public CDN base; set = compose URLs, empty = presign
+	enableWebP    bool
+	webPQuality   int
+	maxFileSize   int64
 }
 
 // ImageConfig holds configuration for the image service
 type ImageConfig struct {
-	AWSEndpoint string // Optional: for S3-compatible services (e.g., MinIO)
-	AWSRegion   string
-	AWSAccessID string
-	AWSSecret   string
-	BucketName  string
-	EnableWebP  bool
-	WebPQuality int
-	MaxFileSize int64 // in bytes
+	AWSEndpoint   string // Optional: for S3-compatible services (e.g., MinIO)
+	AWSRegion     string
+	AWSAccessID   string
+	AWSSecret     string
+	BucketName    string
+	PublicBaseURL string // Optional: public object base URL (e.g. https://cdn.letpai.xyz)
+	EnableWebP    bool
+	WebPQuality   int
+	MaxFileSize   int64 // in bytes
 }
 
 // imageFormat represents the supported image formats
@@ -97,11 +99,12 @@ func NewImageService(cfg *ImageConfig) (*ImageService, error) {
 	}
 
 	return &ImageService{
-		s3Client:    s3Client,
-		bucketName:  cfg.BucketName,
-		enableWebP:  cfg.EnableWebP,
-		webPQuality: cfg.WebPQuality,
-		maxFileSize: cfg.MaxFileSize,
+		s3Client:      s3Client,
+		bucketName:    cfg.BucketName,
+		publicBaseURL: strings.TrimSuffix(cfg.PublicBaseURL, "/"),
+		enableWebP:    cfg.EnableWebP,
+		webPQuality:   cfg.WebPQuality,
+		maxFileSize:   cfg.MaxFileSize,
 	}, nil
 }
 
@@ -224,6 +227,21 @@ func (s *ImageService) PresignStoredObjectKey(ctx context.Context, stored string
 		return stored
 	}
 	return signed.String()
+}
+
+// ObjectURL resolves a stored object reference to a browser-resolvable URL.
+// With a public base URL configured it composes <base>/<key> (no signature,
+// immutable objects, cache-friendly); otherwise it falls back to a presigned
+// URL for private buckets. Non-key references (legacy full URLs, bare
+// filenames, empty) pass through unchanged.
+func (s *ImageService) ObjectURL(ctx context.Context, stored string) string {
+	if stored == "" || !strings.Contains(stored, "/") || strings.Contains(stored, "://") {
+		return stored
+	}
+	if s.publicBaseURL != "" {
+		return s.publicBaseURL + "/" + stored
+	}
+	return s.PresignStoredObjectKey(ctx, stored, 15*time.Minute)
 }
 
 // extractAndValidateImage extracts image data from base64 and validates it

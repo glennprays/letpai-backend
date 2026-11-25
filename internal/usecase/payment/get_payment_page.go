@@ -281,7 +281,7 @@ func (uc *GetPaymentPageUseCase) Execute(ctx context.Context, participantID stri
 
 	proofURL := participant.PaymentProofURL
 	if proofURL != nil {
-		if signed := uc.imageService.PresignStoredObjectKey(ctx, *proofURL, 15*time.Minute); signed != "" {
+		if signed := uc.imageService.ObjectURL(ctx, *proofURL); signed != "" {
 			proofURL = &signed
 		}
 	}
