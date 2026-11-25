@@ -2,7 +2,6 @@ package billing
 
 import (
 	"context"
-	"time"
 
 	"github.com/glennprays/letpai-backend/domain/ports"
 	"github.com/glennprays/letpai-backend/internal/service"
@@ -48,7 +47,7 @@ func (uc *GetBillImagesUseCase) Execute(ctx context.Context, userID, sessionID s
 		items = append(items, &BillImageItem{
 			BillImageID:  img.BillImageID.String(),
 			SessionID:    img.SessionID.String(),
-			ImageURL:     uc.imageService.PresignStoredObjectKey(ctx, key, 15*time.Minute),
+			ImageURL:     uc.imageService.ObjectURL(ctx, key),
 			ThumbnailURL: img.ThumbnailURL,
 			FileName:     img.FileName,
 			FileFormat:   img.FileFormat,

@@ -109,6 +109,6 @@ func (uc *SubmitPaymentUseCase) Execute(ctx context.Context, participantID strin
 		ProofID:    participantID,
 		Status:     "submitted",
 		UploadedAt: uploadResult.UploadedAt.Format("2006-01-02T15:04:05Z07:00"),
-		ProofURL:   uc.imageService.PresignStoredObjectKey(ctx, uploadResult.ObjectKey, 15*time.Minute),
+		ProofURL:   uc.imageService.ObjectURL(ctx, uploadResult.ObjectKey),
 	}, nil
 }

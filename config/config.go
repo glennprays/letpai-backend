@@ -50,7 +50,7 @@ type Config struct {
 	WhatsAppGatewayToken string `mapstructure:"WHATSAPP_GATEWAY_TOKEN" default:""`
 	// WhatsAppTokenEncKey is the base64-encoded 32-byte AES-256-GCM key
 	// used to encrypt the gateway JWT at rest.
-	WhatsAppTokenEncKey string `mapstructure:"WHATSAPP_TOKEN_ENC_KEY" default:""`
+	WhatsAppTokenEncKey   string `mapstructure:"WHATSAPP_TOKEN_ENC_KEY" default:""`
 	WhatsAppWebhookSecret string `mapstructure:"WHATSAPP_WEBHOOK_SECRET" default:""`
 
 	RedisHost     string `mapstructure:"REDIS_HOST" default:"localhost"`
@@ -59,14 +59,15 @@ type Config struct {
 	RedisDB       int    `mapstructure:"REDIS_DB" default:"0"`
 
 	// S3/AWS Configuration for image upload
-	AWSEndpoint    string `mapstructure:"AWS_ENDPOINT" default:""` // Optional: for S3-compatible services
-	AWSRegion      string `mapstructure:"AWS_REGION" default:"us-east-1"`
-	AWSAccessID    string `mapstructure:"AWS_ACCESS_KEY_ID"`
-	AWSSecret      string `mapstructure:"AWS_SECRET_ACCESS_KEY"`
-	S3BucketName   string `mapstructure:"S3_BUCKET_NAME" default:"letpai-uploads"`
-	EnableWebP     bool   `mapstructure:"ENABLE_WEBP" default:"true"`
-	WebPQuality    int    `mapstructure:"WEBP_QUALITY" default:"85"`
-	MaxImageSizeMB int    `mapstructure:"MAX_IMAGE_SIZE_MB" default:"5"`
+	AWSEndpoint     string `mapstructure:"AWS_ENDPOINT" default:""` // Optional: for S3-compatible services
+	AWSRegion       string `mapstructure:"AWS_REGION" default:"us-east-1"`
+	AWSAccessID     string `mapstructure:"AWS_ACCESS_KEY_ID"`
+	AWSSecret       string `mapstructure:"AWS_SECRET_ACCESS_KEY"`
+	S3BucketName    string `mapstructure:"S3_BUCKET_NAME" default:"letpai-uploads"`
+	PublicS3BaseURL string `mapstructure:"PUBLIC_S3_BASE_URL" default:""` // Optional: public object base (e.g. https://cdn.letpai.xyz); empty = presign URLs
+	EnableWebP      bool   `mapstructure:"ENABLE_WEBP" default:"true"`
+	WebPQuality     int    `mapstructure:"WEBP_QUALITY" default:"85"`
+	MaxImageSizeMB  int    `mapstructure:"MAX_IMAGE_SIZE_MB" default:"5"`
 }
 
 type Environment string

@@ -200,14 +200,15 @@ func NewWhatsAppService(cfg *config.Config) *service.WhatsAppService {
 // NewImageService creates a new image service with AWS S3 configuration
 func NewImageService(cfg *config.Config) (*service.ImageService, error) {
 	imageCfg := &service.ImageConfig{
-		AWSEndpoint: cfg.AWSEndpoint,
-		AWSRegion:   cfg.AWSRegion,
-		AWSAccessID: cfg.AWSAccessID,
-		AWSSecret:   cfg.AWSSecret,
-		BucketName:  cfg.S3BucketName,
-		EnableWebP:  cfg.EnableWebP,
-		WebPQuality: cfg.WebPQuality,
-		MaxFileSize: int64(cfg.MaxImageSizeMB) * 1024 * 1024, // Convert MB to bytes
+		AWSEndpoint:   cfg.AWSEndpoint,
+		AWSRegion:     cfg.AWSRegion,
+		AWSAccessID:   cfg.AWSAccessID,
+		AWSSecret:     cfg.AWSSecret,
+		BucketName:    cfg.S3BucketName,
+		PublicBaseURL: cfg.PublicS3BaseURL,
+		EnableWebP:    cfg.EnableWebP,
+		WebPQuality:   cfg.WebPQuality,
+		MaxFileSize:   int64(cfg.MaxImageSizeMB) * 1024 * 1024, // Convert MB to bytes
 	}
 	return service.NewImageService(imageCfg)
 }
