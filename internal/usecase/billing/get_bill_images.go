@@ -2,24 +2,29 @@ package billing
 
 import (
 	"context"
+	"time"
 
 	"github.com/glennprays/letpai-backend/domain/ports"
+	"github.com/glennprays/letpai-backend/internal/service"
 )
 
 // GetBillImagesUseCase handles listing bill images for a session.
 type GetBillImagesUseCase struct {
 	sessionRepo   ports.SessionRepository
 	billImageRepo ports.BillImageRepository
+	imageService  *service.ImageService
 }
 
 // NewGetBillImagesUseCase creates a new get bill images use case.
 func NewGetBillImagesUseCase(
 	sessionRepo ports.SessionRepository,
 	billImageRepo ports.BillImageRepository,
+	imageService *service.ImageService,
 ) *GetBillImagesUseCase {
 	return &GetBillImagesUseCase{
 		sessionRepo:   sessionRepo,
 		billImageRepo: billImageRepo,
+		imageService:  imageService,
 	}
 }
 
@@ -37,10 +42,13 @@ func (uc *GetBillImagesUseCase) Execute(ctx context.Context, userID, sessionID s
 
 	items := make([]*BillImageItem, 0, len(images))
 	for _, img := range images {
+		// Stored value is the bare filename; reads presign the full key
+		// because the bucket is private.
+		key := "bill-images/" + img.ImageURL
 		items = append(items, &BillImageItem{
 			BillImageID:  img.BillImageID.String(),
 			SessionID:    img.SessionID.String(),
-			ImageURL:     img.ImageURL,
+			ImageURL:     uc.imageService.PresignStoredObjectKey(ctx, key, 15*time.Minute),
 			ThumbnailURL: img.ThumbnailURL,
 			FileName:     img.FileName,
 			FileFormat:   img.FileFormat,

@@ -130,7 +130,7 @@ func InitializeApp() (*App, error) {
 	deleteBillItemUseCase := billing.NewDeleteBillItemUseCase(billItemRepository, sessionRepository, calculateSplitsUseCase)
 	replaceBankAccountsUseCase := session.NewReplaceBankAccountsUseCase(sessionRepository, sessionBankAccountRepository)
 	uploadBillImageUseCase := billing.NewUploadBillImageUseCase(sessionRepository, billImageRepository, imageService)
-	getBillImagesUseCase := billing.NewGetBillImagesUseCase(sessionRepository, billImageRepository)
+	getBillImagesUseCase := billing.NewGetBillImagesUseCase(sessionRepository, billImageRepository, imageService)
 	getBillImageSignedUrlUseCase := billing.NewGetBillImageSignedUrlUseCase(sessionRepository, billImageRepository, imageService)
 	deleteBillImageUseCase := billing.NewDeleteBillImageUseCase(sessionRepository, billImageRepository, imageService)
 	updateFeeConfigUseCase := billing.NewUpdateFeeConfigUseCase(sessionRepository)
@@ -230,7 +230,6 @@ func NewImageService(cfg *config.Config) (*service.ImageService, error) {
 		AWSAccessID: cfg.AWSAccessID,
 		AWSSecret:   cfg.AWSSecret,
 		BucketName:  cfg.S3BucketName,
-		CDNURL:      cfg.CDNURL,
 		EnableWebP:  cfg.EnableWebP,
 		WebPQuality: cfg.WebPQuality,
 		MaxFileSize: int64(cfg.MaxImageSizeMB) * 1024 * 1024,

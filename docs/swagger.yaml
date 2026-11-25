@@ -2720,6 +2720,10 @@ components:
               type: string
               format: date-time
               example: "2026-03-18T15:00:00Z"
+            proof_url:
+              type: string
+              format: uri
+              description: Presigned URL, valid for about 15 minutes.
 
     PaymentPageResponse:
       type: object
@@ -2755,6 +2759,7 @@ components:
               type: string
               format: uri
               nullable: true
+              description: Presigned URL, valid for about 15 minutes.
             rejection_reason:
               type: string
               nullable: true

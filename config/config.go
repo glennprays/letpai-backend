@@ -64,7 +64,6 @@ type Config struct {
 	AWSAccessID    string `mapstructure:"AWS_ACCESS_KEY_ID"`
 	AWSSecret      string `mapstructure:"AWS_SECRET_ACCESS_KEY"`
 	S3BucketName   string `mapstructure:"S3_BUCKET_NAME" default:"letpai-uploads"`
-	CDNURL         string `mapstructure:"CDN_URL" default:""`
 	EnableWebP     bool   `mapstructure:"ENABLE_WEBP" default:"true"`
 	WebPQuality    int    `mapstructure:"WEBP_QUALITY" default:"85"`
 	MaxImageSizeMB int    `mapstructure:"MAX_IMAGE_SIZE_MB" default:"5"`

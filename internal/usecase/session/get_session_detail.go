@@ -358,6 +358,13 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, userID, sessionI
 			}
 		}
 
+		proofURL := p.PaymentProofURL
+		if proofURL != nil {
+			if signed := uc.imageService.PresignStoredObjectKey(ctx, *proofURL, 15*time.Minute); signed != "" {
+				proofURL = &signed
+			}
+		}
+
 		participantItems = append(participantItems, &ParticipantItem{
 			ParticipantID:      p.ParticipantID.String(),
 			PublicSlug:         p.PublicSlug,
@@ -367,7 +374,7 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, userID, sessionI
 			AvatarURL:          avatarURL,
 			ShareAmount:        p.ShareAmount,
 			PaymentStatus:      p.PaymentStatus.String(),
-			PaymentProofURL:    p.PaymentProofURL,
+			PaymentProofURL:    proofURL,
 			PaidManually:       p.PaidManually,
 			NotificationCount:  p.NotificationCount,
 			LastNotificationAt: p.LastNotificationAt,
